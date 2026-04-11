@@ -1,0 +1,28 @@
+# Python
+**/venv/
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Node / Bun
+orchestrator/node_modules/
+
+# Vendored repos (cloned by setup scripts)
+**/vendor/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
