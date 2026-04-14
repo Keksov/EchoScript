@@ -1,0 +1,14 @@
+{
+  "include": [
+    "shared",
+    "services"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "./shared"
+      ]
+    }
+  ]
+}

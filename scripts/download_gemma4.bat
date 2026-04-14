@@ -7,8 +7,8 @@ REM   Run: venv\Scripts\huggingface-cli.exe login
 REM ============================================================
 setlocal
 
-set "HF_HOME=c:\var\huggingface"
 set "SCRIPT_DIR=%~dp0"
+call "%SCRIPT_DIR%env.bat"
 set "VENV_DIR=%SCRIPT_DIR%..\services\gemma4\venv"
 
 if not exist "%VENV_DIR%\Scripts\python.exe" (
@@ -17,18 +17,18 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
 )
 
 echo [INFO] Downloading google/gemma-4-E4B ...
-echo [INFO] Cache directory: %HF_HOME%
+echo [INFO] Cache directory: %HF_HUB_CACHE%
 echo [INFO] If this model requires authentication, run:
 echo        %VENV_DIR%\Scripts\huggingface-cli.exe login
 echo.
 
-"%VENV_DIR%\Scripts\python.exe" -c "from huggingface_hub import snapshot_download; snapshot_download('google/gemma-4-E4B')"
+"%VENV_DIR%\Scripts\python.exe" -c "import os; from huggingface_hub import snapshot_download; snapshot_download('google/gemma-4-E4B', cache_dir=os.environ['HF_HUB_CACHE'])"
 if errorlevel 1 (
     echo [ERROR] Download failed. You may need to authenticate first.
     exit /b 1
 )
 
 echo.
-echo [OK] Gemma 4 E4B weights downloaded to %HF_HOME%
+echo [OK] Gemma 4 E4B weights downloaded to %HF_HUB_CACHE%
 
 endlocal

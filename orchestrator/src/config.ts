@@ -1,0 +1,167 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+
+export interface ModelConfig {
+  readonly serviceDir: string;
+  readonly pythonExecutable: string;
+  readonly module: string;
+}
+
+export interface AppConfig {
+  readonly projectRoot: string;
+  readonly jobsRoot: string;
+  readonly allowedInputRoots: readonly string[];
+  readonly maxWorkers: number;
+  readonly pollIntervalMs: number;
+  readonly modelStopTimeoutMs: number;
+  readonly defaultModel: string;
+  readonly models: Readonly<Record<string, ModelConfig>>;
+}
+
+interface RawModelConfig {
+  readonly service_dir?: unknown;
+  readonly python_executable?: unknown;
+  readonly module?: unknown;
+}
+
+interface RawConfig {
+  readonly jobs_root?: unknown;
+  readonly allowed_input_roots?: unknown;
+  readonly max_workers?: unknown;
+  readonly poll_interval_ms?: unknown;
+  readonly model_stop_timeout_ms?: unknown;
+  readonly default_model?: unknown;
+  readonly models?: unknown;
+}
+
+const defaultVenvPython = process.platform === "win32" ? "venv/Scripts/python.exe" : "venv/bin/python";
+
+const defaultModel = (serviceDir: string): { readonly serviceDir: string; readonly pythonExecutable: string; readonly module: string } => {
+  return {
+    serviceDir,
+    pythonExecutable: `${serviceDir}/${defaultVenvPython}`,
+    module: "app.main",
+  };
+};
+
+const DEFAULT_MODELS = {
+  whisper_podlodka: defaultModel("services/whisper_podlodka"),
+  borealis: defaultModel("services/borealis"),
+  gemma4: defaultModel("services/gemma4"),
+  vibevoice: defaultModel("services/vibevoice"),
+} as const;
+
+const DEFAULT_JOBS_ROOT = "./jobs";
+const DEFAULT_MAX_WORKERS = 1;
+const DEFAULT_POLL_INTERVAL_MS = 500;
+const DEFAULT_MODEL_STOP_TIMEOUT_MS = 120000;
+const DEFAULT_MODEL = "whisper_podlodka";
+const JOBS_ROOT_ENV = "ECHOSCRIPT_JOBS_ROOT";
+
+export const PROJECT_ROOT = path.resolve(import.meta.dir, "..", "..");
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const asString = (value: unknown): string | null => {
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const asNumber = (value: unknown): number | null => {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+const asStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+};
+
+const normalizePythonExecutableForPlatform = (pythonExecutable: string): string => {
+  if (process.platform === "win32") {
+    return pythonExecutable.replace(/venv[\\/]+bin[\\/]+python$/i, "venv/Scripts/python.exe");
+  }
+
+  return pythonExecutable.replace(/venv[\\/]+scripts[\\/]+python\.exe$/i, "venv/bin/python");
+};
+
+const resolveModelConfig = (
+  projectRoot: string,
+  modelName: string,
+  rawConfig: RawModelConfig | null,
+): ModelConfig => {
+  const defaults = DEFAULT_MODELS[modelName as keyof typeof DEFAULT_MODELS];
+  const serviceDir = asString(rawConfig?.service_dir) ?? defaults?.serviceDir ?? null;
+  const pythonExecutable =
+    asString(rawConfig?.python_executable) ?? defaults?.pythonExecutable ?? null;
+  const moduleName = asString(rawConfig?.module) ?? defaults?.module ?? null;
+
+  if (serviceDir === null || pythonExecutable === null || moduleName === null) {
+    throw new Error(`Incomplete model config for ${modelName}`);
+  }
+
+  return {
+    serviceDir: path.resolve(projectRoot, serviceDir),
+    pythonExecutable: path.resolve(projectRoot, normalizePythonExecutableForPlatform(pythonExecutable)),
+    module: moduleName,
+  };
+};
+
+export const loadConfig = async (): Promise<AppConfig> => {
+  const configPath = path.join(PROJECT_ROOT, "config.json");
+  const rawText = await readFile(configPath, "utf-8");
+  const parsed: unknown = JSON.parse(rawText);
+  if (!isRecord(parsed)) {
+    throw new Error("config.json must contain a JSON object");
+  }
+
+  const rawConfig = parsed as RawConfig;
+  const rawModels = isRecord(rawConfig.models) ? rawConfig.models : {};
+  const modelNames = new Set<string>([
+    ...Object.keys(DEFAULT_MODELS),
+    ...Object.keys(rawModels),
+  ]);
+
+  const models: Record<string, ModelConfig> = {};
+  for (const modelName of modelNames) {
+    const modelValue = rawModels[modelName];
+    const modelConfig = isRecord(modelValue) ? (modelValue as RawModelConfig) : null;
+    models[modelName] = resolveModelConfig(PROJECT_ROOT, modelName, modelConfig);
+  }
+
+  const defaultModel = asString(rawConfig.default_model) ?? DEFAULT_MODEL;
+  if (!(defaultModel in models)) {
+    throw new Error(`default_model is not defined in models: ${defaultModel}`);
+  }
+
+  const maxWorkers = Math.max(1, asNumber(rawConfig.max_workers) ?? DEFAULT_MAX_WORKERS);
+  const pollIntervalMs = Math.max(
+    100,
+    asNumber(rawConfig.poll_interval_ms) ?? DEFAULT_POLL_INTERVAL_MS,
+  );
+  const modelStopTimeoutMs = Math.max(
+    1000,
+    asNumber(rawConfig.model_stop_timeout_ms) ?? DEFAULT_MODEL_STOP_TIMEOUT_MS,
+  );
+  const jobsRootOverride = asString(process.env[JOBS_ROOT_ENV]);
+  const configuredJobsRoot = jobsRootOverride ?? asString(rawConfig.jobs_root) ?? DEFAULT_JOBS_ROOT;
+  const configuredAllowedRoots = asStringArray(rawConfig.allowed_input_roots);
+  const allowedInputRoots = (configuredAllowedRoots.length > 0 ? configuredAllowedRoots : [PROJECT_ROOT]).map(
+    (rootPath) => path.resolve(PROJECT_ROOT, rootPath),
+  );
+
+  return {
+    projectRoot: PROJECT_ROOT,
+    jobsRoot: path.resolve(PROJECT_ROOT, configuredJobsRoot),
+    allowedInputRoots: [...new Set(allowedInputRoots)],
+    maxWorkers,
+    pollIntervalMs,
+    modelStopTimeoutMs,
+    defaultModel,
+    models,
+  };
+};

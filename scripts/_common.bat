@@ -6,8 +6,10 @@ REM Usage: call _common.bat <command> [args...]
 REM Commands: detect_gpu, create_venv <dir>, install_requirements <dir>
 REM ============================================================
 
+set "SCRIPT_DIR=%~dp0"
+call "%SCRIPT_DIR%env.bat"
+
 set "PYTHON_EXE=C:\Python313\python.exe"
-set "HF_HOME=c:\var\huggingface"
 set "PIP_DISABLE_PIP_VERSION_CHECK=1"
 
 REM Torch index URLs
@@ -88,7 +90,7 @@ if errorlevel 1 (
 )
 
 echo [INFO] Installing echoscript-shared in editable mode ...
-"%VENV_PIP%" install -e "%~dp0..\shared" --quiet
+"%VENV_PIP%" install -e "%SCRIPT_DIR%..\shared" --quiet
 if errorlevel 1 (
     echo [ERROR] Failed to install echoscript-shared.
     exit /b 1

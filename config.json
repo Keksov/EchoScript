@@ -1,0 +1,28 @@
+{
+  "jobs_root": "./jobs",
+  "max_workers": 1,
+  "poll_interval_ms": 500,
+  "default_model": "whisper_podlodka",
+  "models": {
+    "whisper_podlodka": {
+      "service_dir": "./services/whisper_podlodka",
+      "python_executable": "./services/whisper_podlodka/venv/bin/python",
+      "module": "app.main"
+    },
+    "borealis": {
+      "service_dir": "./services/borealis",
+      "python_executable": "./services/borealis/venv/bin/python",
+      "module": "app.main"
+    },
+    "gemma4": {
+      "service_dir": "./services/gemma4",
+      "python_executable": "./services/gemma4/venv/bin/python",
+      "module": "app.main"
+    },
+    "vibevoice": {
+      "service_dir": "./services/vibevoice",
+      "python_executable": "./services/vibevoice/venv/bin/python",
+      "module": "app.main"
+    }
+  }
+}

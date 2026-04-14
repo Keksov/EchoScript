@@ -5,6 +5,7 @@ REM ============================================================
 setlocal
 
 set "SCRIPT_DIR=%~dp0"
+call "%SCRIPT_DIR%env.bat"
 
 echo ============================================================
 echo  EchoScript — Full Setup

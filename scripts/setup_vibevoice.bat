@@ -6,6 +6,7 @@ REM ============================================================
 setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
+call "%SCRIPT_DIR%env.bat"
 set "SERVICE_DIR=%SCRIPT_DIR%..\services\vibevoice"
 
 call "%SCRIPT_DIR%_common.bat" detect_gpu

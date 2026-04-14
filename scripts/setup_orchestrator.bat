@@ -6,6 +6,7 @@ REM ============================================================
 setlocal
 
 set "SCRIPT_DIR=%~dp0"
+call "%SCRIPT_DIR%env.bat"
 set "ORCH_DIR=%SCRIPT_DIR%..\orchestrator"
 
 REM --- Check if bun is available ---

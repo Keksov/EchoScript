@@ -12,6 +12,10 @@ orchestrator/node_modules/
 
 # Vendored repos (cloned by setup scripts)
 **/vendor/
+**/jobs/
+jobs/
+tests/logs/
+services/*.pid
 
 # Environment
 .env

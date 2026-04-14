@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class TranscriptionResult:
     text: str
     language: str | None = None
-    segments: list[dict] | None = None
+    segments: list[dict[str, Any]] | None = None
+    raw: dict[str, Any] | None = None
 
 
 class BaseASRAdapter(ABC):
