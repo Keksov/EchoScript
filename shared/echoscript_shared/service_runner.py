@@ -22,6 +22,7 @@ except ImportError:
     Observer = None
 
 from echoscript_shared.base_adapter import BaseASRAdapter, TranscriptionResult
+from echoscript_shared.vosk_env import is_vosk_model_name
 
 LOGGER = logging.getLogger(__name__)
 
@@ -555,9 +556,10 @@ def _bootstrap_media_job(
             "job_id": job_id,
             "source": "input",
             "original_filename": original_filename,
+            "created_from": "file_drop",
         },
     )
-    _write_json(data_dir / "params.json", {})
+    _write_json(data_dir / "params.json", _build_default_bootstrap_params(paths.model_name))
     _write_json(
         data_dir / "status.json",
         [
@@ -566,6 +568,16 @@ def _bootstrap_media_job(
         ],
     )
     return data_dir
+
+
+def _build_default_bootstrap_params(model_name: str) -> dict[str, Any]:
+    if is_vosk_model_name(model_name):
+        return {
+            "punctuation": True,
+            "speaker_embeddings": True,
+        }
+
+    return {}
 
 
 def _record_bootstrap_failure(data_dir: Path, error: Exception) -> None:

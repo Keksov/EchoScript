@@ -31,9 +31,11 @@ export interface ListedJob {
   readonly has_result: boolean;
   readonly source: string | null;
   readonly original_filename: string | null;
+  readonly created_from: JobCreatedFrom | null;
 }
 
 export type JobResultType = "raw" | "normalized" | "plain" | "timestamp";
+type JobCreatedFrom = "api_body" | "api_file" | "file_drop";
 
 const MAX_JOB_ID_LENGTH = 200;
 const JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
@@ -48,6 +50,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
 };
 
 const nowIso = (): string => new Date().toISOString();
+
+const isVoskModelName = (modelName: string): boolean => {
+  return modelName.startsWith("vosk_");
+};
 
 const normalizeForComparison = (value: string): string => {
   const resolved = path.resolve(value);
@@ -163,6 +169,7 @@ export const getModelFromJobId = (jobId: string, knownModels: readonly string[] 
 interface JobInputMetadata {
   readonly source: string | null;
   readonly originalFilename: string | null;
+  readonly createdFrom: JobCreatedFrom | null;
 }
 
 interface JobStatusSummary {
@@ -213,6 +220,7 @@ export class JobManager {
     await writeJson(path.join(dataDir, "input.json"), {
       job_id: jobId,
       source: source.length > 0 ? source : "input",
+      created_from: "api_body",
     });
 
     return {
@@ -253,6 +261,7 @@ export class JobManager {
     await writeJson(path.join(dataDir, "input.json"), {
       job_id: jobId,
       source: resolvedPath,
+      created_from: "api_file",
     });
 
     return {
@@ -270,8 +279,10 @@ export class JobManager {
     await this.ensureJobDataDir(jobId);
     const modelName = this.resolveModelFromJobId(jobId);
     const targetModel = modelName ?? this.config.defaultModel;
+    const inputMetadata = await this.readJobInputMetadata(this.getDataDir(jobId));
+    const effectiveParams = this.mergePhaseTwoDefaults(targetModel, inputMetadata.createdFrom, params);
 
-    await writeJson(path.join(this.getDataDir(jobId), "params.json"), params);
+    await writeJson(path.join(this.getDataDir(jobId), "params.json"), effectiveParams);
     await this.appendStatus(this.getDataDir(jobId), "queued");
     await writeJson(path.join(this.getQueueDir(), `${jobId}.json`), {
       created_at: nowIso(),
@@ -560,6 +571,7 @@ export class JobManager {
       has_result: hasResult,
       source: inputMetadata.source,
       original_filename: inputMetadata.originalFilename,
+      created_from: inputMetadata.createdFrom,
     };
   }
 
@@ -570,12 +582,14 @@ export class JobManager {
         return {
           source: null,
           originalFilename: null,
+          createdFrom: null,
         };
       }
 
       return {
         source: typeof payload.source === "string" ? payload.source : null,
         originalFilename: typeof payload.original_filename === "string" ? payload.original_filename : null,
+        createdFrom: this.parseCreatedFrom(payload.created_from),
       };
     } catch (error) {
       const code = getNodeErrorCode(error);
@@ -583,11 +597,40 @@ export class JobManager {
         return {
           source: null,
           originalFilename: null,
+          createdFrom: null,
         };
       }
 
       throw error;
     }
+  }
+
+  private mergePhaseTwoDefaults(
+    modelName: string,
+    createdFrom: JobCreatedFrom | null,
+    params: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (!isVoskModelName(modelName)) {
+      return params;
+    }
+
+    const defaultedCreatedFrom = createdFrom ?? "api_body";
+    const defaults = defaultedCreatedFrom === "file_drop"
+      ? { punctuation: true, speaker_embeddings: true }
+      : { punctuation: false, speaker_embeddings: false };
+
+    return {
+      ...defaults,
+      ...params,
+    };
+  }
+
+  private parseCreatedFrom(value: unknown): JobCreatedFrom | null {
+    if (value === "api_body" || value === "api_file" || value === "file_drop") {
+      return value;
+    }
+
+    return null;
   }
 
   private async readJobStatusSummary(jobId: string, dataDir: string): Promise<JobStatusSummary> {

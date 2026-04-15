@@ -85,12 +85,36 @@ if ($apiCreatedJob.Ok) {
         if ($null -ne $listedApiJob) {
             Assert-Equal "API-created job current status is dispatching" "dispatching" ([string]$listedApiJob.current_status)
             Assert-Equal "API-created job source is preserved" "job-discovery-api" ([string]$listedApiJob.source)
+            Assert-Equal "API-created body job created_from is api_body" "api_body" ([string]$listedApiJob.created_from)
             Assert-True "API-created job has no result before run" (-not [bool]$listedApiJob.has_result)
         }
     }
 
     $cleanupApiJob = Remove-Job -JobId $apiCreatedJobId
     Assert-Equal "cleanup API-created job returns 200" 200 $cleanupApiJob.StatusCode
+}
+
+Write-TestHeader "GET /list_jobs includes API file job"
+$apiFileJob = Add-FileJob -FilePath $audioFilePath -Model $ModelName
+Assert-True "setup API file job succeeds" $apiFileJob.Ok
+Assert-NotNull "API file job returns job_id" $apiFileJob.Data.job_id
+
+if ($apiFileJob.Ok) {
+    $apiFileJobId = [string]$apiFileJob.Data.job_id
+    $listedJobs = Get-Jobs
+    Assert-True "list_jobs succeeds for API file job" $listedJobs.Ok
+    if ($listedJobs.Ok) {
+        $listedApiFileJob = Find-ListedJob -JobsPayload $listedJobs.Data -JobId $apiFileJobId
+        Assert-NotNull "list_jobs includes API file job" $listedApiFileJob
+        if ($null -ne $listedApiFileJob) {
+            Assert-Equal "API file job current status is dispatching" "dispatching" ([string]$listedApiFileJob.current_status)
+            Assert-Equal "API file job created_from is api_file" "api_file" ([string]$listedApiFileJob.created_from)
+            Assert-True "API file job has no result before run" (-not [bool]$listedApiFileJob.has_result)
+        }
+    }
+
+    $cleanupApiFileJob = Remove-Job -JobId $apiFileJobId
+    Assert-Equal "cleanup API file job returns 200" 200 $cleanupApiFileJob.StatusCode
 }
 
 Write-TestHeader "GET /list_jobs includes direct media drop job"
@@ -262,6 +286,7 @@ try {
         Assert-Equal "direct-drop listed model" $ModelName ([string]$listedDirectJob.model)
         Assert-Equal "direct-drop listed source" "input" ([string]$listedDirectJob.source)
         Assert-Equal "direct-drop listed original filename" $audioLabel ([string]$listedDirectJob.original_filename)
+        Assert-Equal "direct-drop created_from is file_drop" "file_drop" ([string]$listedDirectJob.created_from)
         Assert-True "direct-drop listed status is present" (@("dispatching", "pending", "processing", "ready") -contains [string]$listedDirectJob.current_status)
     }
 } finally {

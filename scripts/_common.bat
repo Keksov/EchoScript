@@ -29,18 +29,18 @@ REM ============================================================
 nvidia-smi >nul 2>&1
 if %errorlevel% equ 0 (
     set "HAS_GPU=1"
-    echo [INFO] NVIDIA GPU detected — will install CUDA-enabled torch.
+    echo [INFO] NVIDIA GPU detected - will install CUDA-enabled torch.
 ) else (
     set "HAS_GPU=0"
-    echo [INFO] No NVIDIA GPU detected — will install CPU-only torch.
+    echo [INFO] No NVIDIA GPU detected - will install CPU-only torch.
 )
-goto :eof
+exit /b 0
 
 REM ============================================================
 :create_venv
 REM Usage: call :create_venv <service_dir>
-REM Creates venv in <service_dir>\venv and installs torch.
-REM Requires HAS_GPU to be set (call :detect_gpu first).
+REM Creates venv in <service_dir>\venv and installs torch unless SKIP_TORCH=1.
+REM Requires HAS_GPU to be set unless SKIP_TORCH=1.
 REM ============================================================
 set "SERVICE_DIR=%~1"
 set "VENV_DIR=%SERVICE_DIR%\venv"
@@ -60,6 +60,11 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
 echo [INFO] Ensuring pip is available ...
 "%VENV_DIR%\Scripts\python.exe" -m ensurepip --upgrade --default-pip 2>nul
 "%VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip --quiet
+
+if /I "%SKIP_TORCH%"=="1" (
+    echo [INFO] SKIP_TORCH=1, skipping torch installation.
+    goto :eof
+)
 
 echo [INFO] Installing torch ...
 if "%HAS_GPU%"=="1" (

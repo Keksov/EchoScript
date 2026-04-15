@@ -23,6 +23,16 @@
       "service_dir": "./services/vibevoice",
       "python_executable": "./services/vibevoice/venv/bin/python",
       "module": "app.main"
+    },
+    "vosk_ru": {
+      "service_dir": "./services/vosk_ru",
+      "python_executable": "./services/vosk_ru/venv/bin/python",
+      "module": "app.main"
+    },
+    "vosk_en": {
+      "service_dir": "./services/vosk_en",
+      "python_executable": "./services/vosk_en/venv/bin/python",
+      "module": "app.main"
     }
   }
 }

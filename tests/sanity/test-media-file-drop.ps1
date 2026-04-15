@@ -6,7 +6,7 @@ param(
     [string]$ModelName = "whisper_podlodka",
     [string]$AudioPath = "",
     [int]$StartupTimeoutSeconds = 120,
-    [int]$WatcherStartupTimeoutSeconds = 15,
+    [int]$WatcherStartupTimeoutSeconds = 120,
     [int]$WakeupThresholdMs = 2500,
     [int]$PollIntervalMs = 5000,
     [int]$CompletionTimeoutSeconds = 300
@@ -346,6 +346,8 @@ try {
     $resultPayload = Read-JsonFile -Path $resultPath
     $plainResultPath = Join-Path $dataDir "result_plain.txt"
     $timestampResultPath = Join-Path $dataDir "result_timestamp.txt"
+    $inputMetadataPath = Join-Path $dataDir "input.json"
+    $paramsPath = Join-Path $dataDir "params.json"
     $statusNames = @($finalStatuses | ForEach-Object { $_.status })
 
     Assert-Contains "status progression includes processing [$audioLabel]" ($statusNames -join ",") "processing"
@@ -355,8 +357,23 @@ try {
     Assert-True "output marker exists [$audioLabel]" (Test-Path $outputMarkerPath)
     Assert-True "plain result exists [$audioLabel]" (Test-Path $plainResultPath)
     Assert-True "timestamp result exists [$audioLabel]" (Test-Path $timestampResultPath)
+    Assert-True "input metadata exists [$audioLabel]" (Test-Path $inputMetadataPath)
     Assert-NotNull "result normalized text exists [$audioLabel]" $resultPayload.normalized.text
     Assert-NotNull "result raw text exists [$audioLabel]" $resultPayload.raw.text
+
+    if (Test-Path $inputMetadataPath) {
+        $inputMetadata = Read-JsonFile -Path $inputMetadataPath
+        Assert-Equal "file drop created_from is file_drop [$audioLabel]" "file_drop" ([string]$inputMetadata.created_from)
+    }
+
+    if (@("vosk_ru", "vosk_en") -contains $ModelName) {
+        Assert-True "Vosk params exist [$audioLabel]" (Test-Path $paramsPath)
+        if (Test-Path $paramsPath) {
+            $paramsPayload = Read-JsonFile -Path $paramsPath
+            Assert-True "Vosk punctuation default is enabled for file drop [$audioLabel]" ([bool]$paramsPayload.punctuation)
+            Assert-True "Vosk speaker embeddings default is enabled for file drop [$audioLabel]" ([bool]$paramsPayload.speaker_embeddings)
+        }
+    }
 
     $plainResultText = (Get-Content -Raw $plainResultPath).Trim()
     $timestampResultText = Get-Content -Raw $timestampResultPath
