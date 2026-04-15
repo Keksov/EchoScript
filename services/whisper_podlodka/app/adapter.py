@@ -1,21 +1,47 @@
+import copy
 import logging
 from pathlib import Path
 from typing import Any
 
 import librosa
 import torch
-from huggingface_hub import snapshot_download
-from safetensors import safe_open
-from transformers import AutoConfig, AutoFeatureExtractor, AutoModelForSpeechSeq2Seq, AutoTokenizer, GenerationConfig, pipeline
-from transformers.models.whisper.tokenization_whisper import TO_LANGUAGE_CODE
-
 from echoscript_shared.base_adapter import BaseASRAdapter, TranscriptionResult
 from echoscript_shared.hf_env import get_hf_hub_cache
+from huggingface_hub import snapshot_download
+from safetensors import safe_open
+from transformers import (
+    AutoConfig,
+    AutoFeatureExtractor,
+    AutoModelForSpeechSeq2Seq,
+    AutoTokenizer,
+    GenerationConfig,
+    pipeline,
+)
+from transformers.models.whisper.tokenization_whisper import TO_LANGUAGE_CODE
 
 LOGGER = logging.getLogger(__name__)
+TRANSFORMERS_GENERATION_LOGGER = logging.getLogger("transformers.generation.utils")
+
+_SUPPRESSED_TRANSFORMERS_WARNINGS = (
+    "A custom logits processor of type <class 'transformers.generation.logits_process.SuppressTokensLogitsProcessor'> has been passed to `.generate()`",
+    "A custom logits processor of type <class 'transformers.generation.logits_process.SuppressTokensAtBeginLogitsProcessor'> has been passed to `.generate()`",
+)
+
+
+class _WhisperGenerationWarningFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not any(message.startswith(prefix) for prefix in _SUPPRESSED_TRANSFORMERS_WARNINGS)
+
+
+if not any(isinstance(existing, _WhisperGenerationWarningFilter) for existing in TRANSFORMERS_GENERATION_LOGGER.filters):
+    TRANSFORMERS_GENERATION_LOGGER.addFilter(_WhisperGenerationWarningFilter())
 
 try:
-    from whisper_lid.whisper_lid import detect_language_in_long_speech, detect_language_in_speech
+    from whisper_lid.whisper_lid import (
+        detect_language_in_long_speech,
+        detect_language_in_speech,
+    )
 except ImportError:
     detect_language_in_long_speech = None
     detect_language_in_speech = None
@@ -95,13 +121,20 @@ class WhisperPodlodkaAdapter(BaseASRAdapter):
 
         try:
             model.generation_config = GenerationConfig.from_pretrained(str(snapshot_path), local_files_only=True)
+            model.generation_config.max_length = None
         except OSError:
             LOGGER.warning("Generation config is missing for %s", snapshot_path)
 
         model.eval()
         return model
 
-    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_path: str,
+        language: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> TranscriptionResult:
+        del params
         audio_file = Path(audio_path)
         if not audio_file.exists() or not audio_file.is_file():
             raise FileNotFoundError(f"Audio file does not exist: {audio_file}")
@@ -115,23 +148,19 @@ class WhisperPodlodkaAdapter(BaseASRAdapter):
 
         target_language = self._resolve_language(audio_file, language)
 
-        generate_kwargs: dict[str, Any] = {
-            "task": "transcribe",
-            "max_new_tokens": 410,
-            "num_beams": 5,
-            "condition_on_prev_tokens": False,
-            "compression_ratio_threshold": 2.4,
-            "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
-            "logprob_threshold": -1.0,
-            "no_speech_threshold": 0.6,
-        }
-        if target_language is not None:
-            generate_kwargs["language"] = target_language
-
         raw_output = pipeline_instance(
             str(audio_file),
             return_timestamps=True,
-            generate_kwargs=generate_kwargs,
+            generate_kwargs={
+                "generation_config": self._build_generation_config(pipeline_instance),
+                "task": "transcribe",
+                "condition_on_prev_tokens": False,
+                "compression_ratio_threshold": 2.4,
+                "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+                "logprob_threshold": -1.0,
+                "no_speech_threshold": 0.6,
+                **({"language": target_language} if target_language is not None else {}),
+            },
         )
         if not isinstance(raw_output, dict):
             raise RuntimeError("Unexpected output type from ASR pipeline")
@@ -147,6 +176,20 @@ class WhisperPodlodkaAdapter(BaseASRAdapter):
 
     def is_loaded(self) -> bool:
         return self._pipeline is not None
+
+    def _build_generation_config(self, pipeline_instance: Any) -> GenerationConfig:
+        base_config = getattr(pipeline_instance, "generation_config", None)
+        if base_config is None:
+            model = getattr(pipeline_instance, "model", None)
+            base_config = getattr(model, "generation_config", None)
+
+        model = getattr(pipeline_instance, "model", None)
+        max_target_positions = getattr(getattr(model, "config", None), "max_target_positions", 448)
+        generation_config = copy.deepcopy(base_config) if base_config is not None else GenerationConfig()
+        generation_config.max_new_tokens = None
+        generation_config.max_length = max_target_positions
+        generation_config.num_beams = 5
+        return generation_config
 
     def _resolve_language(self, audio_file: Path, language: str | None) -> str | None:
         if language is not None and language.lower() != "auto":

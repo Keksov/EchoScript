@@ -1,3 +1,5 @@
+from typing import Any
+
 from echoscript_shared import BaseASRAdapter, TranscriptionResult
 
 
@@ -7,7 +9,12 @@ class BorealisAdapter(BaseASRAdapter):
     def load_model(self) -> None:
         raise NotImplementedError
 
-    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_path: str,
+        language: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> TranscriptionResult:
         raise NotImplementedError
 
     def is_loaded(self) -> bool:

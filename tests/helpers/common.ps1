@@ -847,7 +847,9 @@ function Invoke-TestTranscriptionFlow {
         [string]$InputMethod,
         [string]$AudioPath = "",
         [string]$Model = "",
-        [hashtable]$Params = @{}
+        [hashtable]$Params = @{},
+        [int]$TimeoutSeconds = $Script:PollTimeoutSeconds,
+        [int]$IntervalSeconds = $Script:PollIntervalSeconds
     )
 
     if ($AudioPath.Length -eq 0) {
@@ -883,7 +885,7 @@ function Invoke-TestTranscriptionFlow {
     Assert-Equal "$Label - queue name" "queue" $runResult.Data.queue
     Assert-NotNull "$Label - target model" $runResult.Data.target_model
 
-    $waitResult = Wait-ForJobCompletion -JobId $jobId
+    $waitResult = Wait-ForJobCompletion -JobId $jobId -TimeoutSeconds $TimeoutSeconds -IntervalSeconds $IntervalSeconds
     Assert-True "$Label - job completed" $waitResult.Ok
     if (-not $waitResult.Ok) {
         Write-TestStep "Failure reason: $($waitResult.Error)"

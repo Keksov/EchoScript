@@ -17,7 +17,12 @@ class BaseASRAdapter(ABC):
         ...
 
     @abstractmethod
-    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_path: str,
+        language: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> TranscriptionResult:
         ...
 
     @abstractmethod

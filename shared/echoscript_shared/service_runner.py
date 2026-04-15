@@ -334,7 +334,7 @@ def _process_job(adapter: BaseASRAdapter, data_dir: Path) -> dict[str, Any]:
     params = _load_params(data_dir)
     audio_path = _resolve_audio_path(data_dir)
     language = _extract_language(params)
-    result = adapter.transcribe(str(audio_path), language)
+    result = adapter.transcribe(str(audio_path), language, params)
     return {
         "raw": _build_raw_result(result),
         "normalized": _build_normalized_result(result, params),
@@ -371,14 +371,16 @@ def _build_timestamp_result_text(result: dict[str, Any]) -> str:
             if len(text) == 0:
                 continue
 
+            speaker_prefix = _build_speaker_text_prefix(segment.get("speaker"))
+
             start = _to_float(segment.get("start"))
             end = _to_float(segment.get("end"))
             if start is None or end is None:
-                lines.append(text)
+                lines.append(f"{speaker_prefix}{text}")
                 continue
 
             lines.append(
-                f"[{_format_timestamp_seconds(start)} --> {_format_timestamp_seconds(max(start, end))}]  {text}"
+                f"[{_format_timestamp_seconds(start)} --> {_format_timestamp_seconds(max(start, end))}]  {speaker_prefix}{text}"
             )
 
     if len(lines) == 0:
@@ -393,6 +395,17 @@ def _normalize_text_artifact(text: str) -> str:
         return ""
 
     return f"{stripped_text}\n"
+
+
+def _build_speaker_text_prefix(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+
+    normalized_value = value.strip()
+    if len(normalized_value) == 0:
+        return ""
+
+    return f"[{normalized_value}]  "
 
 
 def _format_timestamp_seconds(seconds: float) -> str:
