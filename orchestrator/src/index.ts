@@ -12,6 +12,19 @@ import {
   UnknownModelError,
 } from "./job-manager";
 import { ProcessManager } from "./process-manager";
+import {
+  assertSpeechTargetProvisioned,
+  buildBufferedSpeechParams,
+  buildBufferedSpeechResponse,
+  hasBufferedSpeechText,
+  InvalidSpeechRequestError,
+  parseBufferedSpeechRequest,
+  resolveSpeechTargetModel,
+  SpeechConfigurationError,
+  SpeechJobFailedError,
+  SpeechProcessingTimeoutError,
+  waitForBufferedSpeechResult,
+} from "./speech-v2";
 import { JobBusyError, Scheduler } from "./scheduler";
 
 interface AddFileBody {
@@ -181,6 +194,87 @@ app.get("/list_jobs", async (c) => {
     const jobs = await jobManager.listJobs();
     return c.json({ jobs });
   } catch (error) {
+    return c.json({ error: messageOf(error) }, 500);
+  }
+});
+
+app.post("/api/v2/speech/recognize", async (c) => {
+  try {
+    const requestStartedAt = Date.now();
+    const request = parseBufferedSpeechRequest(
+      c.req.query("mode"),
+      c.req.query("language"),
+      c.req.query("timeout_ms"),
+    );
+    const targetModel = resolveSpeechTargetModel(config, request);
+    await assertSpeechTargetProvisioned(config, targetModel);
+    const body = await readBodyWithLimit(c.req.raw, maxAddBodyBytes);
+    const createdJob = await jobManager.addBodyJob(body, targetModel, `speech_v2_${request.mode}`);
+    const queuedJob = await scheduler.enqueue(createdJob.jobId, buildBufferedSpeechParams(config, request));
+    let responseJobId = createdJob.jobId;
+    let responseTargetModel = queuedJob.targetModel;
+    let responsePayload = await waitForBufferedSpeechResult(jobManager, createdJob.jobId, request.timeoutMs);
+    let commandStatus = request.mode === "command" ? "matched" : null;
+
+    if (request.mode === "command" && !hasBufferedSpeechText(responsePayload)) {
+      const fallbackRequest = { ...request, mode: "dictation" as const };
+      const fallbackTargetModel = resolveSpeechTargetModel(config, fallbackRequest);
+      await assertSpeechTargetProvisioned(config, fallbackTargetModel);
+
+      const remainingTimeoutMs = request.timeoutMs - (Date.now() - requestStartedAt);
+      if (remainingTimeoutMs <= 0) {
+        throw new SpeechProcessingTimeoutError(
+          createdJob.jobId,
+          `Timed out waiting for speech fallback result for ${createdJob.jobId}`,
+        );
+      }
+
+      const fallbackCreatedJob = await jobManager.addBodyJob(
+        body,
+        fallbackTargetModel,
+        "speech_v2_command_fallback",
+      );
+      const fallbackQueuedJob = await scheduler.enqueue(
+        fallbackCreatedJob.jobId,
+        buildBufferedSpeechParams(config, fallbackRequest),
+      );
+
+      responseJobId = fallbackCreatedJob.jobId;
+      responseTargetModel = fallbackQueuedJob.targetModel;
+      responsePayload = await waitForBufferedSpeechResult(
+        jobManager,
+        fallbackCreatedJob.jobId,
+        remainingTimeoutMs,
+      );
+      commandStatus = "not_command";
+    }
+
+    return c.json(
+      buildBufferedSpeechResponse(
+        responseJobId,
+        request,
+        responseTargetModel,
+        responsePayload,
+        commandStatus,
+      ),
+    );
+  } catch (error) {
+    if (error instanceof InvalidSpeechRequestError || error instanceof InvalidJobError) {
+      return c.json({ error: messageOf(error) }, 400);
+    }
+
+    if (error instanceof SpeechProcessingTimeoutError) {
+      return c.json({ error: messageOf(error), job_id: error.jobId }, 504);
+    }
+
+    if (error instanceof SpeechJobFailedError) {
+      return c.json({ error: messageOf(error), job_id: error.jobId }, 422);
+    }
+
+    if (error instanceof SpeechConfigurationError || error instanceof UnknownModelError) {
+      return c.json({ error: messageOf(error) }, 503);
+    }
+
     return c.json({ error: messageOf(error) }, 500);
   }
 });

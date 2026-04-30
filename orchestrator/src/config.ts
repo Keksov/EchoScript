@@ -8,6 +8,10 @@ export interface ModelConfig {
   readonly module: string;
 }
 
+export interface SpeechConfig {
+  readonly commandGrammars: Readonly<Record<string, readonly string[]>>;
+}
+
 export interface AppConfig {
   readonly projectRoot: string;
   readonly jobsRoot: string;
@@ -16,6 +20,7 @@ export interface AppConfig {
   readonly pollIntervalMs: number;
   readonly modelStopTimeoutMs: number;
   readonly defaultModel: string;
+  readonly speech: SpeechConfig;
   readonly models: Readonly<Record<string, ModelConfig>>;
 }
 
@@ -25,6 +30,10 @@ interface RawModelConfig {
   readonly module?: unknown;
 }
 
+interface RawSpeechConfig {
+  readonly command_grammars?: unknown;
+}
+
 interface RawConfig {
   readonly jobs_root?: unknown;
   readonly allowed_input_roots?: unknown;
@@ -32,6 +41,7 @@ interface RawConfig {
   readonly poll_interval_ms?: unknown;
   readonly model_stop_timeout_ms?: unknown;
   readonly default_model?: unknown;
+  readonly speech?: unknown;
   readonly models?: unknown;
 }
 
@@ -58,6 +68,9 @@ const DEFAULT_POLL_INTERVAL_MS = 500;
 const DEFAULT_MODEL_STOP_TIMEOUT_MS = 120000;
 const DEFAULT_MODEL = "whisper_podlodka";
 const JOBS_ROOT_ENV = "ECHOSCRIPT_JOBS_ROOT";
+const DEFAULT_COMMAND_GRAMMARS = {
+  ru: ["вверх", "вниз", "дальше", "назад", "пауза", "старт", "стоп"],
+} as const;
 
 export const PROJECT_ROOT = path.resolve(import.meta.dir, "..", "..");
 
@@ -79,6 +92,12 @@ const asStringArray = (value: unknown): string[] => {
   }
 
   return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+};
+
+const asTrimmedStringArray = (value: unknown): string[] => {
+  return asStringArray(value)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 };
 
 const normalizePythonExecutableForPlatform = (pythonExecutable: string): string => {
@@ -108,6 +127,31 @@ const resolveModelConfig = (
     serviceDir: path.resolve(projectRoot, serviceDir),
     pythonExecutable: path.resolve(projectRoot, normalizePythonExecutableForPlatform(pythonExecutable)),
     module: moduleName,
+  };
+};
+
+const resolveSpeechConfig = (rawConfig: RawSpeechConfig | null): SpeechConfig => {
+  const commandGrammars: Record<string, readonly string[]> = {};
+
+  for (const [language, grammar] of Object.entries(DEFAULT_COMMAND_GRAMMARS)) {
+    commandGrammars[language] = [...grammar];
+  }
+
+  const rawCommandGrammars = rawConfig !== null && isRecord(rawConfig.command_grammars)
+    ? rawConfig.command_grammars
+    : null;
+
+  if (rawCommandGrammars !== null) {
+    for (const [language, rawGrammar] of Object.entries(rawCommandGrammars)) {
+      const normalizedGrammar = [...new Set(asTrimmedStringArray(rawGrammar))];
+      if (normalizedGrammar.length > 0) {
+        commandGrammars[language] = normalizedGrammar;
+      }
+    }
+  }
+
+  return {
+    commandGrammars,
   };
 };
 
@@ -162,6 +206,7 @@ export const loadConfig = async (): Promise<AppConfig> => {
     pollIntervalMs,
     modelStopTimeoutMs,
     defaultModel,
+    speech: resolveSpeechConfig(isRecord(rawConfig.speech) ? (rawConfig.speech as RawSpeechConfig) : null),
     models,
   };
 };

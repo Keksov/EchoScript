@@ -129,7 +129,16 @@ class VoskRuntime:
         if KaldiRecognizer is None or self._model is None:
             raise RuntimeError("vosk is not available")
 
-        recognizer = KaldiRecognizer(self._model, _TARGET_SAMPLE_RATE)
+        grammar = self._coerce_grammar_param(params.get("grammar"))
+        if grammar is None:
+            recognizer = KaldiRecognizer(self._model, _TARGET_SAMPLE_RATE)
+        else:
+            recognizer = KaldiRecognizer(
+                self._model,
+                _TARGET_SAMPLE_RATE,
+                json.dumps(grammar, ensure_ascii=False),
+            )
+
         recognizer.SetWords(True)
         if bool(params.get("partial_words", False)) and hasattr(recognizer, "SetPartialWords"):
             recognizer.SetPartialWords(True)
@@ -434,7 +443,7 @@ class VoskRuntime:
                 language,
             )
 
-        unsupported_keys = [key for key in ("hotwords", "grammar") if key in params]
+        unsupported_keys = [key for key in ("hotwords",) if key in params]
         if len(unsupported_keys) > 0:
             LOGGER.info(
                 "Ignoring unsupported Vosk runtime params for %s: %s",
@@ -463,3 +472,27 @@ class VoskRuntime:
                 return False
 
         return False
+
+    def _coerce_grammar_param(self, value: object) -> list[str] | None:
+        if isinstance(value, str):
+            normalized_value = value.strip()
+            return [normalized_value] if len(normalized_value) > 0 else None
+
+        if not isinstance(value, list):
+            return None
+
+        grammar: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                continue
+
+            normalized_item = item.strip()
+            if len(normalized_item) == 0:
+                continue
+
+            grammar.append(normalized_item)
+
+        if len(grammar) == 0:
+            return None
+
+        return grammar

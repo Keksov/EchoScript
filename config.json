@@ -3,6 +3,19 @@
   "max_workers": 1,
   "poll_interval_ms": 500,
   "default_model": "whisper_podlodka",
+  "speech": {
+    "command_grammars": {
+      "ru": [
+        "вверх",
+        "вниз",
+        "дальше",
+        "назад",
+        "пауза",
+        "старт",
+        "стоп"
+      ]
+    }
+  },
   "models": {
     "whisper_podlodka": {
       "service_dir": "./services/whisper_podlodka",
@@ -27,6 +40,11 @@
     "vosk_ru": {
       "service_dir": "./services/vosk_ru",
       "python_executable": "./services/vosk_ru/venv/bin/python",
+      "module": "app.main"
+    },
+    "vosk_ru_cmd": {
+      "service_dir": "./services/vosk_ru_cmd",
+      "python_executable": "./services/vosk_ru_cmd/venv/bin/python",
       "module": "app.main"
     },
     "vosk_en": {

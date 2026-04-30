@@ -1,5 +1,6 @@
 ---
 applyTo: "orchestrator/**/*.ts"
+description: "TypeScript best practices for the orchestrator, including Bun patterns, strict typing, async streams, and naming conventions."
 ---
 
 # TypeScript Best Practices (Bun)

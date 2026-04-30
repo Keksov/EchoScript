@@ -1,0 +1,1 @@
+"""vosk_ru_cmd service package."""

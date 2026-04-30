@@ -16,6 +16,26 @@ $ErrorActionPreference = "Stop"
 
 . "$PSScriptRoot\..\helpers\common.ps1"
 
+function Test-IsVoskModel {
+    param([string]$Name)
+
+    return $Name.StartsWith("vosk_", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+if (Test-IsVoskModel -Name $ModelName) {
+    if (-not $PSBoundParameters.ContainsKey("StartupTimeoutSeconds")) {
+        $StartupTimeoutSeconds = 240
+    }
+
+    if (-not $PSBoundParameters.ContainsKey("WatcherStartupTimeoutSeconds")) {
+        $WatcherStartupTimeoutSeconds = 420
+    }
+
+    if (-not $PSBoundParameters.ContainsKey("CompletionTimeoutSeconds")) {
+        $CompletionTimeoutSeconds = 600
+    }
+}
+
 function Read-JsonFile {
     param([string]$Path)
 

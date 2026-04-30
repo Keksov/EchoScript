@@ -1,5 +1,6 @@
 ---
 applyTo: "**/*.py"
+description: "Python best practices for EchoScript services, including FastAPI structure, adapters, async patterns, and dependency rules."
 ---
 
 # Python Best Practices (EchoScript Services)
