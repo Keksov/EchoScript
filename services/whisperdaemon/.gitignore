@@ -1,0 +1,7 @@
+releases
+whisper.cpp
+build
+logs
+models
+spikes/conversion-out
+spikes/conversion.log

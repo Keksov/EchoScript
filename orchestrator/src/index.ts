@@ -205,6 +205,7 @@ app.post("/api/v2/speech/recognize", async (c) => {
       c.req.query("mode"),
       c.req.query("language"),
       c.req.query("timeout_ms"),
+      c.req.query("speaker_embeddings"),
     );
     const targetModel = resolveSpeechTargetModel(config, request);
     await assertSpeechTargetProvisioned(config, targetModel);
@@ -214,7 +215,8 @@ app.post("/api/v2/speech/recognize", async (c) => {
     let responseJobId = createdJob.jobId;
     let responseTargetModel = queuedJob.targetModel;
     let responsePayload = await waitForBufferedSpeechResult(jobManager, createdJob.jobId, request.timeoutMs);
-    let commandStatus = request.mode === "command" ? "matched" : null;
+    let commandStatus: "matched" | "not_command" | null =
+      request.mode === "command" ? "matched" : null;
 
     if (request.mode === "command" && !hasBufferedSpeechText(responsePayload)) {
       const fallbackRequest = { ...request, mode: "dictation" as const };

@@ -16,6 +16,7 @@ orchestrator/node_modules/
 jobs/
 tests/logs/
 services/*.pid
+services/voskdaemon/logs/
 
 # Environment
 .env

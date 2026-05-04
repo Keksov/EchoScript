@@ -11,6 +11,7 @@ export interface BufferedSpeechRequest {
   readonly mode: SpeechMode
   readonly language: SpeechLanguage
   readonly timeoutMs: number
+  readonly speakerEmbeddings: boolean | null
 }
 
 export interface BufferedSpeechResultPayload {
@@ -28,6 +29,7 @@ export interface BufferedSpeechResponse {
   readonly command_status: BufferedSpeechCommandStatus | null
   readonly status: "ready"
   readonly is_final: true
+  readonly speaker_aware: boolean
   readonly text: string
   readonly language: string
   readonly segments: readonly unknown[] | null
@@ -86,6 +88,23 @@ const asPositiveInteger = (value: string | undefined): number | null => {
   return parsed
 }
 
+const asOptionalBoolean = (value: string | undefined): boolean | null => {
+  if (value === undefined || value.length === 0) {
+    return null
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (normalized === "1" || normalized === "true" || normalized === "yes") {
+    return true
+  }
+
+  if (normalized === "0" || normalized === "false" || normalized === "no") {
+    return false
+  }
+
+  return null
+}
+
 const getLastStatusEntry = (payload: unknown): StatusEntry | null => {
   if (!Array.isArray(payload) || payload.length === 0) {
     return null
@@ -141,16 +160,23 @@ export const parseBufferedSpeechRequest = (
   rawMode: string | undefined,
   rawLanguage: string | undefined,
   rawTimeoutMs: string | undefined,
+  rawSpeakerEmbeddings: string | undefined,
 ): BufferedSpeechRequest => {
   const timeoutMs = asPositiveInteger(rawTimeoutMs) ?? DEFAULT_BUFFERED_TIMEOUT_MS
   if (timeoutMs > MAX_BUFFERED_TIMEOUT_MS) {
     throw new InvalidSpeechRequestError(`timeout_ms cannot exceed ${MAX_BUFFERED_TIMEOUT_MS}`)
   }
 
+  const speakerEmbeddings = asOptionalBoolean(rawSpeakerEmbeddings)
+  if (rawSpeakerEmbeddings !== undefined && speakerEmbeddings === null) {
+    throw new InvalidSpeechRequestError("speaker_embeddings query parameter must be true/false/1/0")
+  }
+
   return {
     mode: assertSpeechMode(rawMode),
     language: assertSpeechLanguage(rawLanguage),
     timeoutMs,
+    speakerEmbeddings,
   }
 }
 
@@ -241,12 +267,14 @@ export const buildBufferedSpeechParams = (
   config: AppConfig,
   request: BufferedSpeechRequest,
 ): Record<string, unknown> => {
+  const speakerEmbeddings = request.speakerEmbeddings ?? false
+
   if (request.mode === "command") {
     return {
       language: request.language,
       grammar: [...getCommandGrammar(config, request.language)],
       punctuation: false,
-      speaker_embeddings: false,
+      speaker_embeddings: speakerEmbeddings,
       timestamps: false,
       word_timestamps: false,
     }
@@ -255,7 +283,7 @@ export const buildBufferedSpeechParams = (
   return {
     language: request.language,
     punctuation: true,
-    speaker_embeddings: false,
+    speaker_embeddings: speakerEmbeddings,
     timestamps: true,
     word_timestamps: true,
   }
@@ -322,6 +350,7 @@ export const buildBufferedSpeechResponse = (
     command_status: commandStatus,
     status: "ready",
     is_final: true,
+    speaker_aware: request.speakerEmbeddings === true,
     text,
     language,
     segments,
