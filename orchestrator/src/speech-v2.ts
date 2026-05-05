@@ -201,11 +201,11 @@ export const resolveSpeechTargetModel = (
 
 const getProvisioningScripts = (targetModel: string): readonly string[] => {
   if (targetModel === "vosk_ru_cmd") {
-    return ["scripts\\setup_vosk_ru_cmd.bat", "scripts\\download_vosk_ru_cmd.bat"]
+    return ["services\\vosk_ru_cmd\\scripts\\setup_vosk_ru_cmd.bat", "services\\vosk_ru_cmd\\scripts\\download_vosk_ru_cmd.bat"]
   }
 
   if (targetModel === "vosk_ru") {
-    return ["scripts\\setup_vosk_ru.bat", "scripts\\download_vosk_ru.bat"]
+    return ["services\\vosk_ru\\scripts\\setup_vosk_ru.bat", "services\\vosk_ru\\scripts\\download_vosk_ru.bat"]
   }
 
   return []

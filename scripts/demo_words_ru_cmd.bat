@@ -32,7 +32,7 @@ if not defined FIXTURE (
     exit /b 1
 )
 
-powershell -NoProfile -Command "$items = Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'VoskDaemon.exe' -and $_.CommandLine -match '--model-name vosk_ru_cmd' }; if (@($items).Count -eq 0) { Write-Host 'voskdaemon_ru_cmd is not running. Start scripts\run_voskdaemon_ru_cmd.bat first and wait for [voskdaemon] warmup ready.'; exit 1 }"
+powershell -NoProfile -Command "$items = Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'VoskDaemon.exe' -and $_.CommandLine -match '--model-name vosk_ru_cmd' }; if (@($items).Count -eq 0) { Write-Host 'voskdaemon_ru_cmd is not running. Start services\voskdaemon\scripts\run_voskdaemon_ru_cmd.bat first and wait for [voskdaemon] warmup ready.'; exit 1 }"
 if errorlevel 1 (
     popd
     exit /b 1

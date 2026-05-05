@@ -9,17 +9,17 @@ set "SCRIPT_DIR=%~dp0"
 call "%SCRIPT_DIR%env.bat"
 
 echo --- [1/3] Orchestrator ---
-call "%SCRIPT_DIR%setup_orchestrator.bat"
+call "%SCRIPT_DIR%..\orchestrator\scripts\setup_orchestrator.bat"
 if errorlevel 1 goto :fail
 
 echo.
 echo --- [2/3] Vosk RU dictation backend ---
-call "%SCRIPT_DIR%setup_vosk_ru.bat"
+call "%SCRIPT_DIR%..\services\vosk_ru\scripts\setup_vosk_ru.bat"
 if errorlevel 1 goto :fail
 
 echo.
 echo --- [3/3] Vosk RU command backend ---
-call "%SCRIPT_DIR%setup_vosk_ru_cmd.bat"
+call "%SCRIPT_DIR%..\services\vosk_ru_cmd\scripts\setup_vosk_ru_cmd.bat"
 if errorlevel 1 goto :fail
 
 echo.
