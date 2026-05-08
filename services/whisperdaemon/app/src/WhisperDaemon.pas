@@ -27,16 +27,6 @@ type
   TStringArray = array of string;
   TInt64Array = array of Int64;
 
-  TSpeakerSegment = record
-    SegmentId: Integer;
-    StartMs: Int64;
-    EndMs: Int64;
-    SpeakerId: string;
-    Text: string;
-  end;
-
-  TSpeakerSegments = array of TSpeakerSegment;
-
   TModelWarmupState = (mwsNotStarted, mwsLoading, mwsReady, mwsFailed);
 
   TWhisperTokenData = record
@@ -171,53 +161,7 @@ type
     GpuDevice: LongInt;
     WhisperDllPath: string;
     ReleaseTag: string;
-    SherpaDllPath: string;
-    DiarizeSegModelPath: string;
-    DiarizeEmbModelPath: string;
-    DiarizeNumSpeakers: LongInt;
-    DiarizeClusterThreshold: Single;
-    DiarizeMinDurationOn: Single;
-    DiarizeMinDurationOff: Single;
   end;
-
-  TSherpaOnnxOfflineSpeakerSegmentationPyannoteModelConfig = record
-    Model: PAnsiChar;
-  end;
-
-  TSherpaOnnxOfflineSpeakerSegmentationModelConfig = record
-    Pyannote: TSherpaOnnxOfflineSpeakerSegmentationPyannoteModelConfig;
-    NumThreads: LongInt;
-    Debug: LongInt;
-    Provider: PAnsiChar;
-  end;
-
-  TSherpaOnnxFastClusteringConfig = record
-    NumClusters: LongInt;
-    Threshold: Single;
-  end;
-
-  TSherpaOnnxSpeakerEmbeddingExtractorConfig = record
-    Model: PAnsiChar;
-    NumThreads: LongInt;
-    Debug: LongInt;
-    Provider: PAnsiChar;
-  end;
-
-  TSherpaOnnxOfflineSpeakerDiarizationConfig = record
-    Segmentation: TSherpaOnnxOfflineSpeakerSegmentationModelConfig;
-    Embedding: TSherpaOnnxSpeakerEmbeddingExtractorConfig;
-    Clustering: TSherpaOnnxFastClusteringConfig;
-    MinDurationOn: Single;
-    MinDurationOff: Single;
-  end;
-  PTSherpaOnnxOfflineSpeakerDiarizationConfig = ^TSherpaOnnxOfflineSpeakerDiarizationConfig;
-
-  TSherpaOnnxOfflineSpeakerDiarizationSegment = record
-    Start: Single;
-    Stop: Single;
-    Speaker: LongInt;
-  end;
-  PSherpaOnnxOfflineSpeakerDiarizationSegment = ^TSherpaOnnxOfflineSpeakerDiarizationSegment;
 
   TWhisperWarmupThread = class(TThread)
   private
@@ -241,12 +185,7 @@ type
     Fconnection              : TWSConnection;
     FsegmentCount            : Integer;
     FlastAutoCheckBytes      : SizeInt;
-    FspeakerEmbeddings       : Boolean;
-    FspeakerCount            : Integer;
-    FspeakerSegments         : TSpeakerSegments;
-    FfullSessionAudioBytes   : TBytes;
     procedure   appendAudioBytes(const aBytes: TBytes);
-    procedure   appendFullSessionAudioBytes(const aBytes: TBytes);
     procedure   appendTextWithSpace(var aTarget: string; const aValue: string);
     procedure   appendWordEvent(
                   var aWordEvents: TWhisperWordEvents;
@@ -259,7 +198,6 @@ type
                   aConfidence: Double
                 );
     procedure   clearSessionData(aResetSummary: Boolean = True);
-    procedure   clearDiarizationData;
     procedure   collectSegmentWords(
                   aContext: PWhisperContext;
                   aState: PWhisperState;
@@ -281,9 +219,7 @@ type
     procedure   handleFlush;
     procedure   processBufferedAudio(aFinalizeSession: Boolean);
     procedure   handleSessionStart(const aRoot: TJSONObject);
-    procedure   runSpeakerDiarization;
     function    endsWithSentenceBoundary(const aText: string): Boolean;
-    function    findSpeakerForRange(const aTimeline: TSpeakerSegments; aStartMs: Int64; aEndMs: Int64): string;
     procedure   sendError(const aMessage: string);
     procedure   sendWarning(const aMessage: string);
     procedure   sendEvent(aObject: TJSONObject);
@@ -335,12 +271,7 @@ var
   gWarmupModelName: string = '';
   gWarmupSignal: TEvent = nil;
   gInferenceLock: TRTLCriticalSection;
-  gSherpaLock: TRTLCriticalSection;
   gWarmupState: TModelWarmupState = mwsNotStarted;
-  gSherpaHandle: TLibHandle = 0;
-  gSherpaLoaded: Boolean = False;
-  gSherpaDllPath: string = '';
-  gSpeakerDiarizer: Pointer = nil;
   gWhisperContextDefaultParams: function(): TWhisperContextParams; cdecl;
   gWhisperInitState: function(aContext: PWhisperContext): PWhisperState; cdecl;
   gWhisperFreeState: procedure(aState: PWhisperState); cdecl;
@@ -358,16 +289,6 @@ var
   gWhisperFullGetSegmentT1FromState: function(aState: PWhisperState; aSegmentIndex: LongInt): Int64; cdecl;
   gWhisperFullGetTokenTextFromState: function(aContext: PWhisperContext; aState: PWhisperState; aSegmentIndex: LongInt; aTokenIndex: LongInt): PChar; cdecl;
   gWhisperFullGetTokenDataFromState: function(aState: PWhisperState; aSegmentIndex: LongInt; aTokenIndex: LongInt): TWhisperTokenData; cdecl;
-  gSherpaCreateOfflineSpeakerDiarization: function(aConfig: PTSherpaOnnxOfflineSpeakerDiarizationConfig): Pointer; cdecl;
-  gSherpaDestroyOfflineSpeakerDiarization: procedure(aHandle: Pointer); cdecl;
-  gSherpaOfflineSpeakerDiarizationGetSampleRate: function(aHandle: Pointer): LongInt; cdecl;
-  gSherpaOfflineSpeakerDiarizationSetConfig: procedure(aHandle: Pointer; aConfig: PTSherpaOnnxOfflineSpeakerDiarizationConfig); cdecl;
-  gSherpaOfflineSpeakerDiarizationResultGetNumSpeakers: function(aResult: Pointer): LongInt; cdecl;
-  gSherpaOfflineSpeakerDiarizationResultGetNumSegments: function(aResult: Pointer): LongInt; cdecl;
-  gSherpaOfflineSpeakerDiarizationResultSortByStartTime: function(aResult: Pointer): PSherpaOnnxOfflineSpeakerDiarizationSegment; cdecl;
-  gSherpaOfflineSpeakerDiarizationDestroySegment: procedure(aSegments: Pointer); cdecl;
-  gSherpaOfflineSpeakerDiarizationProcess: function(aHandle: Pointer; const aSamples: PSingle; aSampleCount: LongInt): Pointer; cdecl;
-  gSherpaOfflineSpeakerDiarizationDestroyResult: procedure(aResult: Pointer); cdecl;
 
 procedure requireArgValue(aIndex: Integer; const aName: string; out aValue: string);
 begin
@@ -483,15 +404,7 @@ begin
   WriteLn('  --gpu-device <value>    GPU device index, default 0');
   WriteLn('  --whisper-dll <path>    explicit whisper.dll path override');
   WriteLn('  --release-tag <value>   whisper.dll release tag under services\whisperdaemon\releases');
-  WriteLn('  --sherpa-dll <path>     explicit sherpa-onnx.dll path override');
-  WriteLn('  --diarize-seg-model <path>   speaker segmentation ONNX model');
-  WriteLn('  --diarize-emb-model <path>   speaker embedding ONNX model');
-  WriteLn('  --num-speakers <value>       fixed speaker count, default -1');
-  WriteLn('  --cluster-threshold <value>  clustering threshold, default 0.5');
-  WriteLn('  --diarize-min-duration-on <value>   diarization min active speech, default 0.2');
-  WriteLn('  --diarize-min-duration-off <value>  diarization min silence gap, default 0.5');
   WriteLn('  env: WHISPER_USE_GPU, WHISPER_GPU_DEVICE, WHISPER_DLL_PATH, WHISPER_RELEASE_TAG');
-  WriteLn('  env: SHERPA_DLL_PATH, DIARIZE_SEG_MODEL, DIARIZE_EMB_MODEL, DIARIZE_NUM_SPEAKERS, DIARIZE_CLUSTER_THRESHOLD');
 end;
 
 function parseCommandLine: TWhisperDaemonOptions;
@@ -507,13 +420,6 @@ begin
   Result.GpuDevice := readEnvGpuDevice('WHISPER_GPU_DEVICE', 0);
   Result.WhisperDllPath := Trim(SysUtils.GetEnvironmentVariable('WHISPER_DLL_PATH'));
   Result.ReleaseTag := Trim(SysUtils.GetEnvironmentVariable('WHISPER_RELEASE_TAG'));
-  Result.SherpaDllPath := Trim(SysUtils.GetEnvironmentVariable('SHERPA_DLL_PATH'));
-  Result.DiarizeSegModelPath := Trim(SysUtils.GetEnvironmentVariable('DIARIZE_SEG_MODEL'));
-  Result.DiarizeEmbModelPath := Trim(SysUtils.GetEnvironmentVariable('DIARIZE_EMB_MODEL'));
-  Result.DiarizeNumSpeakers := readEnvInt64('DIARIZE_NUM_SPEAKERS', -1);
-  Result.DiarizeClusterThreshold := readEnvFloat('DIARIZE_CLUSTER_THRESHOLD', 0.5);
-  Result.DiarizeMinDurationOn := readEnvFloat('DIARIZE_MIN_DURATION_ON', 0.2);
-  Result.DiarizeMinDurationOff := readEnvFloat('DIARIZE_MIN_DURATION_OFF', 0.5);
   if Result.ReleaseTag = '' then
     Result.ReleaseTag := '1.8.4';
 
@@ -566,48 +472,6 @@ begin
       Inc(idx);
       requireArgValue(idx, '--release-tag', val);
       Result.ReleaseTag := Trim(val);
-    end
-    else if arg = '--sherpa-dll' then
-    begin
-      Inc(idx);
-      requireArgValue(idx, '--sherpa-dll', val);
-      Result.SherpaDllPath := Trim(val);
-    end
-    else if arg = '--diarize-seg-model' then
-    begin
-      Inc(idx);
-      requireArgValue(idx, '--diarize-seg-model', val);
-      Result.DiarizeSegModelPath := Trim(val);
-    end
-    else if arg = '--diarize-emb-model' then
-    begin
-      Inc(idx);
-      requireArgValue(idx, '--diarize-emb-model', val);
-      Result.DiarizeEmbModelPath := Trim(val);
-    end
-    else if arg = '--num-speakers' then
-    begin
-      Inc(idx);
-      requireArgValue(idx, '--num-speakers', val);
-      Result.DiarizeNumSpeakers := StrToInt64Def(Trim(val), -1);
-    end
-    else if arg = '--cluster-threshold' then
-    begin
-      Inc(idx);
-      requireArgValue(idx, '--cluster-threshold', val);
-      Result.DiarizeClusterThreshold := parseSingleValue('--cluster-threshold', val);
-    end
-    else if arg = '--diarize-min-duration-on' then
-    begin
-      Inc(idx);
-      requireArgValue(idx, '--diarize-min-duration-on', val);
-      Result.DiarizeMinDurationOn := parseSingleValue('--diarize-min-duration-on', val);
-    end
-    else if arg = '--diarize-min-duration-off' then
-    begin
-      Inc(idx);
-      requireArgValue(idx, '--diarize-min-duration-off', val);
-      Result.DiarizeMinDurationOff := parseSingleValue('--diarize-min-duration-off', val);
     end
     else
       raise Exception.CreateFmt('Unknown argument: %s', [arg]);
@@ -663,16 +527,6 @@ begin
     'releases' + PathDelim + releaseTag + PathDelim + 'whisper.dll';
 end;
 
-function resolveSherpaDllPath: string;
-begin
-  if Trim(gDaemonOptions.SherpaDllPath) <> '' then
-    Exit(resolveOptionalPath(gDaemonOptions.SherpaDllPath));
-
-  Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
-    'services' + PathDelim + 'whisperdaemon' + PathDelim +
-    'vendors' + PathDelim + 'sherpa-onnx' + PathDelim + 'sherpa-onnx.dll';
-end;
-
 function resolveWhisperModelsRoot: string;
 begin
   Result := Trim(SysUtils.GetEnvironmentVariable('WHISPER_MODELS_ROOT'));
@@ -692,33 +546,6 @@ begin
     Result := IncludeTrailingPathDelimiter(resolveWhisperModelsRoot) + fileName
   else
     Result := IncludeTrailingPathDelimiter(resolveWhisperModelsRoot) + 'ggml-' + fileName + '.bin';
-end;
-
-procedure ensureDiarizationAssetsAvailable(const aOptions: TWhisperDaemonOptions);
-var
-  segPath: string;
-  embPath: string;
-  sherpaPath: string;
-begin
-  segPath := resolveRequiredPath(
-    aOptions.DiarizeSegModelPath,
-    'services' + PathDelim + 'whisperdaemon' + PathDelim + 'models' + PathDelim + 'diarization' + PathDelim + 'segmentation.onnx'
-  );
-  embPath := resolveRequiredPath(
-    aOptions.DiarizeEmbModelPath,
-    'services' + PathDelim + 'whisperdaemon' + PathDelim + 'models' + PathDelim + 'diarization' + PathDelim + 'embedding.onnx'
-  );
-  sherpaPath := resolveRequiredPath(
-    aOptions.SherpaDllPath,
-    'services' + PathDelim + 'whisperdaemon' + PathDelim + 'vendors' + PathDelim + 'sherpa-onnx' + PathDelim + 'sherpa-onnx.dll'
-  );
-
-  if not FileExists(segPath) then
-    raise Exception.CreateFmt('Required diarization segmentation model not found: %s', [segPath]);
-  if not FileExists(embPath) then
-    raise Exception.CreateFmt('Required diarization embedding model not found: %s', [embPath]);
-  if not FileExists(sherpaPath) then
-    raise Exception.CreateFmt('Required sherpa runtime not found: %s', [sherpaPath]);
 end;
 
 procedure prependDirectoryToPath(const aDirPath: string);
@@ -779,34 +606,8 @@ begin
   Pointer(gWhisperFullGetTokenDataFromState) := nil;
 end;
 
-procedure unloadSherpaLibrary;
-begin
-  if (gSpeakerDiarizer <> nil) and Assigned(gSherpaDestroyOfflineSpeakerDiarization) then
-    gSherpaDestroyOfflineSpeakerDiarization(gSpeakerDiarizer);
-
-  gSpeakerDiarizer := nil;
-
-  if gSherpaHandle <> 0 then
-    UnloadLibrary(gSherpaHandle);
-
-  gSherpaHandle := 0;
-  gSherpaDllPath := '';
-  gSherpaLoaded := False;
-  Pointer(gSherpaCreateOfflineSpeakerDiarization) := nil;
-  Pointer(gSherpaDestroyOfflineSpeakerDiarization) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationGetSampleRate) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationSetConfig) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationResultGetNumSpeakers) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationResultGetNumSegments) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationResultSortByStartTime) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationDestroySegment) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationProcess) := nil;
-  Pointer(gSherpaOfflineSpeakerDiarizationDestroyResult) := nil;
-end;
-
 procedure loadWhisperLibrary; forward;
 function getOrCreateCachedContext(const aModelName: string): PWhisperContext; forward;
-function getOrCreateSpeakerDiarizer: Pointer; forward;
 
 constructor TWhisperWarmupThread.Create(const aModelName: string);
 begin
@@ -902,96 +703,6 @@ begin
   gWhisperLoaded := True;
 end;
 
-procedure loadSherpaLibrary;
-var
-  dllPath: string;
-begin
-  dllPath := ExpandFileName(resolveSherpaDllPath);
-
-  if gSherpaLoaded then
-  begin
-    if SameText(gSherpaDllPath, dllPath) then
-      Exit;
-    unloadSherpaLibrary;
-  end;
-
-  if not FileExists(dllPath) then
-    raise Exception.CreateFmt('sherpa-onnx.dll not found: %s', [dllPath]);
-
-  prependDirectoryToPath(ExtractFileDir(dllPath));
-  gSherpaHandle := SafeLoadLibrary(dllPath);
-  if gSherpaHandle = 0 then
-    raise Exception.CreateFmt('Failed to load sherpa-onnx.dll from: %s', [dllPath]);
-
-  Pointer(gSherpaCreateOfflineSpeakerDiarization) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxCreateOfflineSpeakerDiarization');
-  Pointer(gSherpaDestroyOfflineSpeakerDiarization) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxDestroyOfflineSpeakerDiarization');
-  Pointer(gSherpaOfflineSpeakerDiarizationGetSampleRate) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationGetSampleRate');
-  Pointer(gSherpaOfflineSpeakerDiarizationSetConfig) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationSetConfig');
-  Pointer(gSherpaOfflineSpeakerDiarizationResultGetNumSpeakers) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationResultGetNumSpeakers');
-  Pointer(gSherpaOfflineSpeakerDiarizationResultGetNumSegments) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationResultGetNumSegments');
-  Pointer(gSherpaOfflineSpeakerDiarizationResultSortByStartTime) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationResultSortByStartTime');
-  Pointer(gSherpaOfflineSpeakerDiarizationDestroySegment) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationDestroySegment');
-  Pointer(gSherpaOfflineSpeakerDiarizationProcess) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationProcess');
-  Pointer(gSherpaOfflineSpeakerDiarizationDestroyResult) := GetProcedureAddress(gSherpaHandle, 'SherpaOnnxOfflineSpeakerDiarizationDestroyResult');
-
-  requireAssigned(Pointer(gSherpaCreateOfflineSpeakerDiarization), 'SherpaOnnxCreateOfflineSpeakerDiarization');
-  requireAssigned(Pointer(gSherpaDestroyOfflineSpeakerDiarization), 'SherpaOnnxDestroyOfflineSpeakerDiarization');
-  requireAssigned(Pointer(gSherpaOfflineSpeakerDiarizationGetSampleRate), 'SherpaOnnxOfflineSpeakerDiarizationGetSampleRate');
-  requireAssigned(Pointer(gSherpaOfflineSpeakerDiarizationResultGetNumSpeakers), 'SherpaOnnxOfflineSpeakerDiarizationResultGetNumSpeakers');
-  requireAssigned(Pointer(gSherpaOfflineSpeakerDiarizationResultGetNumSegments), 'SherpaOnnxOfflineSpeakerDiarizationResultGetNumSegments');
-  requireAssigned(Pointer(gSherpaOfflineSpeakerDiarizationResultSortByStartTime), 'SherpaOnnxOfflineSpeakerDiarizationResultSortByStartTime');
-  requireAssigned(Pointer(gSherpaOfflineSpeakerDiarizationDestroySegment), 'SherpaOnnxOfflineSpeakerDiarizationDestroySegment');
-  requireAssigned(Pointer(gSherpaOfflineSpeakerDiarizationProcess), 'SherpaOnnxOfflineSpeakerDiarizationProcess');
-  requireAssigned(Pointer(gSherpaOfflineSpeakerDiarizationDestroyResult), 'SherpaOnnxOfflineSpeakerDiarizationDestroyResult');
-
-  gSherpaDllPath := dllPath;
-  gSherpaLoaded := True;
-end;
-
-function getOrCreateSpeakerDiarizer: Pointer;
-var
-  config: TSherpaOnnxOfflineSpeakerDiarizationConfig;
-  embeddingPath: string;
-  segmentationPath: string;
-begin
-  EnterCriticalSection(gSherpaLock);
-  try
-    loadSherpaLibrary;
-
-    if gSpeakerDiarizer <> nil then
-      Exit(gSpeakerDiarizer);
-
-    segmentationPath := resolveOptionalPath(gDaemonOptions.DiarizeSegModelPath);
-    embeddingPath := resolveOptionalPath(gDaemonOptions.DiarizeEmbModelPath);
-    if segmentationPath = '' then
-      raise Exception.Create('DIARIZE_SEG_MODEL is not configured');
-    if embeddingPath = '' then
-      raise Exception.Create('DIARIZE_EMB_MODEL is not configured');
-    if not FileExists(segmentationPath) then
-      raise Exception.CreateFmt('Speaker segmentation model not found: %s', [segmentationPath]);
-    if not FileExists(embeddingPath) then
-      raise Exception.CreateFmt('Speaker embedding model not found: %s', [embeddingPath]);
-
-    FillChar(config, SizeOf(config), 0);
-    config.Segmentation.Pyannote.Model := PChar(segmentationPath);
-    config.Segmentation.NumThreads := 1;
-    config.Embedding.Model := PChar(embeddingPath);
-    config.Embedding.NumThreads := 1;
-    config.Clustering.NumClusters := gDaemonOptions.DiarizeNumSpeakers;
-    config.Clustering.Threshold := gDaemonOptions.DiarizeClusterThreshold;
-    config.MinDurationOn := gDaemonOptions.DiarizeMinDurationOn;
-    config.MinDurationOff := gDaemonOptions.DiarizeMinDurationOff;
-
-    gSpeakerDiarizer := gSherpaCreateOfflineSpeakerDiarization(@config);
-    if gSpeakerDiarizer = nil then
-      raise Exception.Create('SherpaOnnxCreateOfflineSpeakerDiarization returned nil');
-
-    Result := gSpeakerDiarizer;
-  finally
-    LeaveCriticalSection(gSherpaLock);
-  end;
-end;
-
 function getOrCreateCachedContext(const aModelName: string): PWhisperContext;
 var
   modelPath: string;
@@ -1064,10 +775,6 @@ begin
   Fconnection := aConnection;
   FsegmentCount := 0;
   FlastAutoCheckBytes := 0;
-  FspeakerEmbeddings := False;
-  FspeakerCount := 0;
-  SetLength(FspeakerSegments, 0);
-  SetLength(FfullSessionAudioBytes, 0);
 end;
 
 procedure TWhisperDaemonSession.appendAudioBytes(const aBytes: TBytes);
@@ -1090,28 +797,6 @@ begin
 
   SetLength(FaudioBytes, newLen);
   Move(aBytes[0], FaudioBytes[oldLen], byteLen);
-end;
-
-procedure TWhisperDaemonSession.appendFullSessionAudioBytes(const aBytes: TBytes);
-var
-  oldLen: SizeInt;
-  newLen: SizeInt;
-  byteLen: SizeInt;
-begin
-  byteLen := Length(aBytes);
-  if byteLen <= 0 then
-    Exit;
-
-  oldLen := Length(FfullSessionAudioBytes);
-  newLen := oldLen + byteLen;
-  if newLen > MAX_SESSION_AUDIO_BYTES then
-    raise Exception.CreateFmt(
-      'Session audio buffer reached %d bytes. Flush more frequently.',
-      [MAX_SESSION_AUDIO_BYTES]
-    );
-
-  SetLength(FfullSessionAudioBytes, newLen);
-  Move(aBytes[0], FfullSessionAudioBytes[oldLen], byteLen);
 end;
 
 procedure TWhisperDaemonSession.appendTextWithSpace(var aTarget: string; const aValue: string);
@@ -1168,134 +853,10 @@ begin
     FresolvedLanguage := '';
     FfinalText := '';
     FsegmentCount := 0;
-    SetLength(FfullSessionAudioBytes, 0);
-    clearDiarizationData;
   end;
 
   FlastAutoCheckBytes := 0;
   SetLength(FaudioBytes, 0);
-end;
-
-procedure TWhisperDaemonSession.clearDiarizationData;
-begin
-  FspeakerCount := 0;
-  SetLength(FspeakerSegments, 0);
-end;
-
-function TWhisperDaemonSession.findSpeakerForRange(const aTimeline: TSpeakerSegments; aStartMs: Int64; aEndMs: Int64): string;
-var
-  idx: Integer;
-  bestMs: Int64;
-  leftMs: Int64;
-  rightMs: Int64;
-  overlapMs: Int64;
-begin
-  Result := '';
-  bestMs := 0;
-  for idx := 0 to High(aTimeline) do
-  begin
-    leftMs := Max(aStartMs, aTimeline[idx].StartMs);
-    rightMs := Min(aEndMs, aTimeline[idx].EndMs);
-    overlapMs := rightMs - leftMs;
-    if overlapMs <= 0 then
-      Continue;
-    if overlapMs > bestMs then
-    begin
-      bestMs := overlapMs;
-      Result := aTimeline[idx].SpeakerId;
-    end;
-  end;
-end;
-
-procedure TWhisperDaemonSession.runSpeakerDiarization;
-var
-  diarizer: Pointer;
-  diarizationResult: Pointer;
-  diarizationSegments: PSherpaOnnxOfflineSpeakerDiarizationSegment;
-  diarizationTimeline: TSpeakerSegments;
-  pcm: TFloatArray;
-  idx: Integer;
-  segmentCount: Integer;
-  sampleRate: Integer;
-begin
-  FspeakerCount := 0;
-  for idx := 0 to High(FspeakerSegments) do
-    FspeakerSegments[idx].SpeakerId := '';
-
-  if not FspeakerEmbeddings then
-    Exit;
-  if Length(FspeakerSegments) = 0 then
-    Exit;
-  if Length(FfullSessionAudioBytes) = 0 then
-    Exit;
-  if (Trim(gDaemonOptions.DiarizeSegModelPath) = '') or (Trim(gDaemonOptions.DiarizeEmbModelPath) = '') then
-  begin
-    WriteLn(StdErr, '[whisperdaemon] diarization skipped: DIARIZE_SEG_MODEL/DIARIZE_EMB_MODEL is not configured');
-    Exit;
-  end;
-
-  try
-    diarizer := getOrCreateSpeakerDiarizer;
-    pcm := bytesToPcmFloat(FfullSessionAudioBytes);
-    if Length(pcm) = 0 then
-      Exit;
-
-    EnterCriticalSection(gSherpaLock);
-    try
-      sampleRate := gSherpaOfflineSpeakerDiarizationGetSampleRate(diarizer);
-      if sampleRate <> 16000 then
-        raise Exception.CreateFmt('Unsupported diarization sample rate: %d', [sampleRate]);
-
-      diarizationResult := gSherpaOfflineSpeakerDiarizationProcess(diarizer, @pcm[0], Length(pcm));
-    finally
-      LeaveCriticalSection(gSherpaLock);
-    end;
-
-    if diarizationResult = nil then
-      raise Exception.Create('SherpaOnnxOfflineSpeakerDiarizationProcess returned nil');
-
-    try
-      FspeakerCount := gSherpaOfflineSpeakerDiarizationResultGetNumSpeakers(diarizationResult);
-      segmentCount := gSherpaOfflineSpeakerDiarizationResultGetNumSegments(diarizationResult);
-      if segmentCount <= 0 then
-        Exit;
-
-      SetLength(diarizationTimeline, segmentCount);
-      diarizationSegments := gSherpaOfflineSpeakerDiarizationResultSortByStartTime(diarizationResult);
-      try
-        if diarizationSegments = nil then
-          Exit;
-
-        for idx := 0 to segmentCount - 1 do
-        begin
-          diarizationTimeline[idx].SegmentId := idx;
-          diarizationTimeline[idx].StartMs := Round(diarizationSegments[idx].Start * 1000.0);
-          diarizationTimeline[idx].EndMs := Round(diarizationSegments[idx].Stop * 1000.0);
-          diarizationTimeline[idx].SpeakerId := Format('spk_%d', [diarizationSegments[idx].Speaker]);
-          diarizationTimeline[idx].Text := '';
-        end;
-      finally
-        if diarizationSegments <> nil then
-          gSherpaOfflineSpeakerDiarizationDestroySegment(diarizationSegments);
-      end;
-
-      for idx := 0 to High(FspeakerSegments) do
-        FspeakerSegments[idx].SpeakerId := findSpeakerForRange(
-          diarizationTimeline,
-          FspeakerSegments[idx].StartMs,
-          FspeakerSegments[idx].EndMs
-        );
-    finally
-      gSherpaOfflineSpeakerDiarizationDestroyResult(diarizationResult);
-    end;
-  except
-    on E: Exception do
-    begin
-      FspeakerCount := 0;
-      WriteLn(StdErr, '[whisperdaemon] diarization skipped: ', E.Message);
-      sendWarning('diarization_failed: ' + Trim(E.Message));
-    end;
-  end;
 end;
 
 function TWhisperDaemonSession.endsWithSentenceBoundary(const aText: string): Boolean;
@@ -1694,7 +1255,6 @@ procedure TWhisperDaemonSession.processBufferedAudio(aFinalizeSession: Boolean);
 var
   audioMs: Int64;
   batchText: string;
-  mappedIdx: Integer;
   shouldCommit: Boolean;
   nextWordEventIndex: Integer;
   segmentIndex: Integer;
@@ -1751,24 +1311,10 @@ begin
       segmentT0s[segmentIndex],
       segmentT1s[segmentIndex]
     );
-
-    if FspeakerEmbeddings then
-    begin
-      mappedIdx := Length(FspeakerSegments);
-      SetLength(FspeakerSegments, mappedIdx + 1);
-      FspeakerSegments[mappedIdx].SegmentId := startSegmentId + segmentIndex;
-      FspeakerSegments[mappedIdx].StartMs := segmentT0s[segmentIndex];
-      FspeakerSegments[mappedIdx].EndMs := segmentT1s[segmentIndex];
-      FspeakerSegments[mappedIdx].SpeakerId := '';
-      FspeakerSegments[mappedIdx].Text := segmentTexts[segmentIndex];
-    end;
   end;
 
   appendTextWithSpace(FfinalText, batchText);
   Inc(FsegmentCount, collectedCount);
-
-  if aFinalizeSession then
-    runSpeakerDiarization;
 
   clearSessionData(False);
 
@@ -1963,11 +1509,7 @@ end;
 
 procedure TWhisperDaemonSession.sendSessionFinal(aDurationMs: Int64);
 var
-  arr: TJSONArray;
-  idx: Integer;
-  item: TJSONObject;
   root: TJSONObject;
-  hasSpeakerIds: Boolean;
 begin
   root := TJSONObject.Create;
   try
@@ -1979,47 +1521,6 @@ begin
       root.Add('language', FresolvedLanguage);
     if SameText(Flanguage, 'auto') and (FresolvedLanguage <> '') then
       root.Add('detected_language', FresolvedLanguage);
-
-    hasSpeakerIds := False;
-    if FspeakerEmbeddings then
-    begin
-      for idx := 0 to High(FspeakerSegments) do
-      begin
-        if Trim(FspeakerSegments[idx].SpeakerId) <> '' then
-        begin
-          hasSpeakerIds := True;
-          Break;
-        end;
-      end;
-    end;
-
-    if hasSpeakerIds and (FspeakerCount > 0) then
-      root.Add('speaker_count', FspeakerCount);
-
-    if FspeakerEmbeddings and (Length(FspeakerSegments) > 0) then
-    begin
-      arr := TJSONArray.Create;
-      for idx := 0 to High(FspeakerSegments) do
-      begin
-        if Trim(FspeakerSegments[idx].SpeakerId) = '' then
-          Continue;
-
-        item := TJSONObject.Create;
-        item.Add('segment_id', FspeakerSegments[idx].SegmentId);
-        item.Add('start_ms', FspeakerSegments[idx].StartMs);
-        item.Add('end_ms', FspeakerSegments[idx].EndMs);
-        if FspeakerSegments[idx].SpeakerId <> '' then
-          item.Add('speaker_id', FspeakerSegments[idx].SpeakerId);
-        if FspeakerSegments[idx].Text <> '' then
-          item.Add('text', FspeakerSegments[idx].Text);
-        arr.Add(item);
-      end;
-
-      if arr.Count > 0 then
-        root.Add('speaker_segments', arr)
-      else
-        arr.Free;
-    end;
     sendEvent(root);
   finally
     root.Free;
@@ -2035,7 +1536,6 @@ begin
   end;
 
   appendAudioBytes(aBytes);
-  appendFullSessionAudioBytes(aBytes);
   if Length(FaudioBytes) < AUTO_FLUSH_MIN_BYTES then
     Exit;
   if Length(FaudioBytes) < (FlastAutoCheckBytes + AUTO_FLUSH_STEP_BYTES) then
@@ -2091,7 +1591,6 @@ begin
   Flanguage := jsonStringOf(aRoot, 'language');
   Fmode := jsonStringOf(aRoot, 'mode');
   FrequestId := jsonStringOf(aRoot, 'request_id');
-  FspeakerEmbeddings := jsonBoolOf(aRoot, 'speaker_embeddings');
   if Trim(Flanguage) = '' then
     Flanguage := 'ru';
   if Trim(Fmode) = '' then
@@ -2209,9 +1708,7 @@ begin
   host := nil;
   try
     InitCriticalSection(gInferenceLock);
-    InitCriticalSection(gSherpaLock);
     options := parseCommandLine;
-    ensureDiarizationAssetsAvailable(options);
     gDaemonOptions := options;
     host := TWhisperDaemonHost.Create(options);
     WriteLn('WhisperDaemon listening on ws://', options.Host, ':', options.Port, '/ model=', options.ModelName);
@@ -2229,6 +1726,5 @@ begin
   { unreachable: daemon runs until the process is terminated }
   host.Free;
   DoneCriticalSection(gInferenceLock);
-  DoneCriticalSection(gSherpaLock);
   gWarmupSignal.Free;
 end.
