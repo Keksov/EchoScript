@@ -1,1 +1,5 @@
+accelerate
+huggingface_hub
+safetensors
+transformers
 websockets>=12.0

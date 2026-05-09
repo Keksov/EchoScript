@@ -10,12 +10,8 @@ set "LOG_DIR=%SERVICE_DIR%\logs"
 set "STDOUT_LOG=%LOG_DIR%\vibevoicedaemon.stdout.log"
 
 if not exist "%PYTHON_EXE%" (
-    set "PYTHON_EXE=services\vibevoice\venv\Scripts\python.exe"
-)
-if not exist "%PYTHON_EXE%" (
-    echo Python executable not found in either:
+    echo Python executable not found:
     echo   %SERVICE_DIR%\venv\Scripts\python.exe
-    echo   services\vibevoice\venv\Scripts\python.exe
     echo Run services\vibevoicedaemon\scripts\setup_vibevoicedaemon.bat first.
     popd
     exit /b 1

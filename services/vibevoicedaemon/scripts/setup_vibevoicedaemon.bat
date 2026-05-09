@@ -2,14 +2,13 @@
 REM ============================================================
 REM EchoScript — Setup: vibevoicedaemon service
 REM Creates venv, installs torch, pip deps, and VibeVoice package.
-REM Reuses the VibeVoice vendor clone from the vibevoice service.
 REM ============================================================
 setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
 call "%SCRIPT_DIR%..\..\..\scripts\env.bat"
 set "SERVICE_DIR=%SCRIPT_DIR%.."
-set "VIBEVOICE_VENDOR_DIR=%SCRIPT_DIR%..\..\..\services\vibevoice\vendor\VibeVoice"
+set "VIBEVOICE_VENDOR_DIR=%SERVICE_DIR%\vendor\VibeVoice"
 
 call "%SCRIPT_DIR%..\..\..\scripts\_common.bat" detect_gpu
 call "%SCRIPT_DIR%..\..\..\scripts\_common.bat" create_venv "%SERVICE_DIR%"
@@ -17,19 +16,22 @@ if errorlevel 1 goto :fail
 call "%SCRIPT_DIR%..\..\..\scripts\_common.bat" install_requirements "%SERVICE_DIR%"
 if errorlevel 1 goto :fail
 
-REM --- Install accelerate, safetensors, transformers (model loading deps) ---
-echo [INFO] Installing model loading dependencies ...
-"%SERVICE_DIR%\venv\Scripts\pip.exe" install accelerate safetensors transformers huggingface_hub --quiet
-if errorlevel 1 (
-    echo [ERROR] Failed to install model loading dependencies.
-    goto :fail
-)
-
-REM --- Install VibeVoice from the shared vendor clone ---
+REM --- Clone VibeVoice repo into vendor/ ---
 if not exist "%VIBEVOICE_VENDOR_DIR%\.git" (
-    echo [ERROR] VibeVoice vendor clone not found: %VIBEVOICE_VENDOR_DIR%
-    echo         Run services\vibevoice\scripts\setup_vibevoice.bat first.
-    goto :fail
+    if not exist "%SERVICE_DIR%\vendor" mkdir "%SERVICE_DIR%\vendor"
+    if errorlevel 1 (
+        echo [ERROR] Failed to create vendor directory.
+        goto :fail
+    )
+
+    echo [INFO] Cloning VibeVoice repository into %VIBEVOICE_VENDOR_DIR% ...
+    git clone https://github.com/microsoft/VibeVoice.git "%VIBEVOICE_VENDOR_DIR%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to clone VibeVoice into local daemon vendor.
+        goto :fail
+    )
+) else (
+    echo [INFO] VibeVoice already cloned: %VIBEVOICE_VENDOR_DIR%
 )
 
 echo [INFO] Installing VibeVoice in editable mode from %VIBEVOICE_VENDOR_DIR% ...
