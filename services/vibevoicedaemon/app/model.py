@@ -34,6 +34,12 @@ _MAX_CHUNK_DURATION_MS = 15000
 _CHUNK_OVERLAP_MS = 2000
 _MIN_STITCH_SEGMENT_MS = 250
 _NON_SPEECH_MARKERS = {"[noise]", "[silence]", "[music]", "[applause]"}
+_RUSSIAN_CONTEXT_HINT = (
+    "Transcribe spoken Russian verbatim. "
+    "The audio may contain a casual dialogue between two speakers. "
+    "Preserve colloquial wording, false starts, hesitations, short interjections, and proper names exactly as spoken. "
+    "Do not translate, summarize, paraphrase, merge distant phrases, or omit short utterances."
+)
 
 _VIBEVOICE_SEGMENT_PATTERN = re.compile(
     r'\{\s*"?(?:Start(?: time)?)"?\s*:\s*(?P<start>-?\d+(?:\.\d+)?)'
@@ -158,6 +164,38 @@ def _looks_structured_vibevoice_output(text: str) -> bool:
     return ('"Start"' in stripped or '"End"' in stripped or '"Content"' in stripped) and '[' in stripped
 
 
+def _normalize_context_info(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return normalized
+
+
+def _default_context_info(language: str) -> str | None:
+    normalized_language = language.strip().lower()
+    if normalized_language in {"ru", "rus", "russian"}:
+        return _RUSSIAN_CONTEXT_HINT
+    return None
+
+
+def _compose_context_info(language: str, context_info: str | None) -> str | None:
+    parts: list[str] = []
+    default_context = _default_context_info(language)
+    if default_context is not None:
+        parts.append(default_context)
+
+    normalized_context = _normalize_context_info(context_info)
+    if normalized_context is not None and normalized_context not in parts:
+        parts.append(normalized_context)
+
+    if len(parts) == 0:
+        return None
+
+    return "\n".join(parts)
+
+
 class VibevoiceModel:
     """Thread-safe VibeVoice ASR model singleton with queue-based concurrency."""
 
@@ -178,12 +216,17 @@ class VibevoiceModel:
                 return
             await asyncio.to_thread(self._load_sync)
 
-    async def transcribe_pcm(self, pcm_bytes: bytes, language: str) -> dict[str, Any]:
+    async def transcribe_pcm(
+        self,
+        pcm_bytes: bytes,
+        language: str,
+        context_info: str | None = None,
+    ) -> dict[str, Any]:
         """Transcribe raw PCM16LE bytes. Queues if another transcription is in progress."""
         async with self._lock:
             if self._model is None:
                 await asyncio.to_thread(self._load_sync)
-            return await asyncio.to_thread(self._transcribe_sync, pcm_bytes, language)
+            return await asyncio.to_thread(self._transcribe_sync, pcm_bytes, language, context_info)
 
     # ---------- synchronous helpers (run in thread pool) ----------
 
@@ -224,22 +267,38 @@ class VibevoiceModel:
         self._model.eval()
         LOGGER.info("VibeVoice model loaded on %s", self._device)
 
-    def _transcribe_sync(self, pcm_bytes: bytes, language: str) -> dict[str, Any]:
+    def _transcribe_sync(
+        self,
+        pcm_bytes: bytes,
+        language: str,
+        context_info: str | None,
+    ) -> dict[str, Any]:
         model = self._model
         processor = self._processor
         assert model is not None and processor is not None
 
+        resolved_context_info = _compose_context_info(language, context_info)
+
         if language and language.lower() != "auto":
-            LOGGER.info("Language hint '%s' passed; VibeVoice uses auto-detection", language)
+            LOGGER.info(
+                "Language hint '%s' passed; applying context bias=%s",
+                language,
+                resolved_context_info is not None,
+            )
 
         duration_ms = (len(pcm_bytes) // 2) * 1000 // _SAMPLE_RATE
 
         if duration_ms > _MAX_CHUNK_DURATION_MS:
-            return self._transcribe_chunked_sync(pcm_bytes, duration_ms)
+            return self._transcribe_chunked_sync(pcm_bytes, duration_ms, resolved_context_info)
 
-        return self._transcribe_single_chunk_sync(pcm_bytes, duration_ms, 0)
+        return self._transcribe_single_chunk_sync(pcm_bytes, duration_ms, 0, resolved_context_info)
 
-    def _transcribe_chunked_sync(self, pcm_bytes: bytes, duration_ms: int) -> dict[str, Any]:
+    def _transcribe_chunked_sync(
+        self,
+        pcm_bytes: bytes,
+        duration_ms: int,
+        context_info: str | None,
+    ) -> dict[str, Any]:
         chunk_bytes = (_MAX_CHUNK_DURATION_MS * _SAMPLE_RATE * 2) // 1000
         if (chunk_bytes % 2) != 0:
             chunk_bytes -= 1
@@ -282,6 +341,7 @@ class VibevoiceModel:
                 chunk_pcm,
                 chunk_duration_ms,
                 chunk_offset_ms,
+                context_info,
             )
 
             stitched_chunk_segments = self._clip_segments_to_window(
@@ -317,6 +377,7 @@ class VibevoiceModel:
         pcm_bytes: bytes,
         duration_ms: int,
         offset_ms: int,
+        context_info: str | None,
     ) -> dict[str, Any]:
         model = self._model
         processor = self._processor
@@ -334,6 +395,7 @@ class VibevoiceModel:
                 return_tensors="pt",
                 padding=True,
                 add_generation_prompt=True,
+                context_info=context_info,
             )
             inputs = {
                 k: v.to(input_device) if isinstance(v, torch.Tensor) else v

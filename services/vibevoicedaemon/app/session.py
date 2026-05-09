@@ -11,11 +11,21 @@ _SAMPLE_RATE_HZ = 16000
 _MAX_PCM_BYTES = _SAMPLE_RATE_HZ * 2 * 60 * 30  # 30 min of PCM16LE at 16 kHz mono
 
 
+def _normalize_context_info(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return normalized
+
+
 @dataclass
 class _SessionSettings:
     language: str = "auto"
     request_id: str | None = None
     mode: str = "diarize"
+    context_info: str | None = None
 
 
 class Session:
@@ -82,6 +92,7 @@ class Session:
             language=str(msg.get("language") or "auto"),
             request_id=str(msg["request_id"]) if msg.get("request_id") is not None else None,
             mode=str(msg.get("mode") or "diarize"),
+            context_info=_normalize_context_info(msg.get("context_info")),
         )
         self._started = True
 
@@ -114,7 +125,11 @@ class Session:
             )
 
         try:
-            result = await self._model.transcribe_pcm(pcm_bytes, self._settings.language)
+            result = await self._model.transcribe_pcm(
+                pcm_bytes,
+                self._settings.language,
+                self._settings.context_info,
+            )
         except (RuntimeError, ValueError, OSError) as exc:
             LOGGER.exception("Transcription failed: %s", exc)
             return self._error("internal_error", "Transcription failed")

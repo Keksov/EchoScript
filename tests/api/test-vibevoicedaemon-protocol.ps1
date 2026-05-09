@@ -179,6 +179,24 @@ try {
     if ($ws) { Close-VvWS $ws }
 }
 
+# --- Test: session_start with context_info → session_ack ---
+$ws = $null
+try {
+    $ws = New-VvWS
+    Send-VvJson $ws @{
+        event          = "session_start"
+        audio_format   = "pcm16le"
+        sample_rate_hz = 16000
+        channels       = 1
+        context_info   = "Transcribe spoken Russian accurately."
+    }
+    $ack = Receive-VvJson $ws
+    Assert-Equal "context_info_ack event"      "session_ack" $ack.event
+    Assert-Equal "context_info_ack model_name" "vibevoice"   $ack.model_name
+} finally {
+    if ($ws) { Close-VvWS $ws }
+}
+
 # --- Test: extra fields (speaker_embeddings, emit_words, sample_format) are silently ignored ---
 $ws = $null
 try {
