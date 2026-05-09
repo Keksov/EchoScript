@@ -18,6 +18,13 @@ set "TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu124"
 
 call :resolve_python
 if errorlevel 1 exit /b 1
+if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" (
+    if defined PYTHON_ARGS (
+        echo [DIAG] Resolved Python interpreter: "%PYTHON_EXE%" %PYTHON_ARGS%
+    ) else (
+        echo [DIAG] Resolved Python interpreter: "%PYTHON_EXE%"
+    )
+)
 
 REM --- Dispatch to requested command ---
 if "%~1"=="" goto :eof
@@ -86,15 +93,32 @@ set "SERVICE_DIR=%~1"
 set "VENV_DIR=%SERVICE_DIR%\venv"
 set "VENV_PIP=%VENV_DIR%\Scripts\pip.exe"
 
+if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" (
+    echo [DIAG] create_venv SERVICE_DIR=%SERVICE_DIR%
+    echo [DIAG] create_venv VENV_DIR=%VENV_DIR%
+)
+
+if not exist "%SERVICE_DIR%" (
+    echo [ERROR] Service directory not found: %SERVICE_DIR%
+    exit /b 1
+)
+
 if not exist "%VENV_DIR%\Scripts\python.exe" (
     echo [INFO] Creating virtual environment in %VENV_DIR% ...
     if defined PYTHON_ARGS (
+        if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%VENV_DIR%"
         "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%VENV_DIR%"
     ) else (
+        if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%PYTHON_EXE%" -m venv "%VENV_DIR%"
         "%PYTHON_EXE%" -m venv "%VENV_DIR%"
     )
     if errorlevel 1 (
         echo [ERROR] Failed to create venv.
+        if defined PYTHON_ARGS (
+            if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] create_venv command failed: "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%VENV_DIR%"
+        ) else (
+            if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] create_venv command failed: "%PYTHON_EXE%" -m venv "%VENV_DIR%"
+        )
         exit /b 1
     )
 ) else (

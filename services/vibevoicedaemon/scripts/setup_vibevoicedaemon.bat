@@ -9,10 +9,18 @@ set "SCRIPT_DIR=%~dp0"
 call "%SCRIPT_DIR%..\..\..\scripts\env.bat"
 set "SERVICE_DIR=%SCRIPT_DIR%.."
 set "VIBEVOICE_VENDOR_DIR=%SERVICE_DIR%\vendor\VibeVoice"
+set "ECHOSCRIPT_SETUP_DIAG=1"
 
+echo [DIAG] setup_vibevoicedaemon SCRIPT_DIR=%SCRIPT_DIR%
+echo [DIAG] setup_vibevoicedaemon SERVICE_DIR=%SERVICE_DIR%
+echo [DIAG] setup_vibevoicedaemon VIBEVOICE_VENDOR_DIR=%VIBEVOICE_VENDOR_DIR%
+
+echo [DIAG] Calling detect_gpu ...
 call "%SCRIPT_DIR%..\..\..\scripts\_common.bat" detect_gpu
+echo [DIAG] Calling create_venv ...
 call "%SCRIPT_DIR%..\..\..\scripts\_common.bat" create_venv "%SERVICE_DIR%"
 if errorlevel 1 goto :fail
+echo [DIAG] Calling install_requirements ...
 call "%SCRIPT_DIR%..\..\..\scripts\_common.bat" install_requirements "%SERVICE_DIR%"
 if errorlevel 1 goto :fail
 
