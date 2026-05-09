@@ -9,18 +9,58 @@ REM ============================================================
 set "SCRIPT_DIR=%~dp0"
 call "%SCRIPT_DIR%env.bat"
 
-set "PYTHON_EXE=C:\Python313\python.exe"
 set "PIP_DISABLE_PIP_VERSION_CHECK=1"
+set "PYTHON_ARGS="
 
 REM Torch index URLs
 set "TORCH_CPU_INDEX=https://download.pytorch.org/whl/cpu"
 set "TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu124"
+
+call :resolve_python
+if errorlevel 1 exit /b 1
 
 REM --- Dispatch to requested command ---
 if "%~1"=="" goto :eof
 set "_CMD=%~1"
 shift
 goto :%_CMD%
+
+REM ============================================================
+:resolve_python
+REM Resolves a base Python interpreter for venv creation.
+REM Honors PYTHON_EXE if already provided by the caller.
+REM ============================================================
+if defined PYTHON_EXE exit /b 0
+
+if exist "C:\Python313\python.exe" (
+    set "PYTHON_EXE=C:\Python313\python.exe"
+    exit /b 0
+)
+
+for %%I in (python.exe) do if not "%%~$PATH:I"=="" set "PYTHON_EXE=%%~$PATH:I"
+if defined PYTHON_EXE exit /b 0
+
+set "PYTHON_LAUNCHER="
+for %%I in (py.exe) do if not "%%~$PATH:I"=="" set "PYTHON_LAUNCHER=%%~$PATH:I"
+if defined PYTHON_LAUNCHER (
+    "%PYTHON_LAUNCHER%" -3.13 -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=%PYTHON_LAUNCHER%"
+        set "PYTHON_ARGS=-3.13"
+        exit /b 0
+    )
+
+    "%PYTHON_LAUNCHER%" -3 -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=%PYTHON_LAUNCHER%"
+        set "PYTHON_ARGS=-3"
+        exit /b 0
+    )
+)
+
+echo [ERROR] Base Python interpreter not found.
+echo         Install Python 3.13 or ensure python.exe / py.exe is available on PATH.
+exit /b 1
 
 REM ============================================================
 :detect_gpu
@@ -48,7 +88,11 @@ set "VENV_PIP=%VENV_DIR%\Scripts\pip.exe"
 
 if not exist "%VENV_DIR%\Scripts\python.exe" (
     echo [INFO] Creating virtual environment in %VENV_DIR% ...
-    "%PYTHON_EXE%" -m venv "%VENV_DIR%"
+    if defined PYTHON_ARGS (
+        "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%VENV_DIR%"
+    ) else (
+        "%PYTHON_EXE%" -m venv "%VENV_DIR%"
+    )
     if errorlevel 1 (
         echo [ERROR] Failed to create venv.
         exit /b 1
