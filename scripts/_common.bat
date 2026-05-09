@@ -6,8 +6,8 @@ REM Usage: call _common.bat <command> [args...]
 REM Commands: detect_gpu, create_venv <dir>, install_requirements <dir>
 REM ============================================================
 
-set "SCRIPT_DIR=%~dp0"
-call "%SCRIPT_DIR%env.bat"
+set "COMMON_SCRIPT_DIR=%~dp0"
+call "%COMMON_SCRIPT_DIR%env.bat"
 
 set "PIP_DISABLE_PIP_VERSION_CHECK=1"
 set "PYTHON_ARGS="
@@ -89,45 +89,45 @@ REM Usage: call :create_venv <service_dir>
 REM Creates venv in <service_dir>\venv and installs torch unless SKIP_TORCH=1.
 REM Requires HAS_GPU to be set unless SKIP_TORCH=1.
 REM ============================================================
-set "SERVICE_DIR=%~1"
-set "VENV_DIR=%SERVICE_DIR%\venv"
-set "VENV_PIP=%VENV_DIR%\Scripts\pip.exe"
+set "TARGET_SERVICE_DIR=%~1"
+set "TARGET_VENV_DIR=%TARGET_SERVICE_DIR%\venv"
+set "TARGET_VENV_PIP=%TARGET_VENV_DIR%\Scripts\pip.exe"
 
 if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" (
-    echo [DIAG] create_venv SERVICE_DIR=%SERVICE_DIR%
-    echo [DIAG] create_venv VENV_DIR=%VENV_DIR%
+    echo [DIAG] create_venv SERVICE_DIR=%TARGET_SERVICE_DIR%
+    echo [DIAG] create_venv VENV_DIR=%TARGET_VENV_DIR%
 )
 
-if not exist "%SERVICE_DIR%" (
-    echo [ERROR] Service directory not found: %SERVICE_DIR%
+if not exist "%TARGET_SERVICE_DIR%" (
+    echo [ERROR] Service directory not found: %TARGET_SERVICE_DIR%
     exit /b 1
 )
 
-if not exist "%VENV_DIR%\Scripts\python.exe" (
-    echo [INFO] Creating virtual environment in %VENV_DIR% ...
+if not exist "%TARGET_VENV_DIR%\Scripts\python.exe" (
+    echo [INFO] Creating virtual environment in %TARGET_VENV_DIR% ...
     if defined PYTHON_ARGS (
-        if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%VENV_DIR%"
-        "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%VENV_DIR%"
+        if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%TARGET_VENV_DIR%"
+        "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%TARGET_VENV_DIR%"
     ) else (
-        if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%PYTHON_EXE%" -m venv "%VENV_DIR%"
-        "%PYTHON_EXE%" -m venv "%VENV_DIR%"
+        if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%PYTHON_EXE%" -m venv "%TARGET_VENV_DIR%"
+        "%PYTHON_EXE%" -m venv "%TARGET_VENV_DIR%"
     )
     if errorlevel 1 (
         echo [ERROR] Failed to create venv.
         if defined PYTHON_ARGS (
-            if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] create_venv command failed: "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%VENV_DIR%"
+            if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] create_venv command failed: "%PYTHON_EXE%" %PYTHON_ARGS% -m venv "%TARGET_VENV_DIR%"
         ) else (
-            if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] create_venv command failed: "%PYTHON_EXE%" -m venv "%VENV_DIR%"
+            if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] create_venv command failed: "%PYTHON_EXE%" -m venv "%TARGET_VENV_DIR%"
         )
         exit /b 1
     )
 ) else (
-    echo [INFO] Virtual environment already exists: %VENV_DIR%
+    echo [INFO] Virtual environment already exists: %TARGET_VENV_DIR%
 )
 
 echo [INFO] Ensuring pip is available ...
-"%VENV_DIR%\Scripts\python.exe" -m ensurepip --upgrade --default-pip 2>nul
-"%VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip --quiet
+"%TARGET_VENV_DIR%\Scripts\python.exe" -m ensurepip --upgrade --default-pip 2>nul
+"%TARGET_VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip --quiet
 
 if /I "%SKIP_TORCH%"=="1" (
     echo [INFO] SKIP_TORCH=1, skipping torch installation.
@@ -136,9 +136,9 @@ if /I "%SKIP_TORCH%"=="1" (
 
 echo [INFO] Installing torch ...
 if "%HAS_GPU%"=="1" (
-    "%VENV_PIP%" install torch torchaudio --index-url "%TORCH_CUDA_INDEX%" --quiet
+    "%TARGET_VENV_PIP%" install torch torchaudio --index-url "%TORCH_CUDA_INDEX%" --quiet
 ) else (
-    "%VENV_PIP%" install torch torchaudio --index-url "%TORCH_CPU_INDEX%" --quiet
+    "%TARGET_VENV_PIP%" install torch torchaudio --index-url "%TORCH_CPU_INDEX%" --quiet
 )
 if errorlevel 1 (
     echo [ERROR] Failed to install torch.
@@ -152,18 +152,18 @@ REM ============================================================
 REM Usage: call :install_requirements <service_dir>
 REM Installs requirements.txt + shared package in editable mode.
 REM ============================================================
-set "SERVICE_DIR=%~1"
-set "VENV_PIP=%SERVICE_DIR%\venv\Scripts\pip.exe"
+set "TARGET_SERVICE_DIR=%~1"
+set "TARGET_VENV_PIP=%TARGET_SERVICE_DIR%\venv\Scripts\pip.exe"
 
-echo [INFO] Installing requirements from %SERVICE_DIR%\requirements.txt ...
-"%VENV_PIP%" install -r "%SERVICE_DIR%\requirements.txt" --quiet
+echo [INFO] Installing requirements from %TARGET_SERVICE_DIR%\requirements.txt ...
+"%TARGET_VENV_PIP%" install -r "%TARGET_SERVICE_DIR%\requirements.txt" --quiet
 if errorlevel 1 (
     echo [ERROR] Failed to install requirements.
     exit /b 1
 )
 
 echo [INFO] Installing echoscript-shared in editable mode ...
-"%VENV_PIP%" install -e "%SCRIPT_DIR%..\shared" --quiet
+"%TARGET_VENV_PIP%" install -e "%COMMON_SCRIPT_DIR%..\shared" --quiet
 if errorlevel 1 (
     echo [ERROR] Failed to install echoscript-shared.
     exit /b 1
