@@ -10,7 +10,7 @@ setlocal
 
 set "SCRIPT_DIR=%~dp0"
 call "%SCRIPT_DIR%..\..\..\scripts\env.bat"
-set "VENV_DIR=%SCRIPT_DIR%..\venv"
+for %%I in ("%SCRIPT_DIR%..") do set "VENV_DIR=%%~fI\venv"
 
 if not exist "%VENV_DIR%\Scripts\python.exe" (
     echo [ERROR] Virtual environment not found. Run setup_vibevoicedaemon.bat first.

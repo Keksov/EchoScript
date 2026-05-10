@@ -7,7 +7,7 @@ setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
 call "%SCRIPT_DIR%..\..\..\scripts\env.bat"
-set "SERVICE_DIR=%SCRIPT_DIR%.."
+for %%I in ("%SCRIPT_DIR%..") do set "SERVICE_DIR=%%~fI"
 set "VIBEVOICE_VENDOR_DIR=%SERVICE_DIR%\vendor\VibeVoice"
 set "ECHOSCRIPT_SETUP_DIAG=1"
 
