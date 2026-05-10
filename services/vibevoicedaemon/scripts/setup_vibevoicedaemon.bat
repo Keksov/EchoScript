@@ -50,6 +50,17 @@ if errorlevel 1 (
     goto :fail
 )
 
+REM --- Patch VibeVoice modeling to use 'dtype' instead of deprecated 'torch_dtype' ---
+REM In transformers >= 4.49, PretrainedConfig.torch_dtype is a deprecated property
+REM that emits FutureWarning on every access. VibeVoiceASRModel.__init__,
+REM VibeVoiceASRForConditionalGeneration.__init__, and encode_speech() all access
+REM config.torch_dtype — replace with config.dtype which is the canonical name.
+echo [INFO] Patching VibeVoice source: torch_dtype -> dtype ...
+"%SERVICE_DIR%\venv\Scripts\python.exe" -c "import pathlib; p = pathlib.Path(r'%VIBEVOICE_VENDOR_DIR%\vibevoice\modular\modeling_vibevoice_asr.py'); t = p.read_text(encoding='utf-8'); p.write_text(t.replace('torch_dtype', 'dtype'), encoding='utf-8'); print('[INFO] Patched:', p)"
+if errorlevel 1 (
+    echo [WARN] Could not patch modeling_vibevoice_asr.py. torch_dtype FutureWarning may appear at startup.
+)
+
 REM --- Install flash-attn only if GPU is available ---
 if "%HAS_GPU%"=="1" (
     echo [INFO] Installing flash-attn ^(GPU detected^) ...

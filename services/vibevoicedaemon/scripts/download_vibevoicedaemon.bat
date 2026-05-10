@@ -41,6 +41,16 @@ if errorlevel 1 (
     echo [WARN] Could not create preprocessor_config.json. Startup warnings may appear.
 )
 
+REM --- Post-process: patch tokenizer_config.json in Qwen/Qwen2.5-7B snapshot ---
+REM The Qwen2.5-7B tokenizer_config.json declares tokenizer_class=Qwen2Tokenizer, but
+REM VibeVoice loads it via VibeVoiceASRTextTokenizerFast, causing a class-mismatch WARNING
+REM on every startup. Patching the field silences the warning.
+echo [INFO] Patching tokenizer_class in Qwen/Qwen2.5-7B tokenizer_config.json ...
+"%VENV_DIR%\Scripts\python.exe" -c "import os, json; from huggingface_hub import snapshot_download; cache_dir = os.environ['HF_HUB_CACHE']; snap = snapshot_download('Qwen/Qwen2.5-7B', cache_dir=cache_dir, local_files_only=True); p = os.path.join(snap, 'tokenizer_config.json'); cfg = json.load(open(p, encoding='utf-8')); cfg['tokenizer_class'] = 'VibeVoiceASRTextTokenizerFast'; json.dump(cfg, open(p, 'w', encoding='utf-8'), indent=2, ensure_ascii=False); print('[INFO] Patched:', p)"
+if errorlevel 1 (
+    echo [WARN] Could not patch tokenizer_config.json. Tokenizer class mismatch warning may appear at startup.
+)
+
 echo.
 echo [OK] VibeVoice-ASR and Qwen/Qwen2.5-7B downloaded to %HF_HUB_CACHE%
 
