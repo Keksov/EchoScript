@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 import wave
 from collections import Counter
 from pathlib import Path
@@ -34,8 +35,13 @@ _MODEL_ID = "microsoft/VibeVoice-ASR"
 _TOKENIZER_MODEL_ID = "Qwen/Qwen2.5-7B"
 _SAMPLE_RATE = 16000
 _MAX_NEW_TOKENS = 1024
-_MAX_CHUNK_DURATION_MS = 15000
+_DEFAULT_MAX_CHUNK_DURATION_MS = 15000
+_MAX_CHUNK_DURATION_MS = _DEFAULT_MAX_CHUNK_DURATION_MS
 _CHUNK_OVERLAP_MS = 2000
+_DEFAULT_CPU_MAX_CHUNK_DURATION_MS = 15000
+_DEFAULT_CPU_MAX_NEW_TOKENS = 256
+_DEFAULT_CPU_MAX_GENERATE_TIME_S = 90.0
+_DEFAULT_CPU_MAX_REQUEST_DURATION_MS = 10000
 _MIN_STITCH_SEGMENT_MS = 250
 _NON_SPEECH_MARKERS = {"[noise]", "[silence]", "[music]", "[applause]"}
 _RUSSIAN_CONTEXT_HINT = (
@@ -52,6 +58,22 @@ _VIBEVOICE_SEGMENT_PATTERN = re.compile(
     r'\s*,\s*"?Content"?\s*:\s*"(?P<text>(?:[^"\\]|\\.)*?)"\s*\}',
     re.DOTALL,
 )
+
+
+def _resolve_chunk_duration_ms() -> int:
+    raw_value = os.environ.get("ECHOSCRIPT_VIBEVOICE_CHUNK_DURATION_MS", "").strip()
+    if not raw_value:
+        return _DEFAULT_MAX_CHUNK_DURATION_MS
+    try:
+        resolved_value = int(raw_value)
+    except ValueError:
+        return _DEFAULT_MAX_CHUNK_DURATION_MS
+    if resolved_value <= 0:
+        return _DEFAULT_MAX_CHUNK_DURATION_MS
+    return resolved_value
+
+
+_MAX_CHUNK_DURATION_MS = _resolve_chunk_duration_ms()
 
 
 def _to_spk_id(value: Any) -> str | None:
@@ -208,6 +230,10 @@ class VibevoiceModel:
         self._processor: VibeVoiceASRProcessor | None = None
         self._device = "cpu"
         self._dtype: torch.dtype = torch.float32
+        self._chunk_duration_ms = _MAX_CHUNK_DURATION_MS
+        self._max_new_tokens = _MAX_NEW_TOKENS
+        self._max_generate_time_s: float | None = None
+        self._max_request_duration_ms: int | None = None
         self._lock = asyncio.Lock()
 
     def is_loaded(self) -> bool:
@@ -227,10 +253,29 @@ class VibevoiceModel:
         context_info: str | None = None,
     ) -> dict[str, Any]:
         """Transcribe raw PCM16LE bytes. Queues if another transcription is in progress."""
+        queue_enter_ts = time.perf_counter()
         async with self._lock:
+            queue_wait_s = time.perf_counter() - queue_enter_ts
+            duration_ms = (len(pcm_bytes) // 2) * 1000 // _SAMPLE_RATE
+            LOGGER.info(
+                "Transcription lock acquired queue_wait_s=%.3f audio_bytes=%s duration_ms=%s",
+                queue_wait_s,
+                len(pcm_bytes),
+                duration_ms,
+            )
+            start_ts = time.perf_counter()
             if self._model is None:
+                LOGGER.info("Model is not loaded; loading before transcription")
                 await asyncio.to_thread(self._load_sync)
-            return await asyncio.to_thread(self._transcribe_sync, pcm_bytes, language, context_info)
+            result = await asyncio.to_thread(self._transcribe_sync, pcm_bytes, language, context_info)
+            total_s = time.perf_counter() - start_ts
+            LOGGER.info(
+                "Transcription completed total_s=%.3f duration_ms=%s segment_count=%s",
+                total_s,
+                result.get("duration_ms"),
+                len(result.get("speaker_segments") or []),
+            )
+            return result
 
     # ---------- synchronous helpers (run in thread pool) ----------
 
@@ -242,6 +287,99 @@ class VibevoiceModel:
         self._device = self._resolve_device()
         self._dtype = self._resolve_dtype(self._device)
         attn_impl = "sdpa" if self._device == "cuda" else "eager"
+        self._chunk_duration_ms = _MAX_CHUNK_DURATION_MS
+        self._max_new_tokens = _MAX_NEW_TOKENS
+        self._max_generate_time_s = None
+        self._max_request_duration_ms = None
+
+        if self._device == "cpu":
+            raw_cpu_cap = os.environ.get("ECHOSCRIPT_VIBEVOICE_CPU_MAX_CHUNK_DURATION_MS", "").strip()
+            cpu_cap_ms = _DEFAULT_CPU_MAX_CHUNK_DURATION_MS
+            if raw_cpu_cap:
+                try:
+                    parsed_cpu_cap = int(raw_cpu_cap)
+                    if parsed_cpu_cap > 0:
+                        cpu_cap_ms = parsed_cpu_cap
+                except ValueError:
+                    LOGGER.warning(
+                        "Invalid ECHOSCRIPT_VIBEVOICE_CPU_MAX_CHUNK_DURATION_MS=%s; using default=%s",
+                        raw_cpu_cap,
+                        _DEFAULT_CPU_MAX_CHUNK_DURATION_MS,
+                    )
+
+            if self._chunk_duration_ms > cpu_cap_ms:
+                LOGGER.warning(
+                    "Capping chunk duration for CPU from %s ms to %s ms to avoid slow single-chunk generation",
+                    self._chunk_duration_ms,
+                    cpu_cap_ms,
+                )
+                self._chunk_duration_ms = cpu_cap_ms
+
+            raw_cpu_max_new_tokens = os.environ.get(
+                "ECHOSCRIPT_VIBEVOICE_CPU_MAX_NEW_TOKENS", ""
+            ).strip()
+            cpu_max_new_tokens = _DEFAULT_CPU_MAX_NEW_TOKENS
+            if raw_cpu_max_new_tokens:
+                try:
+                    parsed_cpu_max_new_tokens = int(raw_cpu_max_new_tokens)
+                    if parsed_cpu_max_new_tokens > 0:
+                        cpu_max_new_tokens = parsed_cpu_max_new_tokens
+                except ValueError:
+                    LOGGER.warning(
+                        "Invalid ECHOSCRIPT_VIBEVOICE_CPU_MAX_NEW_TOKENS=%s; using default=%s",
+                        raw_cpu_max_new_tokens,
+                        _DEFAULT_CPU_MAX_NEW_TOKENS,
+                    )
+            if self._max_new_tokens > cpu_max_new_tokens:
+                LOGGER.warning(
+                    "Capping max_new_tokens for CPU from %s to %s",
+                    self._max_new_tokens,
+                    cpu_max_new_tokens,
+                )
+                self._max_new_tokens = cpu_max_new_tokens
+
+            raw_cpu_max_generate_time_s = os.environ.get(
+                "ECHOSCRIPT_VIBEVOICE_CPU_MAX_GENERATE_TIME_S", ""
+            ).strip()
+            cpu_max_generate_time_s = _DEFAULT_CPU_MAX_GENERATE_TIME_S
+            if raw_cpu_max_generate_time_s:
+                try:
+                    parsed_cpu_max_generate_time_s = float(raw_cpu_max_generate_time_s)
+                    if parsed_cpu_max_generate_time_s > 0:
+                        cpu_max_generate_time_s = parsed_cpu_max_generate_time_s
+                except ValueError:
+                    LOGGER.warning(
+                        "Invalid ECHOSCRIPT_VIBEVOICE_CPU_MAX_GENERATE_TIME_S=%s; using default=%.1f",
+                        raw_cpu_max_generate_time_s,
+                        _DEFAULT_CPU_MAX_GENERATE_TIME_S,
+                    )
+            self._max_generate_time_s = cpu_max_generate_time_s
+
+            raw_cpu_max_request_duration_ms = os.environ.get(
+                "ECHOSCRIPT_VIBEVOICE_CPU_MAX_REQUEST_DURATION_MS", ""
+            ).strip()
+            cpu_max_request_duration_ms = _DEFAULT_CPU_MAX_REQUEST_DURATION_MS
+            if raw_cpu_max_request_duration_ms:
+                try:
+                    parsed_cpu_max_request_duration_ms = int(raw_cpu_max_request_duration_ms)
+                    if parsed_cpu_max_request_duration_ms > 0:
+                        cpu_max_request_duration_ms = parsed_cpu_max_request_duration_ms
+                except ValueError:
+                    LOGGER.warning(
+                        "Invalid ECHOSCRIPT_VIBEVOICE_CPU_MAX_REQUEST_DURATION_MS=%s; using default=%s",
+                        raw_cpu_max_request_duration_ms,
+                        _DEFAULT_CPU_MAX_REQUEST_DURATION_MS,
+                    )
+            self._max_request_duration_ms = cpu_max_request_duration_ms
+
+        LOGGER.info(
+            "Effective generation configuration chunk_ms=%s overlap_ms=%s max_new_tokens=%s max_time_s=%s max_request_duration_ms=%s",
+            self._chunk_duration_ms,
+            _CHUNK_OVERLAP_MS,
+            self._max_new_tokens,
+            self._max_generate_time_s,
+            self._max_request_duration_ms,
+        )
 
         if self._device == "cpu" and os.environ.get("ECHOSCRIPT_SKIP_MEMORY_PREFLIGHT") != "1":
             model_bytes = _estimate_model_bytes(model_path)
@@ -277,6 +415,7 @@ class VibevoiceModel:
         language: str,
         context_info: str | None,
     ) -> dict[str, Any]:
+        transcribe_start_ts = time.perf_counter()
         model = self._model
         processor = self._processor
         assert model is not None and processor is not None
@@ -291,19 +430,54 @@ class VibevoiceModel:
             )
 
         duration_ms = (len(pcm_bytes) // 2) * 1000 // _SAMPLE_RATE
+        if (
+            self._device == "cpu"
+            and self._max_request_duration_ms is not None
+            and duration_ms > self._max_request_duration_ms
+        ):
+            raise RuntimeError(
+                "VibeVoice-ASR request is too long for CPU mode: "
+                f"duration_ms={duration_ms}, limit_ms={self._max_request_duration_ms}. "
+                "Use CUDA for long audio or increase ECHOSCRIPT_VIBEVOICE_CPU_MAX_REQUEST_DURATION_MS."
+            )
 
-        if duration_ms > _MAX_CHUNK_DURATION_MS:
-            return self._transcribe_chunked_sync(pcm_bytes, duration_ms, resolved_context_info)
+        use_chunking = duration_ms > self._chunk_duration_ms
+        LOGGER.info(
+            "Transcribe sync start duration_ms=%s chunk_threshold_ms=%s use_chunking=%s",
+            duration_ms,
+            self._chunk_duration_ms,
+            use_chunking,
+        )
 
-        return self._transcribe_single_chunk_sync(pcm_bytes, duration_ms, 0, resolved_context_info)
+        if use_chunking:
+            result = self._transcribe_chunked_sync(
+                pcm_bytes,
+                duration_ms,
+                resolved_context_info,
+                self._chunk_duration_ms,
+            )
+            LOGGER.info(
+                "Transcribe sync finished path=chunked elapsed_s=%.3f",
+                time.perf_counter() - transcribe_start_ts,
+            )
+            return result
+
+        result = self._transcribe_single_chunk_sync(pcm_bytes, duration_ms, 0, resolved_context_info)
+        LOGGER.info(
+            "Transcribe sync finished path=single_chunk elapsed_s=%.3f",
+            time.perf_counter() - transcribe_start_ts,
+        )
+        return result
 
     def _transcribe_chunked_sync(
         self,
         pcm_bytes: bytes,
         duration_ms: int,
         context_info: str | None,
+        chunk_duration_ms: int,
     ) -> dict[str, Any]:
-        chunk_bytes = (_MAX_CHUNK_DURATION_MS * _SAMPLE_RATE * 2) // 1000
+        chunking_start_ts = time.perf_counter()
+        chunk_bytes = (chunk_duration_ms * _SAMPLE_RATE * 2) // 1000
         if (chunk_bytes % 2) != 0:
             chunk_bytes -= 1
         overlap_bytes = (_CHUNK_OVERLAP_MS * _SAMPLE_RATE * 2) // 1000
@@ -316,7 +490,7 @@ class VibevoiceModel:
         LOGGER.info(
             "Chunking VibeVoice request duration_ms=%s chunk_ms=%s overlap_ms=%s",
             duration_ms,
-            _MAX_CHUNK_DURATION_MS,
+            chunk_duration_ms,
             _CHUNK_OVERLAP_MS,
         )
 
@@ -329,17 +503,34 @@ class VibevoiceModel:
                 break
             offset_bytes += stride_bytes
 
+        LOGGER.info(
+            "Chunk plan chunks=%s stride_ms=%s",
+            len(chunk_ranges),
+            (stride_bytes // 2) * 1000 // _SAMPLE_RATE,
+        )
+
         combined_segments: list[dict[str, Any]] = []
         detected_language: str | None = None
 
         for chunk_index, (offset_bytes, end_bytes) in enumerate(chunk_ranges):
+            chunk_start_ts = time.perf_counter()
             chunk_pcm = pcm_bytes[offset_bytes:end_bytes]
             chunk_offset_ms = ((offset_bytes // 2) * 1000) // _SAMPLE_RATE
             chunk_duration_ms = (len(chunk_pcm) // 2) * 1000 // _SAMPLE_RATE
             keep_start_ms = chunk_offset_ms
             keep_end_ms = chunk_offset_ms + chunk_duration_ms
             if chunk_index < len(chunk_ranges) - 1:
-                keep_end_ms = min(keep_end_ms, chunk_offset_ms + _MAX_CHUNK_DURATION_MS - _CHUNK_OVERLAP_MS)
+                keep_end_ms = min(keep_end_ms, chunk_offset_ms + chunk_duration_ms - _CHUNK_OVERLAP_MS)
+
+            LOGGER.info(
+                "Chunk %s/%s start offset_ms=%s chunk_duration_ms=%s keep_window=[%s,%s)",
+                chunk_index + 1,
+                len(chunk_ranges),
+                chunk_offset_ms,
+                chunk_duration_ms,
+                keep_start_ms,
+                keep_end_ms,
+            )
 
             chunk_result = self._transcribe_single_chunk_sync(
                 chunk_pcm,
@@ -357,6 +548,14 @@ class VibevoiceModel:
                 detected_language = str(chunk_result["detected_language"])
 
             combined_segments.extend(stitched_chunk_segments)
+            LOGGER.info(
+                "Chunk %s/%s done elapsed_s=%.3f raw_segments=%s kept_segments=%s",
+                chunk_index + 1,
+                len(chunk_ranges),
+                time.perf_counter() - chunk_start_ts,
+                len(chunk_result.get("speaker_segments") or []),
+                len(stitched_chunk_segments),
+            )
 
         combined_segments = self._stitch_chunk_boundaries(combined_segments)
         for idx, segment in enumerate(combined_segments):
@@ -383,15 +582,31 @@ class VibevoiceModel:
         offset_ms: int,
         context_info: str | None,
     ) -> dict[str, Any]:
+        chunk_total_start_ts = time.perf_counter()
         model = self._model
         processor = self._processor
         assert model is not None and processor is not None
+
+        LOGGER.info(
+            "Single chunk start offset_ms=%s duration_ms=%s audio_bytes=%s",
+            offset_ms,
+            duration_ms,
+            len(pcm_bytes),
+        )
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             wav_path = tmp.name
 
         try:
+            write_wav_start_ts = time.perf_counter()
             _write_wav(wav_path, pcm_bytes, _SAMPLE_RATE)
+            LOGGER.info(
+                "Single chunk stage=write_wav elapsed_s=%.3f path=%s",
+                time.perf_counter() - write_wav_start_ts,
+                wav_path,
+            )
+
+            processor_start_ts = time.perf_counter()
             input_device = self._get_input_device(model)
             inputs = processor(
                 audio=wav_path,
@@ -401,25 +616,77 @@ class VibevoiceModel:
                 add_generation_prompt=True,
                 context_info=context_info,
             )
+            LOGGER.info(
+                "Single chunk stage=processor elapsed_s=%.3f keys=%s",
+                time.perf_counter() - processor_start_ts,
+                list(inputs.keys()),
+            )
+
+            to_device_start_ts = time.perf_counter()
             inputs = {
                 k: v.to(input_device) if isinstance(v, torch.Tensor) else v
                 for k, v in inputs.items()
             }
+            LOGGER.info(
+                "Single chunk stage=to_device elapsed_s=%.3f device=%s",
+                time.perf_counter() - to_device_start_ts,
+                input_device,
+            )
+
+            input_ids = inputs.get("input_ids")
+            acoustic_input_mask = inputs.get("acoustic_input_mask")
+            speech_tensors = inputs.get("speech_tensors")
+            input_token_len = int(input_ids.shape[1]) if isinstance(input_ids, torch.Tensor) and input_ids.ndim >= 2 else -1
+            acoustic_slots = int(acoustic_input_mask.sum().item()) if isinstance(acoustic_input_mask, torch.Tensor) else -1
+            speech_shape = tuple(speech_tensors.shape) if isinstance(speech_tensors, torch.Tensor) else None
+            gen_cfg = self._gen_config(processor)
+            LOGGER.info(
+                "Single chunk stage=generate_start input_tokens=%s acoustic_slots=%s speech_shape=%s gen_max_new_tokens=%s gen_use_cache=%s gen_max_time_s=%s",
+                input_token_len,
+                acoustic_slots,
+                speech_shape,
+                gen_cfg.get("max_new_tokens"),
+                gen_cfg.get("use_cache"),
+                gen_cfg.get("max_time"),
+            )
+
+            generate_start_ts = time.perf_counter()
             with torch.no_grad():
-                output_ids = model.generate(**inputs, **self._gen_config(processor))
+                output_ids = model.generate(**inputs, **gen_cfg)
+            LOGGER.info(
+                "Single chunk stage=generate elapsed_s=%.3f output_shape=%s",
+                time.perf_counter() - generate_start_ts,
+                tuple(output_ids.shape),
+            )
         finally:
             try:
                 Path(wav_path).unlink(missing_ok=True)
             except OSError:
                 pass
 
+        decode_start_ts = time.perf_counter()
         generated_ids = self._extract_generated_ids(
             output_ids, inputs["input_ids"].shape[1], processor.tokenizer.eos_token_id
         )
         generated_text = processor.decode(generated_ids, skip_special_tokens=True).strip()
+        LOGGER.info(
+            "Single chunk stage=decode elapsed_s=%.3f generated_tokens=%s text_len=%s",
+            time.perf_counter() - decode_start_ts,
+            int(generated_ids.shape[0]),
+            len(generated_text),
+        )
+
+        parse_start_ts = time.perf_counter()
         vendor_segments = self._parse_vendor_segments(processor, generated_text)
         speaker_segments = self._normalize_to_daemon_segments(vendor_segments)
         structured_output = len(vendor_segments) > 0 or _looks_structured_vibevoice_output(generated_text)
+        LOGGER.info(
+            "Single chunk stage=parse elapsed_s=%.3f vendor_segments=%s normalized_segments=%s structured=%s",
+            time.perf_counter() - parse_start_ts,
+            len(vendor_segments),
+            len(speaker_segments),
+            structured_output,
+        )
 
         for segment in speaker_segments:
             segment["start_ms"] += offset_ms
@@ -454,13 +721,19 @@ class VibevoiceModel:
         ):
             plain_text = generated_text
 
-        return {
+        result = {
             "text": plain_text,
             "detected_language": None,
             "duration_ms": duration_ms,
             "speaker_segments": speaker_segments,
             "speaker_count": len({s["speaker_id"] for s in speaker_segments if s.get("speaker_id")}),
         }
+        LOGGER.info(
+            "Single chunk done total_elapsed_s=%.3f output_segments=%s",
+            time.perf_counter() - chunk_total_start_ts,
+            len(speaker_segments),
+        )
+        return result
 
     def _parse_vendor_segments(
         self, processor: VibeVoiceASRProcessor, generated_text: str
@@ -757,13 +1030,17 @@ class VibevoiceModel:
             return torch.device(self._device)
 
     def _gen_config(self, processor: VibeVoiceASRProcessor) -> dict[str, Any]:
-        return {
-            "max_new_tokens": _MAX_NEW_TOKENS,
+        config: dict[str, Any] = {
+            "max_new_tokens": self._max_new_tokens,
             "do_sample": False,
             "num_beams": 1,
+            "use_cache": True,
             "pad_token_id": processor.pad_id,
             "eos_token_id": processor.tokenizer.eos_token_id,
         }
+        if self._max_generate_time_s is not None:
+            config["max_time"] = self._max_generate_time_s
+        return config
 
     def _extract_generated_ids(
         self,
@@ -801,6 +1078,8 @@ class VibevoiceModel:
         forced = os.environ.get("ECHOSCRIPT_FORCE_CPU_DTYPE", "").strip().lower()
         if forced == "float32":
             return torch.float32
+        if forced == "float16":
+            return torch.float16
         if forced == "bfloat16":
             return torch.bfloat16
         return torch.bfloat16
@@ -853,12 +1132,30 @@ class VibevoiceModel:
                 "Key mismatch: missing=%s unexpected=%s", missing_keys, unexpected_keys
             )
 
-        try:
+        generation_config_path = snapshot_path / "generation_config.json"
+        if generation_config_path.exists():
             model.generation_config = GenerationConfig.from_pretrained(
                 str(snapshot_path), local_files_only=True
             )
-        except OSError:
-            LOGGER.info("Generation config missing for %s, using defaults", snapshot_path)
+        else:
+            generation_defaults: dict[str, Any] = {
+                "max_new_tokens": self._max_new_tokens,
+                "do_sample": False,
+                "num_beams": 1,
+            }
+            if self._processor is not None:
+                generation_defaults["pad_token_id"] = self._processor.pad_id
+                generation_defaults["eos_token_id"] = self._processor.tokenizer.eos_token_id
+
+            model.generation_config = GenerationConfig(**generation_defaults)
+            try:
+                model.generation_config.save_pretrained(str(snapshot_path))
+                LOGGER.info("Created generation config at %s", generation_config_path)
+            except OSError:
+                LOGGER.info(
+                    "Generation config missing for %s and could not be saved; using in-memory defaults",
+                    snapshot_path,
+                )
 
         model.eval()
         return model

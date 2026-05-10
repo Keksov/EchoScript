@@ -7,6 +7,10 @@ if errorlevel 1 exit /b 1
 REM --- Load local overrides if present ---
 if exist "%~dp0.env.bat" call "%~dp0.env.bat"
 
+REM --- Auto-resolve ffmpeg path when FFMPEG_BIN is not explicitly set ---
+call "%~dp0..\..\..\scripts\ffmpeg.bat" ensure_ffmpeg_bin
+call "%~dp0..\..\..\scripts\ffmpeg.bat" print_ffmpeg_diag
+
 REM --- Apply defaults for any unset variables ---
 if not defined VIBEVOICEDAEMON_HOST set "VIBEVOICEDAEMON_HOST=127.0.0.1"
 if not defined VIBEVOICEDAEMON_PORT set "VIBEVOICEDAEMON_PORT=7802"

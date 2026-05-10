@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -114,8 +115,23 @@ class Session:
         self._done = True
         pcm_bytes = b"".join(self._pcm_chunks)
         self._pcm_chunks.clear()
+        duration_ms = (len(pcm_bytes) // 2) * 1000 // _SAMPLE_RATE_HZ
+        flush_start_ts = time.perf_counter()
+        LOGGER.info(
+            "Flush start connection_id=%s request_id=%s audio_bytes=%s duration_ms=%s",
+            self._connection_id,
+            self._settings.request_id,
+            len(pcm_bytes),
+            duration_ms,
+        )
 
         if len(pcm_bytes) == 0:
+            LOGGER.info(
+                "Flush done (empty audio) connection_id=%s request_id=%s elapsed_s=%.3f",
+                self._connection_id,
+                self._settings.request_id,
+                time.perf_counter() - flush_start_ts,
+            )
             return self._build_session_final(
                 text="",
                 duration_ms=0,
@@ -133,6 +149,14 @@ class Session:
         except (RuntimeError, ValueError, OSError) as exc:
             LOGGER.exception("Transcription failed: %s", exc)
             return self._error("internal_error", "Transcription failed")
+
+        LOGGER.info(
+            "Flush done connection_id=%s request_id=%s elapsed_s=%.3f output_segments=%s",
+            self._connection_id,
+            self._settings.request_id,
+            time.perf_counter() - flush_start_ts,
+            len(result.get("speaker_segments") or []),
+        )
 
         return self._build_session_final(
             text=result["text"],
