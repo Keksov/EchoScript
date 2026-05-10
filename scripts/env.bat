@@ -2,7 +2,7 @@
 set "HF_HOME=c:\var\huggingface"
 set "HF_HUB_CACHE=%HF_HOME%\hub"
 set "HUGGINGFACE_HUB_CACHE=%HF_HUB_CACHE%"
-set "TRANSFORMERS_CACHE=%HF_HUB_CACHE%"
+set "TRANSFORMERS_CACHE="
 set "HF_ASSETS_CACHE=%HF_HOME%\assets"
 set "HF_XET_CACHE=%HF_HOME%\xet"
 set "VOSK_MODELS_ROOT=c:\var\vosk"

@@ -4,7 +4,6 @@ from pathlib import Path
 HF_HOME_ENV = "HF_HOME"
 HF_HUB_CACHE_ENV = "HF_HUB_CACHE"
 HUGGINGFACE_HUB_CACHE_ENV = "HUGGINGFACE_HUB_CACHE"
-TRANSFORMERS_CACHE_ENV = "TRANSFORMERS_CACHE"
 HF_ASSETS_CACHE_ENV = "HF_ASSETS_CACHE"
 HF_XET_CACHE_ENV = "HF_XET_CACHE"
 _WINDOWS_DEFAULT_HF_HOME = Path("C:/var/huggingface")
@@ -27,7 +26,6 @@ def bootstrap_hf_cache_env() -> None:
     os.environ.setdefault(HF_HOME_ENV, str(hf_home))
     os.environ.setdefault(HF_HUB_CACHE_ENV, str(hub_cache))
     os.environ.setdefault(HUGGINGFACE_HUB_CACHE_ENV, str(hub_cache))
-    os.environ.setdefault(TRANSFORMERS_CACHE_ENV, str(hub_cache))
     os.environ.setdefault(HF_ASSETS_CACHE_ENV, str(assets_cache))
     os.environ.setdefault(HF_XET_CACHE_ENV, str(xet_cache))
 

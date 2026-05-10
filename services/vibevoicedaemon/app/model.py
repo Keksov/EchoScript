@@ -17,6 +17,10 @@ from accelerate.utils import set_module_tensor_to_device
 from echoscript_shared.hf_env import bootstrap_hf_cache_env, get_hf_hub_cache
 from huggingface_hub import snapshot_download
 from safetensors import safe_open
+
+# TRANSFORMERS_CACHE is deprecated and can emit warnings during transformers import.
+os.environ.pop("TRANSFORMERS_CACHE", None)
+
 from transformers import GenerationConfig
 from vibevoice.modular.configuration_vibevoice import VibeVoiceASRConfig
 from vibevoice.modular.modeling_vibevoice_asr import (
@@ -805,7 +809,10 @@ class VibevoiceModel:
         self, snapshot_path: Path, attn_impl: str
     ) -> VibeVoiceASRForConditionalGeneration:
         config = VibeVoiceASRConfig.from_pretrained(str(snapshot_path), local_files_only=True)
-        config.torch_dtype = self._dtype
+        if hasattr(config, "dtype"):
+            config.dtype = self._dtype
+        else:
+            config.torch_dtype = self._dtype
         setattr(config, "_attn_implementation", attn_impl)
 
         with init_empty_weights():
@@ -854,7 +861,7 @@ class VibevoiceModel:
                 str(snapshot_path), local_files_only=True
             )
         except OSError:
-            LOGGER.warning("Generation config missing for %s", snapshot_path)
+            LOGGER.info("Generation config missing for %s, using defaults", snapshot_path)
 
         model.eval()
         return model
