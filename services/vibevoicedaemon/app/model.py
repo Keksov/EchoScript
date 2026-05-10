@@ -6,8 +6,8 @@ import logging
 import os
 import re
 import tempfile
-import wave
 import warnings
+import wave
 from collections import Counter
 from pathlib import Path
 from typing import Any
