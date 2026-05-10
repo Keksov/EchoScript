@@ -42,7 +42,7 @@ if not exist "%VIBEVOICE_VENDOR_DIR%\.git" (
     echo [INFO] VibeVoice already cloned: %VIBEVOICE_VENDOR_DIR%
 )
 
-echo [INFO] Installing VibeVoice in editable mode from %VIBEVOICE_VENDOR_DIR% (without upstream deps) ...
+echo [INFO] Installing VibeVoice in editable mode from %VIBEVOICE_VENDOR_DIR% ^(without upstream deps^) ...
 if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%SERVICE_DIR%\venv\Scripts\pip.exe" install -e "%VIBEVOICE_VENDOR_DIR%" --no-deps --quiet
 "%SERVICE_DIR%\venv\Scripts\pip.exe" install -e "%VIBEVOICE_VENDOR_DIR%" --no-deps --quiet
 if errorlevel 1 (
@@ -52,7 +52,7 @@ if errorlevel 1 (
 
 REM --- Install flash-attn only if GPU is available ---
 if "%HAS_GPU%"=="1" (
-    echo [INFO] Installing flash-attn (GPU detected) ...
+    echo [INFO] Installing flash-attn ^(GPU detected^) ...
     "%SERVICE_DIR%\venv\Scripts\pip.exe" install flash-attn --no-build-isolation --quiet
     if errorlevel 1 (
         echo [WARN] flash-attn installation failed. vibevoicedaemon may still work without it.
