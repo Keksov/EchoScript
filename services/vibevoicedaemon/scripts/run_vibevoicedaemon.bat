@@ -4,6 +4,13 @@ setlocal
 pushd "%~dp0\..\..\.."
 if errorlevel 1 exit /b 1
 
+REM --- Load local overrides if present ---
+if exist "%~dp0.env.bat" call "%~dp0.env.bat"
+
+REM --- Apply defaults for any unset variables ---
+if not defined VIBEVOICEDAEMON_HOST set "VIBEVOICEDAEMON_HOST=127.0.0.1"
+if not defined VIBEVOICEDAEMON_PORT set "VIBEVOICEDAEMON_PORT=7802"
+
 set "SERVICE_DIR=services\vibevoicedaemon"
 set "PYTHON_EXE=%SERVICE_DIR%\venv\Scripts\python.exe"
 set "LOG_DIR=%SERVICE_DIR%\logs"
@@ -22,7 +29,7 @@ set "PYTHON_EXE_ABS=%CD%\%PYTHON_EXE%"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 
-powershell -NoProfile -Command "$wd=(Get-Location).Path; $svcDir=Join-Path $wd 'services\vibevoicedaemon'; $python='%PYTHON_EXE_ABS%'; $out=Join-Path $wd 'services\vibevoicedaemon\logs\vibevoicedaemon.stdout.log'; $argList=@('-m','app.main','--host','127.0.0.1','--port','7802','--warmup'); Write-Host ('vibevoicedaemon args: ' + ($argList -join ' ')); Push-Location $svcDir; & $python @argList 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; $exitCode=$LASTEXITCODE; Pop-Location; exit $exitCode"
+powershell -NoProfile -Command "$wd=(Get-Location).Path; $svcDir=Join-Path $wd 'services\vibevoicedaemon'; $python='%PYTHON_EXE_ABS%'; $out=Join-Path $wd 'services\vibevoicedaemon\logs\vibevoicedaemon.stdout.log'; $argList=@('-m','app.main','--host','%VIBEVOICEDAEMON_HOST%','--port','%VIBEVOICEDAEMON_PORT%','--warmup'); Write-Host ('vibevoicedaemon args: ' + ($argList -join ' ')); Push-Location $svcDir; & $python @argList 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; $exitCode=$LASTEXITCODE; Pop-Location; exit $exitCode"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd
