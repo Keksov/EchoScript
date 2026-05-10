@@ -36,14 +36,7 @@ REM Without it, VibeVoiceASRProcessor.from_pretrained() falls back to defaults a
 REM WARNING lines on every startup. We create the file with those same defaults so the
 REM processor finds it and loads silently.
 echo [INFO] Creating preprocessor_config.json in VibeVoice-ASR snapshot ...
-"%VENV_DIR%\Scripts\python.exe" -c ^
-  "import os, json; from huggingface_hub import snapshot_download; ^
-   cache_dir = os.environ['HF_HUB_CACHE']; ^
-   snap = snapshot_download('microsoft/VibeVoice-ASR', cache_dir=cache_dir, local_files_only=True); ^
-   cfg_path = os.path.join(snap, 'preprocessor_config.json'); ^
-   cfg = {'processor_class': 'VibeVoiceASRProcessor', 'speech_tok_compress_ratio': 3200, 'target_sample_rate': 24000, 'normalize_audio': True, 'target_dB_FS': -25, 'eps': 1e-6}; ^
-   json.dump(cfg, open(cfg_path, 'w'), indent=2); ^
-   print('[INFO] Written:', cfg_path)"
+"%VENV_DIR%\Scripts\python.exe" -c "import os, json; from huggingface_hub import snapshot_download; cache_dir = os.environ['HF_HUB_CACHE']; snap = snapshot_download('microsoft/VibeVoice-ASR', cache_dir=cache_dir, local_files_only=True); cfg_path = os.path.join(snap, 'preprocessor_config.json'); cfg = {'processor_class': 'VibeVoiceASRProcessor', 'speech_tok_compress_ratio': 3200, 'target_sample_rate': 24000, 'normalize_audio': True, 'target_dB_FS': -25, 'eps': 1e-6}; json.dump(cfg, open(cfg_path, 'w'), indent=2); print('[INFO] Written:', cfg_path)"
 if errorlevel 1 (
     echo [WARN] Could not create preprocessor_config.json. Startup warnings may appear.
 )
