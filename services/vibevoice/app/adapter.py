@@ -164,7 +164,7 @@ class VibeVoiceAdapter(BaseASRAdapter):
         attn_implementation: str,
     ) -> VibeVoiceASRForConditionalGeneration:
         config = VibeVoiceASRConfig.from_pretrained(str(snapshot_path), local_files_only=True)
-        config.torch_dtype = self._dtype
+        config.dtype = self._dtype
         setattr(config, "_attn_implementation", attn_implementation)
 
         with init_empty_weights():

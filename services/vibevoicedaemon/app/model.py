@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import tempfile
-import warnings
 import wave
 from collections import Counter
 from pathlib import Path
@@ -810,18 +809,10 @@ class VibevoiceModel:
         self, snapshot_path: Path, attn_impl: str
     ) -> VibeVoiceASRForConditionalGeneration:
         config = VibeVoiceASRConfig.from_pretrained(str(snapshot_path), local_files_only=True)
-        if hasattr(config, "dtype"):
-            config.dtype = self._dtype
-        else:
-            config.torch_dtype = self._dtype
+        config.dtype = self._dtype
         setattr(config, "_attn_implementation", attn_impl)
 
-        # VibeVoice.__init__ reads config.torch_dtype, a deprecated property in
-        # transformers >= 4.49 that emits FutureWarning on every access. The root
-        # cause is fixed in setup_vibevoicedaemon.bat (patches the vendor source),
-        # but we also guard here for already-deployed installations.
-        with init_empty_weights(), warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=".*torch_dtype.*", category=FutureWarning)
+        with init_empty_weights():
             model = VibeVoiceASRForConditionalGeneration(config)
 
         expected_keys = set(model.state_dict().keys())

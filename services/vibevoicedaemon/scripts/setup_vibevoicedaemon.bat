@@ -61,6 +61,12 @@ if errorlevel 1 (
     echo [WARN] Could not patch modeling_vibevoice_asr.py. torch_dtype FutureWarning may appear at startup.
 )
 
+"%SERVICE_DIR%\venv\Scripts\python.exe" -c "import pathlib, sys; p = pathlib.Path(r'%VIBEVOICE_VENDOR_DIR%\vibevoice\modular\modeling_vibevoice_asr.py'); t = p.read_text(encoding='utf-8'); sys.exit(1 if 'torch_dtype' in t else 0)"
+if errorlevel 1 (
+    echo [ERROR] Patch verification failed: torch_dtype references remain in modeling_vibevoice_asr.py.
+    goto :fail
+)
+
 REM --- Install flash-attn only if GPU is available ---
 if "%HAS_GPU%"=="1" (
     echo [INFO] Installing flash-attn ^(GPU detected^) ...
