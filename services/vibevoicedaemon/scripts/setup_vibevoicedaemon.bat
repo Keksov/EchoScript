@@ -42,8 +42,9 @@ if not exist "%VIBEVOICE_VENDOR_DIR%\.git" (
     echo [INFO] VibeVoice already cloned: %VIBEVOICE_VENDOR_DIR%
 )
 
-echo [INFO] Installing VibeVoice in editable mode from %VIBEVOICE_VENDOR_DIR% ...
-"%SERVICE_DIR%\venv\Scripts\pip.exe" install -e "%VIBEVOICE_VENDOR_DIR%" --quiet
+echo [INFO] Installing VibeVoice in editable mode from %VIBEVOICE_VENDOR_DIR% (without upstream deps) ...
+if /I "%ECHOSCRIPT_SETUP_DIAG%"=="1" echo [DIAG] Running: "%SERVICE_DIR%\venv\Scripts\pip.exe" install -e "%VIBEVOICE_VENDOR_DIR%" --no-deps --quiet
+"%SERVICE_DIR%\venv\Scripts\pip.exe" install -e "%VIBEVOICE_VENDOR_DIR%" --no-deps --quiet
 if errorlevel 1 (
     echo [ERROR] Failed to install VibeVoice.
     goto :fail
