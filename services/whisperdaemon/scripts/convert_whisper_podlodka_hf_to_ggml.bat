@@ -22,7 +22,9 @@ if errorlevel 1 exit /b 1
 call "scripts\env.bat"
 
 set "PYTHON_EXE=services\whisper_podlodka\venv\Scripts\python.exe"
-set "CONVERTER_SCRIPT=services\whisperdaemon\whisper.cpp\models\convert-h5-to-ggml.py"
+set "CONVERTER_SCRIPT="
+set "DEFAULT_WHISPER_CPP_ROOT=services\whisperdaemon\whisper.cpp"
+set "VENDOR_WHISPER_CPP_ROOT=services\whisperdaemon\vendors\whisper.cpp\whisper.cpp-master"
 set "OUTPUT_DIR=services\whisperdaemon\spikes\conversion-out"
 set "OUTPUT_FILE=%OUTPUT_DIR%\ggml-model.bin"
 set "SNAPSHOTS_DIR=%HF_HUB_CACHE%\models--bond005--whisper-podlodka-turbo\snapshots"
@@ -63,9 +65,13 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-if not exist "%CONVERTER_SCRIPT%" (
-    echo Converter script not found:
-    echo   %CONVERTER_SCRIPT%
+call :resolve_converter_script
+if errorlevel 1 (
+    echo Converter script not found.
+    echo Checked roots:
+    echo   %DEFAULT_WHISPER_CPP_ROOT%
+    echo   %VENDOR_WHISPER_CPP_ROOT%
+    echo Run services\whisperdaemon\scripts\setup_whisperdaemon_podlodka.bat first.
     popd
     exit /b 1
 )
@@ -129,6 +135,24 @@ echo   services\whisperdaemon\scripts\stage_whisperdaemon_model.bat
 popd
 exit /b 0
 
+:resolve_converter_script
+set "CONVERTER_SCRIPT="
+
+if defined WHISPER_CPP_ROOT (
+    if exist "%WHISPER_CPP_ROOT%\models\convert-h5-to-ggml.py" set "CONVERTER_SCRIPT=%WHISPER_CPP_ROOT%\models\convert-h5-to-ggml.py"
+)
+
+if not defined CONVERTER_SCRIPT (
+    if exist "%DEFAULT_WHISPER_CPP_ROOT%\models\convert-h5-to-ggml.py" set "CONVERTER_SCRIPT=%DEFAULT_WHISPER_CPP_ROOT%\models\convert-h5-to-ggml.py"
+)
+
+if not defined CONVERTER_SCRIPT (
+    if exist "%VENDOR_WHISPER_CPP_ROOT%\models\convert-h5-to-ggml.py" set "CONVERTER_SCRIPT=%VENDOR_WHISPER_CPP_ROOT%\models\convert-h5-to-ggml.py"
+)
+
+if defined CONVERTER_SCRIPT exit /b 0
+exit /b 1
+
 :usage
 echo Usage:
 echo   services\whisperdaemon\scripts\convert_whisper_podlodka_hf_to_ggml.bat ^<path-to-openai-whisper-repo^> [path-to-hf-snapshot]
@@ -141,7 +165,10 @@ echo If arg 2 is omitted, the latest snapshot under:
 echo   %SNAPSHOTS_DIR%
 echo is used automatically.
 echo.
-echo You can also set WHISPER_OPENAI_REPO and WHISPER_PODLODKA_SNAPSHOT_DIR.
+echo You can also set WHISPER_OPENAI_REPO, WHISPER_PODLODKA_SNAPSHOT_DIR,
+echo and optionally WHISPER_CPP_ROOT.
+echo.
+echo Run services\whisperdaemon\scripts\setup_whisperdaemon_podlodka.bat to prepare all dependencies automatically.
 
 popd
 exit /b 1

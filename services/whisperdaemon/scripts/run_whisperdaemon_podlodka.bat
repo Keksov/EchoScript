@@ -4,6 +4,20 @@ setlocal
 pushd "%~dp0\..\..\.."
 if errorlevel 1 exit /b 1
 
+set "LOCAL_ENV_SCRIPT=services\whisperdaemon\scripts\.env.bat"
+if exist "%LOCAL_ENV_SCRIPT%" (
+    echo [INFO] Loading local whisperdaemon overrides: %LOCAL_ENV_SCRIPT%
+    call "%LOCAL_ENV_SCRIPT%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to load local config: %LOCAL_ENV_SCRIPT%
+        popd
+        exit /b 1
+    )
+)
+
+if not defined WHISPER_DAEMON_HOST set "WHISPER_DAEMON_HOST=127.0.0.1"
+if not defined WHISPER_DAEMON_PORT set "WHISPER_DAEMON_PORT=7801"
+
 set "DAEMON_DIR=services\whisperdaemon\build\x64"
 set "DAEMON_EXE=%DAEMON_DIR%\WhisperDaemon.exe"
 set "MODEL_FILE=services\whisperdaemon\models\ggml-whisper_podlodka.bin"
@@ -28,7 +42,7 @@ if not exist "%MODEL_FILE%" (
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 
-powershell -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\whisperdaemon\build\x64\WhisperDaemon.exe'; $out=Join-Path $wd 'services\whisperdaemon\logs\whisper_podlodka.stdout.log'; $modelsRoot=Join-Path $wd 'services\whisperdaemon\models'; $env:WHISPER_MODELS_ROOT = $modelsRoot; $argList=@('--model-name','whisper_podlodka','--host','127.0.0.1','--port','7801'); if ($env:WHISPER_USE_GPU -match '^(?i:1|true|yes|on)$') { $argList += '--gpu' }; if ($env:WHISPER_GPU_DEVICE) { $argList += @('--gpu-device',$env:WHISPER_GPU_DEVICE) }; if ($env:WHISPER_DLL_PATH) { $argList += @('--whisper-dll',$env:WHISPER_DLL_PATH) }; if ($env:WHISPER_RELEASE_TAG) { $argList += @('--release-tag',$env:WHISPER_RELEASE_TAG) }; Write-Host ('whisperdaemon args: ' + ($argList -join ' ')); & $exe @argList 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
+powershell -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\whisperdaemon\build\x64\WhisperDaemon.exe'; $out=Join-Path $wd 'services\whisperdaemon\logs\whisper_podlodka.stdout.log'; $modelsRoot=Join-Path $wd 'services\whisperdaemon\models'; $env:WHISPER_MODELS_ROOT = $modelsRoot; $argList=@('--model-name','whisper_podlodka','--host',$env:WHISPER_DAEMON_HOST,'--port',$env:WHISPER_DAEMON_PORT); if ($env:WHISPER_USE_GPU -match '^(?i:1|true|yes|on)$') { $argList += '--gpu' }; if ($env:WHISPER_GPU_DEVICE) { $argList += @('--gpu-device',$env:WHISPER_GPU_DEVICE) }; if ($env:WHISPER_DLL_PATH) { $argList += @('--whisper-dll',$env:WHISPER_DLL_PATH) }; if ($env:WHISPER_RELEASE_TAG) { $argList += @('--release-tag',$env:WHISPER_RELEASE_TAG) }; Write-Host ('whisperdaemon args: ' + ($argList -join ' ')); & $exe @argList 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd

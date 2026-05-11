@@ -548,6 +548,24 @@ begin
     Result := IncludeTrailingPathDelimiter(resolveWhisperModelsRoot) + 'ggml-' + fileName + '.bin';
 end;
 
+function ptrToHex(const aPtr: Pointer): string;
+begin
+  Result := '$' + IntToHex(QWord(PtrUInt(aPtr)), SizeOf(Pointer) * 2);
+end;
+
+function libHandleToHex(const aHandle: TLibHandle): string;
+begin
+  Result := '$' + IntToHex(QWord(PtrUInt(aHandle)), SizeOf(Pointer) * 2);
+end;
+
+procedure logWarmupDiag(const aStage: string; const aDetails: string = '');
+begin
+  if aDetails = '' then
+    WriteLn(StdErr, '[whisperdaemon][diag] ', aStage)
+  else
+    WriteLn(StdErr, '[whisperdaemon][diag] ', aStage, ' ', aDetails);
+end;
+
 procedure prependDirectoryToPath(const aDirPath: string);
 var
   envPath: string;
@@ -619,6 +637,7 @@ end;
 procedure TWhisperWarmupThread.Execute;
 begin
   try
+    logWarmupDiag('warmup.enter', 'model=' + FmodelName);
     SetExceptionMask([
       exInvalidOp,
       exDenormalized,
@@ -627,13 +646,22 @@ begin
       exUnderflow,
       exPrecision
     ]);
+
+    logWarmupDiag('warmup.step', 'loadWhisperLibrary.begin');
     loadWhisperLibrary;
+    logWarmupDiag('warmup.step', 'loadWhisperLibrary.ok');
+
+    logWarmupDiag('warmup.step', 'getOrCreateCachedContext.begin');
     getOrCreateCachedContext(FmodelName);
+    logWarmupDiag('warmup.step', 'getOrCreateCachedContext.ok');
+
     gWarmupState := mwsReady;
     WriteLn('[whisperdaemon] warmup ready model=', FmodelName);
   except
     on E: Exception do
     begin
+      logWarmupDiag('warmup.exception.class', E.ClassName);
+      logWarmupDiag('warmup.exception.message', E.Message);
       gWarmupError := E.Message;
       gWarmupState := mwsFailed;
       WriteLn(StdErr, '[whisperdaemon] warmup failed: ', E.Message);
@@ -647,23 +675,34 @@ end;
 procedure loadWhisperLibrary;
 var
   dllPath: string;
+  versionText: string;
 begin
   dllPath := ExpandFileName(resolveWhisperDllPath);
+  logWarmupDiag('library.path', dllPath);
 
   if gWhisperLoaded then
   begin
     if SameText(gWhisperDllPath, dllPath) then
+    begin
+      logWarmupDiag('library.reuse', gWhisperDllPath);
       Exit;
+    end;
+
+    logWarmupDiag('library.reload', gWhisperDllPath + ' -> ' + dllPath);
     unloadWhisperLibrary;
   end;
 
   if not FileExists(dllPath) then
     raise Exception.CreateFmt('whisper.dll not found: %s', [dllPath]);
 
+  logWarmupDiag('library.load.begin', dllPath);
   prependDirectoryToPath(ExtractFileDir(dllPath));
   gWhisperHandle := SafeLoadLibrary(dllPath);
   if gWhisperHandle = 0 then
     raise Exception.CreateFmt('Failed to load whisper.dll from: %s', [dllPath]);
+  logWarmupDiag('library.load.handle', libHandleToHex(gWhisperHandle));
+
+  logWarmupDiag('library.exports.begin');
 
   Pointer(gWhisperContextDefaultParams) := GetProcedureAddress(gWhisperHandle, 'whisper_context_default_params');
   Pointer(gWhisperInitState) := GetProcedureAddress(gWhisperHandle, 'whisper_init_state');
@@ -699,31 +738,151 @@ begin
   requireAssigned(Pointer(gWhisperFullGetTokenTextFromState), 'whisper_full_get_token_text_from_state');
   requireAssigned(Pointer(gWhisperFullGetTokenDataFromState), 'whisper_full_get_token_data_from_state');
 
+  versionText := '<unknown>';
+  if Assigned(gWhisperVersion) then
+  begin
+    try
+      versionText := string(gWhisperVersion());
+    except
+      on E: Exception do
+        versionText := '<error reading version: ' + E.Message + '>';
+    end;
+  end;
+  logWarmupDiag('library.version', versionText);
+  logWarmupDiag('library.exports.ok');
+
   gWhisperDllPath := dllPath;
   gWhisperLoaded := True;
+  logWarmupDiag('library.ready', dllPath);
 end;
 
 function getOrCreateCachedContext(const aModelName: string): PWhisperContext;
 var
-  modelPath: string;
   params: TWhisperContextParams;
+  initError: string;
+  modelPath: string;
+  modelSize: Int64;
+  retryParams: TWhisperContextParams;
 begin
   modelPath := ExpandFileName(resolveWhisperModelPath(aModelName));
+  logWarmupDiag('context.model.path', modelPath);
+
   if not FileExists(modelPath) then
     raise Exception.CreateFmt('Whisper model file not found: %s', [modelPath]);
 
   if (gCachedContext <> nil) and SameText(gCachedModelPath, modelPath) then
+  begin
+    logWarmupDiag('context.cache.hit', modelPath);
     Exit(gCachedContext);
+  end;
 
+  modelSize := -1;
+  try
+    with TFileStream.Create(modelPath, fmOpenRead or fmShareDenyNone) do
+    try
+      modelSize := Size;
+    finally
+      Free;
+    end;
+  except
+    on E: Exception do
+      logWarmupDiag('context.model.size_error', E.Message);
+  end;
+
+  if modelSize >= 0 then
+    logWarmupDiag('context.model.size', IntToStr(modelSize));
+
+  logWarmupDiag('context.cache.reset');
   freeCachedContext;
+
+  logWarmupDiag('context.params.default.begin');
   params := gWhisperContextDefaultParams();
+  logWarmupDiag(
+    'context.params.default',
+    Format('useGpu=%d flashAttn=%d gpuDevice=%d dtw=%d', [
+      Ord(params.useGpu),
+      Ord(params.flashAttn),
+      params.gpuDevice,
+      Ord(params.dtwTokenTimestamps)
+    ])
+  );
+
   params.useGpu := gDaemonOptions.UseGpu;
   params.gpuDevice := gDaemonOptions.GpuDevice;
-  gCachedContext := gWhisperInitFromFileWithParamsNoState(PChar(modelPath), params);
+
+  if not params.useGpu then
+  begin
+    if params.flashAttn then
+    begin
+      params.flashAttn := False;
+      logWarmupDiag('context.params.adjust', 'flashAttn forced to 0 for CPU mode');
+    end;
+  end;
+
+  logWarmupDiag(
+    'context.params.requested',
+    Format('useGpu=%d flashAttn=%d gpuDevice=%d dtw=%d', [
+      Ord(params.useGpu),
+      Ord(params.flashAttn),
+      params.gpuDevice,
+      Ord(params.dtwTokenTimestamps)
+    ])
+  );
+
+  logWarmupDiag('context.init.begin', modelPath);
+  initError := '';
+  gCachedContext := nil;
+  try
+    gCachedContext := gWhisperInitFromFileWithParamsNoState(PChar(modelPath), params);
+  except
+    on E: Exception do
+    begin
+      initError := E.ClassName + ': ' + E.Message;
+      logWarmupDiag('context.init.exception', initError);
+      gCachedContext := nil;
+    end;
+  end;
+
+  logWarmupDiag('context.init.result', ptrToHex(gCachedContext));
+
+  if (gCachedContext = nil) and (not params.useGpu) and params.flashAttn then
+  begin
+    retryParams := params;
+    retryParams.flashAttn := False;
+    logWarmupDiag(
+      'context.init.retry',
+      Format('useGpu=%d flashAttn=%d gpuDevice=%d dtw=%d', [
+        Ord(retryParams.useGpu),
+        Ord(retryParams.flashAttn),
+        retryParams.gpuDevice,
+        Ord(retryParams.dtwTokenTimestamps)
+      ])
+    );
+
+    initError := '';
+    try
+      gCachedContext := gWhisperInitFromFileWithParamsNoState(PChar(modelPath), retryParams);
+    except
+      on E: Exception do
+      begin
+        initError := E.ClassName + ': ' + E.Message;
+        logWarmupDiag('context.init.retry_exception', initError);
+        gCachedContext := nil;
+      end;
+    end;
+
+    logWarmupDiag('context.init.retry_result', ptrToHex(gCachedContext));
+  end;
+
   if gCachedContext = nil then
+  begin
+    if initError <> '' then
+      raise Exception.Create('whisper_init_from_file_with_params_no_state failed: ' + initError);
     raise Exception.Create('whisper_init_from_file_with_params_no_state failed');
+  end;
 
   gCachedModelPath := modelPath;
+  logWarmupDiag('context.cache.store', gCachedModelPath);
   Result := gCachedContext;
 end;
 
