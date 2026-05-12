@@ -18,7 +18,7 @@ if not exist "%DAEMON_EXE%" (
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 
-powershell -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\voskdaemon\build\x64\VoskDaemon.exe'; $out=Join-Path $wd 'services\voskdaemon\logs\vosk_ru.stdout.log'; & $exe '--model-name' 'vosk_ru' '--host' '127.0.0.1' '--port' '7701' 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
+pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\voskdaemon\build\x64\VoskDaemon.exe'; $out=Join-Path $wd 'services\voskdaemon\logs\vosk_ru.stdout.log'; & $exe '--model-name' 'vosk_ru' '--host' '127.0.0.1' '--port' '7701' 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd

@@ -40,7 +40,7 @@ if not exist "%MODEL_FILE%" (
     exit /b 1
 )
 
-powershell -NoProfile -Command "$items = Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'WhisperDaemon.exe' -and $_.CommandLine -match '--model-name whisper_podlodka(\s|$)' }; if (@($items).Count -gt 0) { Write-Host 'whisperdaemon_podlodka is already running.'; exit 1 }"
+pwsh -NoProfile -Command "$items = Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'WhisperDaemon.exe' -and $_.CommandLine -match '--model-name whisper_podlodka(\s|$)' }; if (@($items).Count -gt 0) { Write-Host 'whisperdaemon_podlodka is already running.'; exit 1 }"
 if errorlevel 1 (
     popd
     exit /b 1
@@ -50,14 +50,14 @@ if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 if exist "%STDERR_LOG%" del /q "%STDERR_LOG%"
 
-powershell -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\whisperdaemon\build\x64\WhisperDaemon.exe'; $out=Join-Path $wd 'services\whisperdaemon\logs\whisper_podlodka.stdout.log'; $err=Join-Path $wd 'services\whisperdaemon\logs\whisper_podlodka.stderr.log'; $modelsRoot=Join-Path $wd 'services\whisperdaemon\models'; $env:WHISPER_MODELS_ROOT = $modelsRoot; $argList=@('--model-name','whisper_podlodka','--host',$env:WHISPER_DAEMON_HOST,'--port',$env:WHISPER_DAEMON_PORT); if ($env:WHISPER_USE_GPU -match '^(?i:1|true|yes|on)$') { $argList += '--gpu' }; if ($env:WHISPER_GPU_DEVICE) { $argList += @('--gpu-device',$env:WHISPER_GPU_DEVICE) }; if ($env:WHISPER_DLL_PATH) { $argList += @('--whisper-dll',$env:WHISPER_DLL_PATH) }; if ($env:WHISPER_RELEASE_TAG) { $argList += @('--release-tag',$env:WHISPER_RELEASE_TAG) }; Write-Host ('whisperdaemon args: ' + ($argList -join ' ')); $proc = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $wd -WindowStyle Minimized -RedirectStandardOutput $out -RedirectStandardError $err -PassThru; if ($proc.WaitForExit(1500)) { Write-Host ('whisperdaemon_podlodka exited with code ' + $proc.ExitCode); if (Test-Path $err) { Get-Content -Path $err | ForEach-Object { Write-Host $_ } }; exit $proc.ExitCode }; Write-Host ('Started whisperdaemon_podlodka PID ' + $proc.Id); Write-Host ('stdout: ' + $out); Write-Host ('stderr: ' + $err)"
+pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\whisperdaemon\build\x64\WhisperDaemon.exe'; $out=Join-Path $wd 'services\whisperdaemon\logs\whisper_podlodka.stdout.log'; $err=Join-Path $wd 'services\whisperdaemon\logs\whisper_podlodka.stderr.log'; $modelsRoot=Join-Path $wd 'services\whisperdaemon\models'; $env:WHISPER_MODELS_ROOT = $modelsRoot; $argList=@('--model-name','whisper_podlodka','--host',$env:WHISPER_DAEMON_HOST,'--port',$env:WHISPER_DAEMON_PORT); if ($env:WHISPER_USE_GPU -match '^(?i:1|true|yes|on)$') { $argList += '--gpu' }; if ($env:WHISPER_GPU_DEVICE) { $argList += @('--gpu-device',$env:WHISPER_GPU_DEVICE) }; if ($env:WHISPER_DLL_PATH) { $argList += @('--whisper-dll',$env:WHISPER_DLL_PATH) }; if ($env:WHISPER_RELEASE_TAG) { $argList += @('--release-tag',$env:WHISPER_RELEASE_TAG) }; Write-Host ('whisperdaemon args: ' + ($argList -join ' ')); $proc = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $wd -WindowStyle Minimized -RedirectStandardOutput $out -RedirectStandardError $err -PassThru; if ($proc.WaitForExit(1500)) { Write-Host ('whisperdaemon_podlodka exited with code ' + $proc.ExitCode); if (Test-Path $err) { Get-Content -Path $err | ForEach-Object { Write-Host $_ } }; exit $proc.ExitCode }; Write-Host ('Started whisperdaemon_podlodka PID ' + $proc.Id); Write-Host ('stdout: ' + $out); Write-Host ('stderr: ' + $err)"
 set "RUN_EXIT=%ERRORLEVEL%"
 if %RUN_EXIT% neq 0 (
     popd
     exit /b %RUN_EXIT%
 )
 
-powershell -NoProfile -File "%~dp0wait_whisperdaemon_ready.ps1" -ModelName whisper_podlodka
+pwsh -NoProfile -File "%~dp0wait_whisperdaemon_ready.ps1" -ModelName whisper_podlodka
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd

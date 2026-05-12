@@ -33,7 +33,7 @@ set "PYTHON_EXE_ABS=%CD%\%PYTHON_EXE%"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 
-powershell -NoProfile -Command "$wd=(Get-Location).Path; $svcDir=Join-Path $wd 'services\vibevoicedaemon'; $python='%PYTHON_EXE_ABS%'; $out=Join-Path $wd 'services\vibevoicedaemon\logs\vibevoicedaemon.stdout.log'; $argList=@('-m','app.main','--host','%VIBEVOICEDAEMON_HOST%','--port','%VIBEVOICEDAEMON_PORT%','--warmup'); Write-Host ('vibevoicedaemon args: ' + ($argList -join ' ')); Push-Location $svcDir; & $python @argList 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; $exitCode=$LASTEXITCODE; Pop-Location; exit $exitCode"
+pwsh -NoProfile -Command "$wd=(Get-Location).Path; $svcDir=Join-Path $wd 'services\vibevoicedaemon'; $python='%PYTHON_EXE_ABS%'; $out=Join-Path $wd 'services\vibevoicedaemon\logs\vibevoicedaemon.stdout.log'; $argList=@('-m','app.main','--host','%VIBEVOICEDAEMON_HOST%','--port','%VIBEVOICEDAEMON_PORT%','--warmup'); Write-Host ('vibevoicedaemon args: ' + ($argList -join ' ')); Push-Location $svcDir; & $python @argList 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; $exitCode=$LASTEXITCODE; Pop-Location; exit $exitCode"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd

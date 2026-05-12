@@ -68,7 +68,7 @@ echo [INFO] Extractor: %ES_ARCHIVER_KIND% (%ES_ARCHIVER_CMD% %ES_ARCHIVER_ARGS%)
 
 if not defined RUNTIME_URL (
     echo [INFO] Resolving sherpa-onnx runtime asset URL...
-    powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $headers=@{'User-Agent'='EchoScript-DiarizationDaemon-Downloader'}; $releaseApi = if ($env:SHERPA_ONNX_RUNTIME_TAG) { 'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/' + $env:SHERPA_ONNX_RUNTIME_TAG } else { 'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest' }; $release = Invoke-RestMethod -Uri $releaseApi -Headers $headers; $pattern = if ($env:SHERPA_ONNX_RUNTIME_ASSET_PATTERN) { $env:SHERPA_ONNX_RUNTIME_ASSET_PATTERN } else { '^sherpa-onnx-v[\d.]+-win-x64-shared-MT-Release-lib\.tar\.bz2$' }; $asset = $release.assets | Where-Object { $_.name -match $pattern } | Select-Object -First 1; if (-not $asset) { throw ('Could not find runtime asset matching pattern: ' + $pattern) }; Set-Content -LiteralPath $env:RUNTIME_URL_FILE -Value $asset.browser_download_url -NoNewline"
+    pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; $headers=@{'User-Agent'='EchoScript-DiarizationDaemon-Downloader'}; $releaseApi = if ($env:SHERPA_ONNX_RUNTIME_TAG) { 'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/' + $env:SHERPA_ONNX_RUNTIME_TAG } else { 'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest' }; $release = Invoke-RestMethod -Uri $releaseApi -Headers $headers; $pattern = if ($env:SHERPA_ONNX_RUNTIME_ASSET_PATTERN) { $env:SHERPA_ONNX_RUNTIME_ASSET_PATTERN } else { '^sherpa-onnx-v[\d.]+-win-x64-shared-MT-Release-lib\.tar\.bz2$' }; $asset = $release.assets | Where-Object { $_.name -match $pattern } | Select-Object -First 1; if (-not $asset) { throw ('Could not find runtime asset matching pattern: ' + $pattern) }; Set-Content -LiteralPath $env:RUNTIME_URL_FILE -Value $asset.browser_download_url -NoNewline"
     if errorlevel 1 (
         echo [ERROR] Failed to resolve runtime URL from GitHub API.
         goto :cleanup
@@ -89,7 +89,7 @@ echo [INFO] Embedding URL: %DIARIZE_EMB_URL%
 echo.
 
 echo [INFO] Downloading sherpa-onnx runtime package...
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:RUNTIME_URL -OutFile $env:RUNTIME_ARCHIVE"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:RUNTIME_URL -OutFile $env:RUNTIME_ARCHIVE"
 if errorlevel 1 (
     echo [ERROR] Failed to download sherpa-onnx runtime package.
     goto :cleanup
@@ -109,14 +109,14 @@ if errorlevel 1 (
     goto :cleanup
 )
 
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $dll = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'sherpa-onnx.dll' -File -Recurse | Select-Object -First 1; if (-not $dll) { $dll = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'sherpa-onnx-c-api.dll' -File -Recurse | Select-Object -First 1 }; if (-not $dll) { throw 'Neither sherpa-onnx.dll nor sherpa-onnx-c-api.dll found in runtime archive' }; Copy-Item -LiteralPath $dll.FullName -Destination $env:TARGET_RUNTIME_DLL -Force; $ort = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'onnxruntime.dll' -File -Recurse | Select-Object -First 1; if (-not $ort) { throw 'onnxruntime.dll not found in runtime archive' }; Copy-Item -LiteralPath $ort.FullName -Destination $env:TARGET_ORT_DLL -Force; $ortShared = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'onnxruntime_providers_shared.dll' -File -Recurse | Select-Object -First 1; if (-not $ortShared) { throw 'onnxruntime_providers_shared.dll not found in runtime archive' }; Copy-Item -LiteralPath $ortShared.FullName -Destination $env:TARGET_ORT_SHARED_DLL -Force"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; $dll = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'sherpa-onnx.dll' -File -Recurse | Select-Object -First 1; if (-not $dll) { $dll = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'sherpa-onnx-c-api.dll' -File -Recurse | Select-Object -First 1 }; if (-not $dll) { throw 'Neither sherpa-onnx.dll nor sherpa-onnx-c-api.dll found in runtime archive' }; Copy-Item -LiteralPath $dll.FullName -Destination $env:TARGET_RUNTIME_DLL -Force; $ort = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'onnxruntime.dll' -File -Recurse | Select-Object -First 1; if (-not $ort) { throw 'onnxruntime.dll not found in runtime archive' }; Copy-Item -LiteralPath $ort.FullName -Destination $env:TARGET_ORT_DLL -Force; $ortShared = Get-ChildItem -Path $env:RUNTIME_EXTRACT_DIR -Filter 'onnxruntime_providers_shared.dll' -File -Recurse | Select-Object -First 1; if (-not $ortShared) { throw 'onnxruntime_providers_shared.dll not found in runtime archive' }; Copy-Item -LiteralPath $ortShared.FullName -Destination $env:TARGET_ORT_SHARED_DLL -Force"
 if errorlevel 1 (
     echo [ERROR] Failed to locate and stage sherpa-onnx runtime DLLs.
     goto :cleanup
 )
 
 echo [INFO] Downloading segmentation model archive...
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:DIARIZE_SEG_URL -OutFile $env:SEG_ARCHIVE"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:DIARIZE_SEG_URL -OutFile $env:SEG_ARCHIVE"
 if errorlevel 1 (
     echo [ERROR] Failed to download segmentation archive.
     goto :cleanup
@@ -136,14 +136,14 @@ if errorlevel 1 (
     goto :cleanup
 )
 
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $model = Get-ChildItem -Path $env:SEG_EXTRACT_DIR -Filter 'model.onnx' -File -Recurse | Select-Object -First 1; if (-not $model) { throw 'model.onnx not found in segmentation archive' }; Copy-Item -LiteralPath $model.FullName -Destination $env:TARGET_SEG_MODEL -Force"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; $model = Get-ChildItem -Path $env:SEG_EXTRACT_DIR -Filter 'model.onnx' -File -Recurse | Select-Object -First 1; if (-not $model) { throw 'model.onnx not found in segmentation archive' }; Copy-Item -LiteralPath $model.FullName -Destination $env:TARGET_SEG_MODEL -Force"
 if errorlevel 1 (
     echo [ERROR] Failed to locate and stage segmentation model.
     goto :cleanup
 )
 
 echo [INFO] Downloading embedding model...
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:DIARIZE_EMB_URL -OutFile $env:EMB_TMP_FILE"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:DIARIZE_EMB_URL -OutFile $env:EMB_TMP_FILE"
 if errorlevel 1 (
     echo [ERROR] Failed to download embedding model.
     goto :cleanup
@@ -156,7 +156,7 @@ if errorlevel 1 (
 )
 
 echo [INFO] Validating downloaded assets...
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $paths=@($env:TARGET_RUNTIME_DLL,$env:TARGET_ORT_DLL,$env:TARGET_ORT_SHARED_DLL,$env:TARGET_SEG_MODEL,$env:TARGET_EMB_MODEL); foreach ($p in $paths) { if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { throw ('Missing file: ' + $p) }; $len = (Get-Item -LiteralPath $p).Length; if ($len -le 0) { throw ('File is empty: ' + $p) } }"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; $paths=@($env:TARGET_RUNTIME_DLL,$env:TARGET_ORT_DLL,$env:TARGET_ORT_SHARED_DLL,$env:TARGET_SEG_MODEL,$env:TARGET_EMB_MODEL); foreach ($p in $paths) { if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { throw ('Missing file: ' + $p) }; $len = (Get-Item -LiteralPath $p).Length; if ($len -le 0) { throw ('File is empty: ' + $p) } }"
 if errorlevel 1 (
     echo [ERROR] Asset validation failed.
     goto :cleanup

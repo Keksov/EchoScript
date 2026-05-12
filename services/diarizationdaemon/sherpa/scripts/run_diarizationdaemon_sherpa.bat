@@ -64,7 +64,7 @@ if errorlevel 1 (
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 
-powershell -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\diarizationdaemon\sherpa\build\x64\DiarizationDaemon.exe'; $out=Join-Path $wd 'services\diarizationdaemon\sherpa\logs\diarizationdaemon.stdout.log'; $args = @('--host','127.0.0.1','--port','7900','--sherpa-dll',$env:SHERPA_DLL_PATH); & $exe @args 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
+pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\diarizationdaemon\sherpa\build\x64\DiarizationDaemon.exe'; $out=Join-Path $wd 'services\diarizationdaemon\sherpa\logs\diarizationdaemon.stdout.log'; $args = @('--host','127.0.0.1','--port','7900','--sherpa-dll',$env:SHERPA_DLL_PATH); & $exe @args 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd

@@ -92,7 +92,7 @@ if errorlevel 1 (
 )
 
 echo [INFO] Staging runtime artifacts into %RELEASE_DIR%...
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $build=$env:BUILD_DIR; $dst=$env:RELEASE_DIR; $releaseItems = Get-ChildItem -Path $build -Recurse -File | Where-Object { $_.FullName -match '\\Release\\' }; if (-not $releaseItems) { $releaseItems = Get-ChildItem -Path $build -Recurse -File }; $dlls = $releaseItems | Where-Object { $_.Extension -ieq '.dll' }; foreach ($f in $dlls) { Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $dst $f.Name) -Force }; $cli = $releaseItems | Where-Object { $_.Name -ieq 'whisper-cli.exe' } | Select-Object -First 1; if ($cli) { Copy-Item -LiteralPath $cli.FullName -Destination (Join-Path $dst 'whisper-cli.exe') -Force }"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; $build=$env:BUILD_DIR; $dst=$env:RELEASE_DIR; $releaseItems = Get-ChildItem -Path $build -Recurse -File | Where-Object { $_.FullName -match '\\Release\\' }; if (-not $releaseItems) { $releaseItems = Get-ChildItem -Path $build -Recurse -File }; $dlls = $releaseItems | Where-Object { $_.Extension -ieq '.dll' }; foreach ($f in $dlls) { Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $dst $f.Name) -Force }; $cli = $releaseItems | Where-Object { $_.Name -ieq 'whisper-cli.exe' } | Select-Object -First 1; if ($cli) { Copy-Item -LiteralPath $cli.FullName -Destination (Join-Path $dst 'whisper-cli.exe') -Force }"
 if errorlevel 1 (
     echo [ERROR] Failed to stage compatible runtime artifacts.
     popd

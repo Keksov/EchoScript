@@ -32,7 +32,7 @@ if not defined FIXTURE (
     exit /b 1
 )
 
-powershell -NoProfile -Command "$items = Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'WhisperDaemon.exe' -and $_.CommandLine -match '--model-name whisper_podlodka(\s|$)' }; if (@($items).Count -gt 0) { exit 0 } else { exit 1 }"
+pwsh -NoProfile -Command "$items = Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'WhisperDaemon.exe' -and $_.CommandLine -match '--model-name whisper_podlodka(\s|$)' }; if (@($items).Count -gt 0) { exit 0 } else { exit 1 }"
 if errorlevel 1 (
     call ".\services\whisperdaemon\scripts\start_whisperdaemon_podlodka.bat"
     if errorlevel 1 (
@@ -40,7 +40,7 @@ if errorlevel 1 (
         exit /b 1
     )
 ) else (
-    powershell -NoProfile -File ".\services\whisperdaemon\scripts\wait_whisperdaemon_ready.ps1" -ModelName whisper_podlodka
+    pwsh -NoProfile -File ".\services\whisperdaemon\scripts\wait_whisperdaemon_ready.ps1" -ModelName whisper_podlodka
     if errorlevel 1 (
         popd
         exit /b 1

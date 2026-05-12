@@ -13,7 +13,7 @@ REM --- Check if bun is available ---
 where bun >nul 2>&1
 if %errorlevel% neq 0 (
     echo [INFO] Bun not found. Installing ...
-    powershell -ExecutionPolicy Bypass -Command "irm bun.sh/install.ps1 | iex"
+    pwsh -ExecutionPolicy Bypass -Command "irm bun.sh/install.ps1 | iex"
     if errorlevel 1 (
         echo [ERROR] Bun installation failed.
         exit /b 1

@@ -287,7 +287,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath $env:WHISPER_BIN_ARCHIVE -DestinationPath $env:WHISPER_BIN_EXTRACT_DIR -Force"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath $env:WHISPER_BIN_ARCHIVE -DestinationPath $env:WHISPER_BIN_EXTRACT_DIR -Force"
 if errorlevel 1 (
     echo [ERROR] Failed to extract archive into: %WHISPER_BIN_EXTRACT_DIR%
     exit /b 1
@@ -423,7 +423,7 @@ if not exist "%WHISPER_SMOKE_DIR%" (
 call :file_ready "%WHISPER_SMOKE_WAV%"
 if not errorlevel 1 exit /b 0
 
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $path=$env:WHISPER_SMOKE_WAV; $sampleRate=16000; $samples=$sampleRate; $channels=1; $bits=16; $blockAlign=[int]($channels * $bits / 8); $byteRate=[int]($sampleRate * $blockAlign); $dataSize=[int]($samples * $blockAlign); $chunkSize=[int](36 + $dataSize); $dir=Split-Path -Parent $path; if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }; $fs=[System.IO.File]::Open($path,[System.IO.FileMode]::Create,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None); try { $bw=New-Object System.IO.BinaryWriter($fs); try { $enc=[System.Text.Encoding]::ASCII; $bw.Write($enc.GetBytes('RIFF')); $bw.Write($chunkSize); $bw.Write($enc.GetBytes('WAVE')); $bw.Write($enc.GetBytes('fmt ')); $bw.Write([int]16); $bw.Write([int16]1); $bw.Write([int16]$channels); $bw.Write([int]$sampleRate); $bw.Write([int]$byteRate); $bw.Write([int16]$blockAlign); $bw.Write([int16]$bits); $bw.Write($enc.GetBytes('data')); $bw.Write([int]$dataSize); for ($i = 0; $i -lt $samples; $i++) { $bw.Write([int16]0) } } finally { $bw.Dispose() } } finally { $fs.Dispose() }"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; $path=$env:WHISPER_SMOKE_WAV; $sampleRate=16000; $samples=$sampleRate; $channels=1; $bits=16; $blockAlign=[int]($channels * $bits / 8); $byteRate=[int]($sampleRate * $blockAlign); $dataSize=[int]($samples * $blockAlign); $chunkSize=[int](36 + $dataSize); $dir=Split-Path -Parent $path; if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }; $fs=[System.IO.File]::Open($path,[System.IO.FileMode]::Create,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None); try { $bw=New-Object System.IO.BinaryWriter($fs); try { $enc=[System.Text.Encoding]::ASCII; $bw.Write($enc.GetBytes('RIFF')); $bw.Write($chunkSize); $bw.Write($enc.GetBytes('WAVE')); $bw.Write($enc.GetBytes('fmt ')); $bw.Write([int]16); $bw.Write([int16]1); $bw.Write([int16]$channels); $bw.Write([int]$sampleRate); $bw.Write([int]$byteRate); $bw.Write([int16]$blockAlign); $bw.Write([int16]$bits); $bw.Write($enc.GetBytes('data')); $bw.Write([int]$dataSize); for ($i = 0; $i -lt $samples; $i++) { $bw.Write([int16]0) } } finally { $bw.Dispose() } } finally { $fs.Dispose() }"
 if errorlevel 1 (
     echo [ERROR] Failed to prepare smoke-test WAV file: %WHISPER_SMOKE_WAV%
     exit /b 1
@@ -467,7 +467,7 @@ if errorlevel 1 (
 
 if exist "%WHISPER_CPP_VENDOR_ARCHIVE%" del /q "%WHISPER_CPP_VENDOR_ARCHIVE%" >nul 2>&1
 
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:WHISPER_CPP_DOWNLOAD_URL -OutFile $env:WHISPER_CPP_VENDOR_ARCHIVE; Expand-Archive -LiteralPath $env:WHISPER_CPP_VENDOR_ARCHIVE -DestinationPath $env:WHISPER_CPP_VENDOR_DIR -Force"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri $env:WHISPER_CPP_DOWNLOAD_URL -OutFile $env:WHISPER_CPP_VENDOR_ARCHIVE; Expand-Archive -LiteralPath $env:WHISPER_CPP_VENDOR_ARCHIVE -DestinationPath $env:WHISPER_CPP_VENDOR_DIR -Force"
 if errorlevel 1 (
     echo [ERROR] Failed to download or extract whisper.cpp.
     exit /b 1
@@ -496,7 +496,7 @@ if errorlevel 1 (
 
 if exist "%AUTO_WHISPER_ZIP%" del /q "%AUTO_WHISPER_ZIP%" >nul 2>&1
 
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri 'https://github.com/openai/whisper/archive/refs/heads/main.zip' -OutFile $env:AUTO_WHISPER_ZIP; Expand-Archive -LiteralPath $env:AUTO_WHISPER_ZIP -DestinationPath $env:AUTO_WHISPER_ROOT -Force"
+pwsh -NoProfile -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri 'https://github.com/openai/whisper/archive/refs/heads/main.zip' -OutFile $env:AUTO_WHISPER_ZIP; Expand-Archive -LiteralPath $env:AUTO_WHISPER_ZIP -DestinationPath $env:AUTO_WHISPER_ROOT -Force"
 if errorlevel 1 (
     echo [ERROR] Failed to download or extract openai/whisper snapshot.
     exit /b 1
