@@ -4,6 +4,20 @@ setlocal
 pushd "%~dp0\..\..\..\.."
 if errorlevel 1 exit /b 1
 
+set "LOCAL_ENV_SCRIPT=services\diarizationdaemon\sherpa\scripts\.env.bat"
+if exist "%LOCAL_ENV_SCRIPT%" (
+    echo [INFO] Loading local diarizationdaemon overrides: %LOCAL_ENV_SCRIPT%
+    call "%LOCAL_ENV_SCRIPT%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to load local config: %LOCAL_ENV_SCRIPT%
+        popd
+        exit /b 1
+    )
+)
+
+if not defined DIARIZATION_DAEMON_HOST set "DIARIZATION_DAEMON_HOST=127.0.0.1"
+if not defined DIARIZATION_DAEMON_PORT set "DIARIZATION_DAEMON_PORT=7900"
+
 set "DAEMON_DIR=services\diarizationdaemon\sherpa\build\x64"
 set "DAEMON_EXE=services\diarizationdaemon\sherpa\build\x64\DiarizationDaemon.exe"
 set "LOG_DIR=services\diarizationdaemon\sherpa\logs"
@@ -64,7 +78,7 @@ if errorlevel 1 (
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 
-powershell -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\diarizationdaemon\sherpa\build\x64\DiarizationDaemon.exe'; $out=Join-Path $wd 'services\diarizationdaemon\sherpa\logs\diarizationdaemon.stdout.log'; $args = @('--host','127.0.0.1','--port','7900','--sherpa-dll',$env:SHERPA_DLL_PATH); & $exe @args 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
+powershell -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\diarizationdaemon\sherpa\build\x64\DiarizationDaemon.exe'; $out=Join-Path $wd 'services\diarizationdaemon\sherpa\logs\diarizationdaemon.stdout.log'; $argList = @('--host',$env:DIARIZATION_DAEMON_HOST,'--port',$env:DIARIZATION_DAEMON_PORT,'--sherpa-dll',$env:SHERPA_DLL_PATH); Write-Host ('diarizationdaemon args: ' + ($argList -join ' ')); & $exe @argList 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $out; exit $LASTEXITCODE"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd

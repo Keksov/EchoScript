@@ -23,6 +23,17 @@ if errorlevel 1 (
 
 call "scripts\env.bat"
 
+set "LOCAL_ENV_SCRIPT=services\diarizationdaemon\sherpa\scripts\.env.bat"
+if exist "%LOCAL_ENV_SCRIPT%" (
+    echo [INFO] Loading local diarizationdaemon overrides: %LOCAL_ENV_SCRIPT%
+    call "%LOCAL_ENV_SCRIPT%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to load local config: %LOCAL_ENV_SCRIPT%
+        popd
+        exit /b 1
+    )
+)
+
 set "ECHORECORDER_VENDORSCORE_DIR=EchoRecorder\VendorsCore"
 set "FPC_SETUP_SCRIPT=%ECHORECORDER_VENDORSCORE_DIR%\fpc\scripts\win_x64\fpc_release_setup.bat"
 set "FPC_EXE=%ECHORECORDER_VENDORSCORE_DIR%\fpc\fpc-main\bin\x86_64-win64\fpc.exe"
@@ -204,4 +215,5 @@ echo Notes:
 echo   - The script prepares VendorsCore and FPC toolchain if missing.
 echo   - The script downloads sherpa runtime/models when required.
 echo   - The script builds DiarizationDaemon executable.
+echo   - If present, services\diarizationdaemon\sherpa\scripts\.env.bat is loaded.
 exit /b 0
