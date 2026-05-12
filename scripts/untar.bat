@@ -31,12 +31,14 @@ if /i "%UNTAR_VERBOSE%"=="1" (
 )
 if errorlevel 1 (
     echo [ERROR] Could not detect extractor for: %ARCHIVE_PATH%
-    if defined ES_ARCHIVER_REASON echo [ERROR] untar: reason: %ES_ARCHIVER_REASON%
+    if defined ES_ARCHIVER_REASON call echo [ERROR] untar: reason: %%ES_ARCHIVER_REASON%%
     goto :done
 )
 
 echo [INFO] untar: using %ES_ARCHIVER_KIND% (%ES_ARCHIVER_CMD% %ES_ARCHIVER_ARGS%)
-if /i "%UNTAR_VERBOSE%"=="1" if defined ES_ARCHIVER_REASON echo [INFO] untar: reason: %ES_ARCHIVER_REASON%
+if /i "%UNTAR_VERBOSE%"=="1" (
+    if defined ES_ARCHIVER_REASON call echo [INFO] untar: reason: %%ES_ARCHIVER_REASON%%
+)
 
 if /i "%ES_ARCHIVER_KIND%"=="TAR" goto :extract_with_tar
 if /i "%ES_ARCHIVER_KIND%"=="7Z" goto :extract_with_7z
