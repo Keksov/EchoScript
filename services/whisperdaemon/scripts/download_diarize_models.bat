@@ -59,12 +59,12 @@ if errorlevel 1 (
     goto :cleanup
 )
 
-where tar >nul 2>&1
+call "scripts\detect_arhivers.bat"
 if errorlevel 1 (
-    echo [ERROR] Required tool not found: tar
-    echo [ERROR] Install bsdtar/tar and retry.
+    echo [ERROR] No supported extractor found for tar.bz2 archives.
     goto :cleanup
 )
+echo [INFO] Extractor: %ES_ARCHIVER_KIND% (%ES_ARCHIVER_CMD% %ES_ARCHIVER_ARGS%)
 
 if not defined RUNTIME_URL (
     echo [INFO] Resolving sherpa-onnx runtime asset URL...
@@ -103,7 +103,7 @@ if errorlevel 1 (
     goto :cleanup
 )
 
-tar -xjf "%RUNTIME_ARCHIVE%" -C "%RUNTIME_EXTRACT_DIR%"
+call "scripts\untar.bat" "%RUNTIME_ARCHIVE%" "%RUNTIME_EXTRACT_DIR%"
 if errorlevel 1 (
     echo [ERROR] Failed to extract runtime archive: %RUNTIME_ARCHIVE%
     goto :cleanup
@@ -130,7 +130,7 @@ if errorlevel 1 (
     goto :cleanup
 )
 
-tar -xjf "%SEG_ARCHIVE%" -C "%SEG_EXTRACT_DIR%"
+call "scripts\untar.bat" "%SEG_ARCHIVE%" "%SEG_EXTRACT_DIR%"
 if errorlevel 1 (
     echo [ERROR] Failed to extract segmentation archive: %SEG_ARCHIVE%
     goto :cleanup
