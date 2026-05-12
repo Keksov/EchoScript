@@ -4,6 +4,20 @@ setlocal
 pushd "%~dp0\..\..\..\.."
 if errorlevel 1 exit /b 1
 
+set "LOCAL_ENV_SCRIPT=services\diarizationdaemon\sherpa\scripts\.env.bat"
+if exist "%LOCAL_ENV_SCRIPT%" (
+    echo [INFO] Loading local diarizationdaemon overrides: %LOCAL_ENV_SCRIPT%
+    call "%LOCAL_ENV_SCRIPT%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to load local config: %LOCAL_ENV_SCRIPT%
+        popd
+        exit /b 1
+    )
+)
+
+if not defined DIARIZATION_DAEMON_HOST set "DIARIZATION_DAEMON_HOST=127.0.0.1"
+if not defined DIARIZATION_DAEMON_PORT set "DIARIZATION_DAEMON_PORT=7900"
+
 set "DAEMON_DIR=services\diarizationdaemon\sherpa\build\x64"
 set "DAEMON_EXE=services\diarizationdaemon\sherpa\build\x64\DiarizationDaemon.exe"
 set "LOG_DIR=services\diarizationdaemon\sherpa\logs"
