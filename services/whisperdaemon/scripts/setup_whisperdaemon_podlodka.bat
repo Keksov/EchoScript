@@ -40,6 +40,15 @@ if exist "%LOCAL_ENV_SCRIPT%" (
     )
 )
 
+set "ECHORECORDER_VENDORSCORE_DIR=EchoRecorder\VendorsCore"
+set "FPC_SETUP_SCRIPT=%ECHORECORDER_VENDORSCORE_DIR%\fpc\scripts\win_x64\fpc_release_setup.bat"
+if not defined VENDORSCORE_REPO_URL set "VENDORSCORE_REPO_URL=https://github.com/Keksov/VendorsCore.git"
+
+echo [INFO] Checking VendorsCore repository...
+call :ensure_vendorscore
+set "RUN_EXIT=%ERRORLEVEL%"
+if errorlevel 1 goto :fail
+
 set "TARGET_RUNTIME_DLL=services\whisperdaemon\vendors\sherpa-onnx\sherpa-onnx.dll"
 set "TARGET_ORT_DLL=services\whisperdaemon\vendors\sherpa-onnx\onnxruntime.dll"
 set "TARGET_ORT_SHARED_DLL=services\whisperdaemon\vendors\sherpa-onnx\onnxruntime_providers_shared.dll"
@@ -196,6 +205,42 @@ echo [FAIL] setup_whisperdaemon_podlodka failed with exit code %RUN_EXIT%.
 :done
 popd
 exit /b %RUN_EXIT%
+
+:ensure_vendorscore
+if exist "%FPC_SETUP_SCRIPT%" (
+    echo [SKIP] VendorsCore is already present: %ECHORECORDER_VENDORSCORE_DIR%
+    exit /b 0
+)
+
+if exist "%ECHORECORDER_VENDORSCORE_DIR%" (
+    echo [ERROR] VendorsCore directory exists but required script is missing:
+    echo [ERROR]   %FPC_SETUP_SCRIPT%
+    echo [ERROR] Resolve this directory and rerun setup.
+    exit /b 1
+)
+
+where git >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] git.exe was not found in PATH.
+    echo [ERROR] Install Git or clone %VENDORSCORE_REPO_URL% into %ECHORECORDER_VENDORSCORE_DIR%.
+    exit /b 1
+)
+
+echo [INFO] VendorsCore repository is missing. Cloning...
+git clone "%VENDORSCORE_REPO_URL%" "%ECHORECORDER_VENDORSCORE_DIR%"
+if errorlevel 1 (
+    echo [ERROR] Failed to clone VendorsCore from %VENDORSCORE_REPO_URL%.
+    exit /b 1
+)
+
+if not exist "%FPC_SETUP_SCRIPT%" (
+    echo [ERROR] VendorsCore clone completed but required script is missing:
+    echo [ERROR]   %FPC_SETUP_SCRIPT%
+    exit /b 1
+)
+
+echo [INFO] VendorsCore repository is ready.
+exit /b 0
 
 :ensure_whisper_runtime
 call :file_ready "%WHISPER_RUNTIME_DLL%"
@@ -533,6 +578,7 @@ echo   services\whisperdaemon\scripts\setup_whisperdaemon_podlodka.bat [path-to-
 echo.
 echo Notes:
 echo   - The script skips already prepared files and cached assets.
+echo   - Missing EchoRecorder\VendorsCore is cloned automatically.
 echo   - Missing openai/whisper assets are downloaded automatically when needed.
 echo   - Missing whisper runtime is downloaded from ggml-org/whisper.cpp release assets.
 echo   - If runtime smoke-test fails, compatible runtime is rebuilt via build_x64_compatible.bat.
