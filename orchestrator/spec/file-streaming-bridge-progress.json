@@ -20,12 +20,12 @@
       "id": "SB0.1",
       "phase": 0,
       "title": "Plan & ledger",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [],
       "artifacts": ["orchestrator/spec/file-streaming-bridge-plan.md", "orchestrator/spec/file-streaming-bridge-progress.json"],
       "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T19:29:55Z", "finishedAt": "2026-07-01T19:31:00Z", "blockedReason": null,
+      "evidence": ["JSON.load ok; 9 шагов; DAG ацикличен; все dependsOn резолвятся; commit ce79dff"]
     },
     {
       "id": "SB1.1",
@@ -116,5 +116,7 @@
       "evidence": []
     }
   ],
-  "log": []
+  "log": [
+    { "ts": "2026-07-01T19:31:00Z", "step": "SB0.1", "event": "done", "note": "План+леджер созданы; JSON парсится, 9 шагов, DAG ацикличен; commit ce79dff. Пауза на границе фазы 0 для ревью решений SB-D1..SB-D7." }
+  ]
 }
