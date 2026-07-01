@@ -107,7 +107,7 @@ Authoritative progress ledger: [file-streaming-bridge-progress.json](file-stream
   WS-соединение со сдвигом таймстампов + интеграционный тест.
 - [x] **SB3.2 — E2E против реального whisperdaemon** (`scripts/e2e_stream_manual.ts`). Вскрыл дефект
   таймстампов → правка демона SB-D9 → повторный прогон зелёный (сегменты на всю длину, progress→100).
-- [ ] **SB3.3 — Docs.** Обновить `docs/ARCHITECTURE.md` и кросс-ссылку из whisperdaemon-jobs-plan.
+- [x] **SB3.3 — Docs.** Обновить `docs/ARCHITECTURE.md` и кросс-ссылку из whisperdaemon-jobs-plan.
 - [ ] **SB4.1 — (non-blocking) Прогресс в мониторе.** Карточка оркестратора показывает `progress_pct`
   активной задачи.
 

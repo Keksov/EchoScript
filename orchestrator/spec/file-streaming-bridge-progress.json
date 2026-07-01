@@ -110,12 +110,12 @@
       "id": "SB3.3",
       "phase": 3,
       "title": "Docs",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["SB3.2"],
       "artifacts": ["EchoRecorder/docs/ARCHITECTURE.md", "services/whisperdaemon/spec/whisperdaemon-jobs-plan.md"],
       "verify": "ARCHITECTURE.md описывает стриминговый файловый путь и progress.json; в whisperdaemon-jobs-plan добавлена кросс-ссылка на эту инициативу.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T10:00:00Z", "finishedAt": "2026-07-02T10:08:00Z", "blockedReason": null,
+      "evidence": ["ARCHITECTURE.md §6: обновлён поток ws-daemon (стрим), новый подраздел 'Файловый ввод через стриминг (мост)' (окна/config/rollover/progress.json/API/правка демона), компоненты + тесты", "whisperdaemon-jobs-plan.md References: кросс-ссылка на orchestrator/spec/file-streaming-bridge-plan.md"]
     },
     {
       "id": "SB4.1",
@@ -139,6 +139,7 @@
     { "ts": "2026-07-02T08:44:00Z", "step": "SB3.1", "event": "done", "note": "Rollover через новое WS-соединение (демон не трогаем): внешний цикл по сессиям, сдвиг offsetMs, сквозная нумерация сегментов. Интеграционный тест: 3 сессии, сшитые таймстампы. bun test 18 pass / 0 fail." },
     { "ts": "2026-07-02T09:20:00Z", "step": "SB3.2", "event": "finding", "note": "E2E против реального демона: стриминг работает, текст корректный, но абсолютные таймстампы сломаны (все сегменты в 0-6.5s при 65s), progress упирается в ~18%. Причина: демон в стриминге эмитит время относительно коммита. Эскалация владельцу -> выбран фикс демона (SB-D9)." },
     { "ts": "2026-07-02T09:52:00Z", "step": "SB3.4", "event": "done", "note": "Мини-правка whisperdaemon (SB-D9): накопительная база FcommittedMs. Пересобран, build успешен." },
-    { "ts": "2026-07-02T09:58:00Z", "step": "SB3.2", "event": "done", "note": "Повторный E2E после SB3.4: сегменты на всю длину [1000..63460], progress 0->100, текст полный, без таймаута. Manual/non-blocking (нужен живой демон); скрипт e2e_stream_manual.ts закоммичен." }
+    { "ts": "2026-07-02T09:58:00Z", "step": "SB3.2", "event": "done", "note": "Повторный E2E после SB3.4: сегменты на всю длину [1000..63460], progress 0->100, текст полный, без таймаута. Manual/non-blocking (нужен живой демон); скрипт e2e_stream_manual.ts закоммичен." },
+    { "ts": "2026-07-02T10:08:00Z", "step": "SB3.3", "event": "done", "note": "Docs: ARCHITECTURE.md §6 (стрим-мост, progress.json, config, rollover, правка демона); кросс-ссылка из whisperdaemon-jobs-plan. Конец фазы 3 — пауза на ревью. Остался только SB4.1 (non-blocking, монитор)." }
   ]
 }
