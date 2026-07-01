@@ -2,9 +2,10 @@ unit main_form;
 
 {$mode objfpc}{$H+}
 
-{ GUI-оболочка монитора. WS-часть (fpwebsocket) отсутствует в FPC Lazarus, поэтому
-  и статусы, и управление идут через CLI (monitor.exe, собран VendorsCore FPC).
-  GUI — тонкий фронт над CLI: таблица статусов (Pixie) + управление (LCL-контролы). }
+{ GUI-оболочка монитора. Окно показывается сразу (скелет из daemons.json), затем
+  асинхронно опрашивает демонов ПО ОДНОМУ через CLI (monitor status <name> --json),
+  показывая прогресс. WS-часть (fpwebsocket) отсутствует в FPC Lazarus, поэтому health
+  берётся из CLI; инвентарь — из общего ядра monitor_core (без WS). }
 
 interface
 
@@ -20,7 +21,8 @@ uses
   Dialogs,
   ExtCtrls,
   StdCtrls,
-  Pixie.HtmlView;
+  Pixie.HtmlView,
+  monitor_core;
 
 type
   TGuiStatus = record
@@ -47,19 +49,25 @@ type
     FrefreshButton  : TButton;
     Ftimer          : TTimer;
     FmonitorExe     : string;
+    FloadError      : string;
+    Finv            : TDaemonInventory;
+    Fstatuses       : TGuiStatuses;
     Fbusy           : Boolean;
     procedure   buildUi;
+    procedure   buildSkeleton;
+    procedure   asyncFirstRefresh({%H-}aData: PtrInt);
     procedure   doRefresh({%H-}Sender: TObject);
+    procedure   progressiveRefresh;
     procedure   onStart({%H-}Sender: TObject);
     procedure   onStop({%H-}Sender: TObject);
     procedure   onRestart({%H-}Sender: TObject);
     procedure   controlAction(const aAction: string);
     procedure   setBusy(aBusy: Boolean);
     function    resolveMonitorExe: string;
+    function    inventoryPath: string;
     function    runMonitor(const aArgs: array of string; out aOutput: string): Boolean;
     function    parseStatuses(const aJson: string; out aStatuses: TGuiStatuses): Boolean;
-    procedure   populateDaemonBox(const aStatuses: TGuiStatuses);
-    procedure   renderStatuses(const aStatuses: TGuiStatuses);
+    procedure   renderStatuses(const aNote: string);
     procedure   renderError(const aMessage: string);
   end;
 
@@ -82,7 +90,7 @@ function stateColor(const aState: string): string;
 begin
   if (aState = 'ready') or (aState = 'up') then
     Result := '#166534'
-  else if (aState = 'loading') or (aState = 'unknown') then
+  else if (aState = 'loading') or (aState = 'unknown') or (aState = 'проверка…') then
     Result := '#9a3412'
   else if aState = 'failed' then
     Result := '#b91c1c'
@@ -102,11 +110,24 @@ begin
   Result := IncludeTrailingPathDelimiter(dir) + 'build' + PathDelim + 'x64' + PathDelim + 'monitor.exe';
 end;
 
+function TMonitorForm.inventoryPath: string;
+var
+  dir: string;
+  idx: Integer;
+begin
+  { GUI exe: orchestrator/monitor/app/build/x64 -> daemons.json на 3 уровня выше }
+  dir := ExtractFileDir(ExpandFileName(ParamStr(0)));
+  for idx := 1 to 3 do
+    dir := ExtractFileDir(dir);
+  Result := IncludeTrailingPathDelimiter(dir) + 'daemons.json';
+end;
+
 function TMonitorForm.runMonitor(const aArgs: array of string; out aOutput: string): Boolean;
 var
   proc: TProcess;
   buf: array[0..8191] of Byte;
   n: LongInt;
+  avail: LongInt;
   idx: Integer;
   outStream: TStringStream;
 begin
@@ -123,11 +144,38 @@ begin
       proc.Parameters.Add(aArgs[idx]);
     proc.Options := [poUsePipes, poNoConsole];
     proc.Execute;
+
+    { Неблокирующее чтение: пока процесс работает — качаем сообщения (окно отзывчиво). }
+    while proc.Running do
+    begin
+      avail := proc.Output.NumBytesAvailable;
+      if avail > 0 then
+      begin
+        if avail > SizeOf(buf) then
+          avail := SizeOf(buf);
+        n := proc.Output.Read(buf, avail);
+        if n > 0 then
+          outStream.Write(buf, n);
+      end
+      else
+      begin
+        Application.ProcessMessages;
+        Sleep(10);
+      end;
+    end;
+
+    { Дочитать остаток после завершения. }
     repeat
-      n := proc.Output.Read(buf, SizeOf(buf));
+      avail := proc.Output.NumBytesAvailable;
+      if avail = 0 then
+        Break;
+      if avail > SizeOf(buf) then
+        avail := SizeOf(buf);
+      n := proc.Output.Read(buf, avail);
       if n > 0 then
         outStream.Write(buf, n);
     until n <= 0;
+
     aOutput := outStream.DataString;
     Result := True;
   finally
@@ -252,6 +300,33 @@ begin
   Ftimer.Enabled := True;
 end;
 
+procedure TMonitorForm.buildSkeleton;
+var
+  idx: Integer;
+begin
+  Finv := loadDaemonInventory(inventoryPath);
+  SetLength(Fstatuses, Length(Finv));
+  FdaemonBox.Items.BeginUpdate;
+  try
+    FdaemonBox.Items.Clear;
+    for idx := 0 to High(Finv) do
+    begin
+      Fstatuses[idx].Name := Finv[idx].Name;
+      Fstatuses[idx].Endpoint := Finv[idx].Host + ':' + IntToStr(Finv[idx].Port);
+      Fstatuses[idx].State := 'ожидание';
+      Fstatuses[idx].Pid := 0;
+      Fstatuses[idx].Reachable := False;
+      Fstatuses[idx].Model := '';
+      FdaemonBox.Items.Add(Finv[idx].Name);
+    end;
+  finally
+    FdaemonBox.Items.EndUpdate;
+  end;
+  if FdaemonBox.Items.Count > 0 then
+    FdaemonBox.ItemIndex := 0;
+  renderStatuses('Готовим опрос…');
+end;
+
 procedure TMonitorForm.setBusy(aBusy: Boolean);
 begin
   Fbusy := aBusy;
@@ -259,10 +334,6 @@ begin
   FstopButton.Enabled := not aBusy;
   FrestartButton.Enabled := not aBusy;
   FrefreshButton.Enabled := not aBusy;
-  if aBusy then
-    Screen.Cursor := crHourGlass
-  else
-    Screen.Cursor := crDefault;
 end;
 
 procedure TMonitorForm.renderError(const aMessage: string);
@@ -275,7 +346,7 @@ begin
     html.Add('body{margin:0;padding:28px;background:#f4f0e8;color:#7f1d1d;font-family:"Segoe UI";}');
     html.Add('</style></head><body>');
     html.Add('<h2>Ошибка</h2><p>' + htmlEscape(aMessage) + '</p>');
-    html.Add('<p style="color:#6b7280">Ожидается CLI: ' + htmlEscape(FmonitorExe) + '</p>');
+    html.Add('<p style="color:#6b7280">CLI: ' + htmlEscape(FmonitorExe) + '</p>');
     html.Add('</body></html>');
     FhtmlView.LoadFromString(html.Text);
   finally
@@ -283,19 +354,7 @@ begin
   end;
 end;
 
-procedure TMonitorForm.populateDaemonBox(const aStatuses: TGuiStatuses);
-var
-  idx: Integer;
-begin
-  if FdaemonBox.Items.Count > 0 then
-    Exit;
-  for idx := 0 to High(aStatuses) do
-    FdaemonBox.Items.Add(aStatuses[idx].Name);
-  if FdaemonBox.Items.Count > 0 then
-    FdaemonBox.ItemIndex := 0;
-end;
-
-procedure TMonitorForm.renderStatuses(const aStatuses: TGuiStatuses);
+procedure TMonitorForm.renderStatuses(const aNote: string);
 var
   idx: Integer;
   s: TGuiStatus;
@@ -314,9 +373,9 @@ begin
     html.Add('</style></head><body>');
     html.Add('<h1>Демоны распознавания</h1>');
     html.Add('<table><tr><th>Демон</th><th>Статус</th><th>Endpoint</th><th>PID</th><th>Reachable</th><th>Модель</th></tr>');
-    for idx := 0 to High(aStatuses) do
+    for idx := 0 to High(Fstatuses) do
     begin
-      s := aStatuses[idx];
+      s := Fstatuses[idx];
       html.Add(
         '<tr><td>' + htmlEscape(s.Name) + '</td>' +
         '<td><span class="dot" style="background:' + stateColor(s.State) + '"></span>' +
@@ -328,7 +387,10 @@ begin
       );
     end;
     html.Add('</table>');
-    html.Add('<p class="muted" style="margin-top:14px;">Автообновление каждые 5 с. Управление — через CLI monitor.</p>');
+    if aNote <> '' then
+      html.Add('<p class="muted" style="margin-top:14px;">' + htmlEscape(aNote) + '</p>')
+    else
+      html.Add('<p class="muted" style="margin-top:14px;">Автообновление каждые 5 с. Управление — через CLI monitor.</p>');
     html.Add('</body></html>');
     FhtmlView.LoadFromString(html.Text);
   finally
@@ -336,30 +398,58 @@ begin
   end;
 end;
 
-procedure TMonitorForm.doRefresh(Sender: TObject);
+procedure TMonitorForm.progressiveRefresh;
 var
+  idx: Integer;
   json: string;
-  statuses: TGuiStatuses;
+  one: TGuiStatuses;
 begin
   if Fbusy then
     Exit;
+  if FloadError <> '' then
+  begin
+    renderError(FloadError);
+    Exit;
+  end;
+
   setBusy(True);
+  Screen.Cursor := crAppStart;
   try
-    if not runMonitor(['status', '--json'], json) or (Trim(json) = '') then
+    for idx := 0 to High(Finv) do
     begin
-      renderError('Не удалось запустить CLI или пустой ответ.');
-      Exit;
+      Fstatuses[idx].State := 'проверка…';
+      renderStatuses(Format('Проверка %d/%d: %s (%s:%d)…',
+        [idx + 1, Length(Finv), Finv[idx].Name, Finv[idx].Host, Finv[idx].Port]));
+      Application.ProcessMessages;
+
+      if runMonitor(['status', Finv[idx].Name, '--json'], json)
+        and parseStatuses(json, one) and (Length(one) = 1) then
+        Fstatuses[idx] := one[0]
+      else
+      begin
+        Fstatuses[idx].State := 'down';
+        Fstatuses[idx].Reachable := False;
+        Fstatuses[idx].Pid := 0;
+      end;
+
+      renderStatuses(Format('Опрошено %d/%d…', [idx + 1, Length(Finv)]));
+      Application.ProcessMessages;
     end;
-    if not parseStatuses(json, statuses) then
-    begin
-      renderError('Не удалось разобрать JSON статуса.');
-      Exit;
-    end;
-    populateDaemonBox(statuses);
-    renderStatuses(statuses);
   finally
+    Screen.Cursor := crDefault;
     setBusy(False);
   end;
+  renderStatuses('');
+end;
+
+procedure TMonitorForm.asyncFirstRefresh(aData: PtrInt);
+begin
+  progressiveRefresh;
+end;
+
+procedure TMonitorForm.doRefresh(Sender: TObject);
+begin
+  progressiveRefresh;
 end;
 
 procedure TMonitorForm.controlAction(const aAction: string);
@@ -377,13 +467,17 @@ begin
   daemonName := FdaemonBox.Items[FdaemonBox.ItemIndex];
 
   setBusy(True);
+  Screen.Cursor := crAppStart;
+  renderStatuses(Format('%s: %s…', [aAction, daemonName]));
+  Application.ProcessMessages;
   try
     runMonitor([aAction, daemonName], output);
   finally
+    Screen.Cursor := crDefault;
     setBusy(False);
   end;
 
-  doRefresh(nil);
+  progressiveRefresh;
 end;
 
 procedure TMonitorForm.onStart(Sender: TObject);
@@ -405,9 +499,22 @@ procedure TMonitorForm.FormCreate(Sender: TObject);
 begin
   Caption := 'Daemon Monitor';
   Fbusy := False;
+  FloadError := '';
   FmonitorExe := resolveMonitorExe;
   buildUi;
-  doRefresh(nil);
+
+  try
+    buildSkeleton;
+  except
+    on E: Exception do
+    begin
+      FloadError := 'Не удалось загрузить ' + inventoryPath + ': ' + E.Message;
+      renderError(FloadError);
+    end;
+  end;
+
+  { Первый опрос — асинхронно, ПОСЛЕ показа окна: UI появляется сразу. }
+  Application.QueueAsyncCall(@asyncFirstRefresh, 0);
 end;
 
 end.
