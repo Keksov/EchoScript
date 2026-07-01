@@ -3,6 +3,7 @@
   "max_workers": 1,
   "poll_interval_ms": 500,
   "default_model": "whisper_podlodka",
+  "ffmpeg_path": "./tools/ffmpeg/ffmpeg.exe",
   "speech": {
     "command_grammars": {
       "ru": [

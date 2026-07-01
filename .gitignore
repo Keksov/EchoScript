@@ -10,6 +10,9 @@ build/
 # Node / Bun
 orchestrator/node_modules/
 
+# Vendored binaries (provided by setup / copied locally)
+tools/ffmpeg/*.exe
+
 # Vendored repos (cloned by setup scripts)
 **/vendor/
 **/jobs/

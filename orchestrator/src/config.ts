@@ -20,6 +20,7 @@ export interface AppConfig {
   readonly pollIntervalMs: number;
   readonly modelStopTimeoutMs: number;
   readonly defaultModel: string;
+  readonly ffmpegPath: string;
   readonly speech: SpeechConfig;
   readonly models: Readonly<Record<string, ModelConfig>>;
 }
@@ -41,6 +42,7 @@ interface RawConfig {
   readonly poll_interval_ms?: unknown;
   readonly model_stop_timeout_ms?: unknown;
   readonly default_model?: unknown;
+  readonly ffmpeg_path?: unknown;
   readonly speech?: unknown;
   readonly models?: unknown;
 }
@@ -67,7 +69,9 @@ const DEFAULT_MAX_WORKERS = 1;
 const DEFAULT_POLL_INTERVAL_MS = 500;
 const DEFAULT_MODEL_STOP_TIMEOUT_MS = 120000;
 const DEFAULT_MODEL = "whisper_podlodka";
+const DEFAULT_FFMPEG_PATH = "./tools/ffmpeg/ffmpeg.exe";
 const JOBS_ROOT_ENV = "ECHOSCRIPT_JOBS_ROOT";
+const FFMPEG_PATH_ENV = "ECHOSCRIPT_FFMPEG_PATH";
 const DEFAULT_COMMAND_GRAMMARS = {
   ru: ["вверх", "вниз", "дальше", "назад", "пауза", "старт", "стоп"],
 } as const;
@@ -193,6 +197,8 @@ export const loadConfig = async (): Promise<AppConfig> => {
   );
   const jobsRootOverride = asString(process.env[JOBS_ROOT_ENV]);
   const configuredJobsRoot = jobsRootOverride ?? asString(rawConfig.jobs_root) ?? DEFAULT_JOBS_ROOT;
+  const ffmpegOverride = asString(process.env[FFMPEG_PATH_ENV]);
+  const configuredFfmpegPath = ffmpegOverride ?? asString(rawConfig.ffmpeg_path) ?? DEFAULT_FFMPEG_PATH;
   const configuredAllowedRoots = asStringArray(rawConfig.allowed_input_roots);
   const allowedInputRoots = (configuredAllowedRoots.length > 0 ? configuredAllowedRoots : [PROJECT_ROOT]).map(
     (rootPath) => path.resolve(PROJECT_ROOT, rootPath),
@@ -206,6 +212,7 @@ export const loadConfig = async (): Promise<AppConfig> => {
     pollIntervalMs,
     modelStopTimeoutMs,
     defaultModel,
+    ffmpegPath: path.resolve(PROJECT_ROOT, configuredFfmpegPath),
     speech: resolveSpeechConfig(isRecord(rawConfig.speech) ? (rawConfig.speech as RawSpeechConfig) : null),
     models,
   };

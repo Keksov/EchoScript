@@ -78,7 +78,7 @@ Authoritative progress ledger: [whisperdaemon-jobs-progress.json](whisperdaemon-
 - [x] **F2.1 — FPC: вынести ядро инференса** в переиспользуемую функцию (pcm16le+lang → segments/words/text/lang); WS-путь делегирует. Поведение WS без изменений. *(in-file: `inferBufferedAudio`→`inferPcm16le(aAudioBytes)`; отдельный юнит не понадобился)*
 - [x] **F2.2 — FPC: события `describe` + `health`** (отдают дескриптор из `daemon.json` / состояние прогрева).
 - [x] **F2.3 — FPC: событие `transcribe_file`** (читает pcm16le-файл по пути, инференс под `gInferenceLock`, отдаёт segment_final/word_committed/session_final).
-- [ ] **F3.1 — TS: ffmpeg-конвертация** input → `data/<id>/audio.pcm` (pcm16le 16k mono) в конвейере диспетча; путь ffmpeg из конфига/env.
+- [x] **F3.1 — TS: ffmpeg-конвертация** input → `data/<id>/audio.pcm` (pcm16le 16k mono) в конвейере диспетча; путь ffmpeg из конфига/env. *(модуль `audio-convert.ts` + `config.ffmpegPath`; ffmpeg скопирован в `tools/ffmpeg/` (gitignored))*
 - [ ] **F3.2 — TS: daemon-driver (WS-клиент) + конфиг** ws-daemon моделей (host/port); `describe` → `transcribe_file` → сбор сегментов в normalized-результат.
 - [ ] **F3.3 — TS: интеграция driver в Scheduler** для моделей `ws-daemon`: вместо python-воркера — конвертация+driver, запись `result.json`/`result_plain.txt`/`result_timestamp.txt` (секунды)/переходов `status.json`/output-маркера.
 - [ ] **F4.1 — Интеграционный E2E-тест** (`/add_file` → convert → daemon → артефакты + `/get_job_status`).
