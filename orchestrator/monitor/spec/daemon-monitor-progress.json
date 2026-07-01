@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T13:46:24Z",
+  "updatedAt": "2026-07-01T13:53:36Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -84,12 +84,17 @@
       "id": "M2.1",
       "phase": 2,
       "title": "monitor-core: инвентарь daemons.json + загрузчик/типы",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M0.1"],
-      "artifacts": ["orchestrator/monitor/daemons.json", "orchestrator/monitor/core/monitor_core.pas", "orchestrator/monitor/tests/"],
+      "artifacts": ["orchestrator/monitor/daemons.json", "orchestrator/monitor/core/monitor_core.pas", "orchestrator/monitor/tests/test_monitor_core.pas", "orchestrator/monitor/scripts/fpc-x64.cfg", "orchestrator/monitor/tests/build_x64.bat"],
       "verify": "FPC-сборка ядра exit 0; unit-тест парсинга inventory (Ok/пассы, exit 1 при провале).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T13:53:36Z", "finishedAt": "2026-07-01T13:53:36Z", "blockedReason": null,
+      "evidence": [
+        "daemons.json: 5 инстансов (vosk_ru:7701, vosk_ru_cmd:7702, whisper_podlodka:7801, vibevoice:7802, diarization:7900) с host/port/kind/health/start_script/stop_script; vosk_en пропущен (нет скриптов).",
+        "monitor_core.pas: TDaemonInventoryItem/TDaemonInventory + loadDaemonInventory (fpjson) + findDaemon + emptyDaemonInventoryItem; UI-независимый (uses SysUtils/Classes/fpjson).",
+        "tests/build_x64.bat -> EXITCODE=0; test_monitor_core: 10/10 PASS (count, порты, kinds python/sherpa, скрипты, дефолты ws_resource/health, отсутствие несуществующего).",
+        "fpc-x64.cfg (тулчейн из EchoRecorder/VendorsCore, -Fucore). build/ игнорируется git. EOL CRLF."
+      ]
     },
     {
       "id": "M2.2",
@@ -162,6 +167,7 @@
     { "ts": "2026-07-01T13:00:17Z", "step": "M0.1", "event": "done", "note": "План+леджер инициативы Daemon Monitor: общее Pascal-ядро + CLI(FPC) + GUI(Lazarus/Pixie); фаза 1 добавляет WS health в vosk/vibevoice/diarization. JSON валиден, DAG ацикличен (11 шагов, 8 решений)." },
     { "ts": "2026-07-01T13:13:17Z", "step": "M1.1", "event": "done", "note": "voskdaemon получил WS describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (порт 7799, model vosk_ru), health_ack state=loading." },
     { "ts": "2026-07-01T13:24:35Z", "step": "M1.2", "event": "done", "note": "vibevoicedaemon (Python) получил describe/health в Session + daemon.json; ленивый импорт модели; handler-тест под venv PASS (describe_ack/health_ack). Полный WS-сервер блокирован битым torch в env." },
-    { "ts": "2026-07-01T13:46:24Z", "step": "M1.3", "event": "done", "note": "diarizationdaemon (FPC WS) получил describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (7898), health_ack state=ready. Конец фазы 1 — единый health у всех 4 демонов." }
+    { "ts": "2026-07-01T13:46:24Z", "step": "M1.3", "event": "done", "note": "diarizationdaemon (FPC WS) получил describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (7898), health_ack state=ready. Конец фазы 1 — единый health у всех 4 демонов." },
+    { "ts": "2026-07-01T13:53:36Z", "step": "M2.1", "event": "done", "note": "monitor-core: daemons.json (5 инстансов) + monitor_core.pas (типы + loadDaemonInventory/findDaemon) + unit-тест 10/10 (build exit 0). Начало ядра." }
   ]
 }

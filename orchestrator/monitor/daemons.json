@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "note": "Инвентарь стриминговых демонов для monitor-core. Пути скриптов — относительно корня проекта (EchoScript). health=ws означает WS describe/health.",
+  "daemons": [
+    {
+      "name": "vosk_ru",
+      "kind": "fpc",
+      "host": "127.0.0.1",
+      "port": 7701,
+      "ws_resource": "/",
+      "model_name": "vosk_ru",
+      "health": "ws",
+      "start_script": "services/voskdaemon/scripts/start_voskdaemon_ru.bat",
+      "stop_script": "services/voskdaemon/scripts/stop_voskdaemon_ru.bat"
+    },
+    {
+      "name": "vosk_ru_cmd",
+      "kind": "fpc",
+      "host": "127.0.0.1",
+      "port": 7702,
+      "ws_resource": "/",
+      "model_name": "vosk_ru_cmd",
+      "health": "ws",
+      "start_script": "services/voskdaemon/scripts/start_voskdaemon_ru_cmd.bat",
+      "stop_script": "services/voskdaemon/scripts/stop_voskdaemon_ru_cmd.bat"
+    },
+    {
+      "name": "whisper_podlodka",
+      "kind": "fpc",
+      "host": "127.0.0.1",
+      "port": 7801,
+      "ws_resource": "/",
+      "model_name": "whisper_podlodka",
+      "health": "ws",
+      "start_script": "services/whisperdaemon/scripts/start_whisperdaemon_podlodka.bat",
+      "stop_script": "services/whisperdaemon/scripts/stop_whisperdaemon_podlodka.bat"
+    },
+    {
+      "name": "vibevoice",
+      "kind": "python",
+      "host": "127.0.0.1",
+      "port": 7802,
+      "ws_resource": "/",
+      "model_name": "vibevoice",
+      "health": "ws",
+      "start_script": "services/vibevoicedaemon/scripts/start_vibevoicedaemon.bat",
+      "stop_script": "services/vibevoicedaemon/scripts/stop_vibevoicedaemon.bat"
+    },
+    {
+      "name": "diarization",
+      "kind": "sherpa",
+      "host": "127.0.0.1",
+      "port": 7900,
+      "ws_resource": "/",
+      "model_name": "diarizationdaemon",
+      "health": "ws",
+      "start_script": "services/diarizationdaemon/sherpa/scripts/start_diarizationdaemon_sherpa.bat",
+      "stop_script": "services/diarizationdaemon/sherpa/scripts/stop_diarizationdaemon_sherpa.bat"
+    }
+  ]
+}
