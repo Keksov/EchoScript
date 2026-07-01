@@ -219,6 +219,8 @@ type
     procedure   handleFlush;
     procedure   processBufferedAudio(aFinalizeSession: Boolean);
     procedure   handleSessionStart(const aRoot: TJSONObject);
+    procedure   handleDescribe;
+    procedure   handleHealth;
     function    endsWithSentenceBoundary(const aText: string): Boolean;
     procedure   sendError(const aMessage: string);
     procedure   sendWarning(const aMessage: string);
@@ -546,6 +548,32 @@ begin
     Result := IncludeTrailingPathDelimiter(resolveWhisperModelsRoot) + fileName
   else
     Result := IncludeTrailingPathDelimiter(resolveWhisperModelsRoot) + 'ggml-' + fileName + '.bin';
+end;
+
+function resolveDaemonDescriptorPath: string;
+begin
+  Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
+    'services' + PathDelim + 'whisperdaemon' + PathDelim + 'daemon.json';
+end;
+
+function loadTextFileUtf8(const aPath: string): string;
+var
+  stream: TFileStream;
+  raw: RawByteString;
+begin
+  Result := '';
+  stream := TFileStream.Create(aPath, fmOpenRead or fmShareDenyNone);
+  try
+    if stream.Size > 0 then
+    begin
+      SetLength(raw, stream.Size);
+      stream.ReadBuffer(raw[1], stream.Size);
+      SetCodePage(raw, 65001, False);
+      Result := raw;
+    end;
+  finally
+    stream.Free;
+  end;
 end;
 
 function ptrToHex(const aPtr: Pointer): string;
@@ -1721,6 +1749,67 @@ begin
   end;
 end;
 
+procedure TWhisperDaemonSession.handleDescribe;
+var
+  descriptorPath: string;
+  descriptor: TJSONData;
+  root: TJSONObject;
+  transport: TJSONData;
+begin
+  descriptorPath := resolveDaemonDescriptorPath;
+  if not FileExists(descriptorPath) then
+  begin
+    sendError('daemon descriptor not found: ' + descriptorPath);
+    Exit;
+  end;
+
+  descriptor := GetJSON(loadTextFileUtf8(descriptorPath));
+  try
+    if descriptor.JSONType <> jtObject then
+    begin
+      sendError('daemon descriptor is not a JSON object');
+      Exit;
+    end;
+
+    root := TJSONObject(descriptor);
+    transport := root.Find('transport');
+    if (transport <> nil) and (transport.JSONType = jtObject) then
+    begin
+      TJSONObject(transport).Strings['host'] := gDaemonOptions.Host;
+      TJSONObject(transport).Integers['port'] := gDaemonOptions.Port;
+    end;
+    root.Add('event', 'describe_ack');
+    sendEvent(root);
+  finally
+    descriptor.Free;
+  end;
+end;
+
+procedure TWhisperDaemonSession.handleHealth;
+var
+  root: TJSONObject;
+  stateText: string;
+begin
+  case gWarmupState of
+    mwsReady: stateText := 'ready';
+    mwsFailed: stateText := 'failed';
+  else
+    stateText := 'loading';
+  end;
+
+  root := TJSONObject.Create;
+  try
+    root.Add('event', 'health_ack');
+    root.Add('state', stateText);
+    root.Add('model_name', FmodelName);
+    if (gWarmupState = mwsFailed) and (gWarmupError <> '') then
+      root.Add('error', gWarmupError);
+    sendEvent(root);
+  finally
+    root.Free;
+  end;
+end;
+
 procedure TWhisperDaemonSession.handleSessionStart(const aRoot: TJSONObject);
 var
   ack: TJSONObject;
@@ -1794,6 +1883,10 @@ begin
       handleSessionStart(root)
     else if eventName = 'flush' then
       handleFlush
+    else if eventName = 'describe' then
+      handleDescribe
+    else if eventName = 'health' then
+      handleHealth
     else if eventName = 'cancel' then
     begin
       if not Fstarted then

@@ -5,7 +5,7 @@
   "title": "Файловый интерфейс распознавания: file-daemon (оркестратор) + тонкий file-API демонов",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T09:41:45Z",
+  "updatedAt": "2026-07-01T09:50:09Z",
   "decisions": [
     { "id": "D1", "text": "File-daemon = расширенный оркестратор (TS): владелец watch, конвертации, lifecycle, status.json, артефактов, HTTP-статусов." },
     { "id": "D2", "text": "Демоны распознавания тонкие: WS file-API (describe/health/transcribe_file); не читают jobs/, не пишут артефакты, не декодируют." },
@@ -69,12 +69,17 @@
       "id": "F2.2",
       "phase": 2,
       "title": "FPC: события describe + health",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["F1.1", "F2.1"],
       "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
       "verify": "build green; WS-клиент получает по describe дескриптор из daemon.json и по health состояние прогрева.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T09:50:09Z", "finishedAt": "2026-07-01T09:50:09Z", "blockedReason": null,
+      "evidence": [
+        "build_x64.bat -> EXITCODE=0",
+        "Живой смоук (демон :7899, Bun WS-клиент): describe -> describe_ack с полным дескриптором и transport.port подменён на фактический 7899.",
+        "health -> {event:health_ack, state:ready, model_name:whisper_podlodka} (модель прогрелась).",
+        "EOL нормализован к CRLF (bare-LF: 0); реализовано loadTextFileUtf8 + resolveDaemonDescriptorPath + handleDescribe/handleHealth + ветки в handleMessage."
+      ]
     },
     {
       "id": "F2.3",
@@ -157,6 +162,7 @@
   "log": [
     { "ts": "2026-07-01T09:24:08Z", "step": "F0.1", "event": "done", "note": "План+леджер пересмотрены под file-daemon(оркестратор)+тонкий file-API; JSON валиден, DAG ацикличен (11 шагов, 10 решений)." },
     { "ts": "2026-07-01T09:28:55Z", "step": "F1.1", "event": "done", "note": "daemon.json (дескриптор: input pcm16le/16k/mono, transport ws, api describe/health/transcribe_file, capabilities) + протокол задокументирован в плане." },
-    { "ts": "2026-07-01T09:41:45Z", "step": "F2.1", "event": "done", "note": "Ядро инференса параметризовано аудио-буфером (inferPcm16le); WS делегирует. Сборка exit 0, CRLF сохранён. WS-смоук — manual/non-blocking." }
+    { "ts": "2026-07-01T09:41:45Z", "step": "F2.1", "event": "done", "note": "Ядро инференса параметризовано аудио-буфером (inferPcm16le); WS делегирует. Сборка exit 0, CRLF сохранён. WS-смоук — manual/non-blocking." },
+    { "ts": "2026-07-01T09:50:09Z", "step": "F2.2", "event": "done", "note": "describe/health реализованы и проверены живым WS-опросом (describe_ack с подменой порта, health_ack state=ready). Сборка exit 0." }
   ]
 }
