@@ -5,7 +5,7 @@
   "title": "Файловый интерфейс распознавания: file-daemon (оркестратор) + тонкий file-API демонов",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T09:50:09Z",
+  "updatedAt": "2026-07-01T10:05:32Z",
   "decisions": [
     { "id": "D1", "text": "File-daemon = расширенный оркестратор (TS): владелец watch, конвертации, lifecycle, status.json, артефактов, HTTP-статусов." },
     { "id": "D2", "text": "Демоны распознавания тонкие: WS file-API (describe/health/transcribe_file); не читают jobs/, не пишут артефакты, не декодируют." },
@@ -85,12 +85,17 @@
       "id": "F2.3",
       "phase": 2,
       "title": "FPC: событие transcribe_file (чтение pcm16le-файла + инференс)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["F2.1", "F1.1"],
       "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
       "verify": "build green; transcribe_file на известном pcm16le-файле отдаёт segment_final/session_final с ожидаемым непустым текстом; инференс под gInferenceLock.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T10:05:32Z", "finishedAt": "2026-07-01T10:05:32Z", "blockedReason": null,
+      "evidence": [
+        "build_x64.bat -> EXITCODE=0",
+        "Живой тест на файле пользователя (EchoRecorder/tests/Два человека.wav -> ffmpeg pcm16le/16k/mono -> transcribe_file):",
+        "session_final: request_id=t1 (проброшен), language=ru, duration_ms=65088, segment_count=17, words_committed=98, связный русский текст; ~60с инференса.",
+        "Реализация: handleTranscribeFile + loadBinaryFile; переиспользует processBufferedAudio->inferPcm16le (gInferenceLock внутри); sendSessionFinal теперь echo request_id. EOL CRLF (bare-LF 0)."
+      ]
     },
     {
       "id": "F3.1",
@@ -163,6 +168,7 @@
     { "ts": "2026-07-01T09:24:08Z", "step": "F0.1", "event": "done", "note": "План+леджер пересмотрены под file-daemon(оркестратор)+тонкий file-API; JSON валиден, DAG ацикличен (11 шагов, 10 решений)." },
     { "ts": "2026-07-01T09:28:55Z", "step": "F1.1", "event": "done", "note": "daemon.json (дескриптор: input pcm16le/16k/mono, transport ws, api describe/health/transcribe_file, capabilities) + протокол задокументирован в плане." },
     { "ts": "2026-07-01T09:41:45Z", "step": "F2.1", "event": "done", "note": "Ядро инференса параметризовано аудио-буфером (inferPcm16le); WS делегирует. Сборка exit 0, CRLF сохранён. WS-смоук — manual/non-blocking." },
-    { "ts": "2026-07-01T09:50:09Z", "step": "F2.2", "event": "done", "note": "describe/health реализованы и проверены живым WS-опросом (describe_ack с подменой порта, health_ack state=ready). Сборка exit 0." }
+    { "ts": "2026-07-01T09:50:09Z", "step": "F2.2", "event": "done", "note": "describe/health реализованы и проверены живым WS-опросом (describe_ack с подменой порта, health_ack state=ready). Сборка exit 0." },
+    { "ts": "2026-07-01T10:05:32Z", "step": "F2.3", "event": "done", "note": "transcribe_file реализован и проверен живьём на файле пользователя: session_final request_id=t1, ru, 17 сегментов, 98 слов, связный текст. Конец фазы 2." }
   ]
 }

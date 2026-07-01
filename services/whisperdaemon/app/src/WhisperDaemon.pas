@@ -221,6 +221,7 @@ type
     procedure   handleSessionStart(const aRoot: TJSONObject);
     procedure   handleDescribe;
     procedure   handleHealth;
+    procedure   handleTranscribeFile(const aRoot: TJSONObject);
     function    endsWithSentenceBoundary(const aText: string): Boolean;
     procedure   sendError(const aMessage: string);
     procedure   sendWarning(const aMessage: string);
@@ -571,6 +572,21 @@ begin
       SetCodePage(raw, 65001, False);
       Result := raw;
     end;
+  finally
+    stream.Free;
+  end;
+end;
+
+function loadBinaryFile(const aPath: string): TBytes;
+var
+  stream: TFileStream;
+begin
+  Result := nil;
+  stream := TFileStream.Create(aPath, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, stream.Size);
+    if stream.Size > 0 then
+      stream.ReadBuffer(Result[0], stream.Size);
   finally
     stream.Free;
   end;
@@ -1704,6 +1720,8 @@ begin
     root.Add('text', FfinalText);
     root.Add('duration_ms', aDurationMs);
     root.Add('segment_count', FsegmentCount);
+    if FrequestId <> '' then
+      root.Add('request_id', FrequestId);
     if FresolvedLanguage <> '' then
       root.Add('language', FresolvedLanguage);
     if SameText(Flanguage, 'auto') and (FresolvedLanguage <> '') then
@@ -1810,6 +1828,54 @@ begin
   end;
 end;
 
+procedure TWhisperDaemonSession.handleTranscribeFile(const aRoot: TJSONObject);
+var
+  filePath: string;
+  requestId: string;
+  language: string;
+  params: TJSONData;
+begin
+  filePath := Trim(jsonStringOf(aRoot, 'path'));
+  requestId := jsonStringOf(aRoot, 'request_id');
+  language := Trim(jsonStringOf(aRoot, 'language'));
+
+  if filePath = '' then
+  begin
+    sendError('transcribe_file requires a non-empty path');
+    Exit;
+  end;
+
+  if not FileExists(filePath) then
+  begin
+    sendError('transcribe_file: file not found: ' + filePath);
+    Exit;
+  end;
+
+  clearSessionData(True);
+  FrequestId := requestId;
+  if language = '' then
+    Flanguage := 'ru'
+  else
+    Flanguage := language;
+  Fmode := 'dictation';
+  params := aRoot.Find('params');
+  if (params <> nil) and (params.JSONType = jtObject) then
+    if Trim(jsonStringOf(TJSONObject(params), 'mode')) <> '' then
+      Fmode := Trim(jsonStringOf(TJSONObject(params), 'mode'));
+
+  WriteLn('[whisperdaemon] transcribe_file path=', filePath, ' language=', Flanguage);
+  try
+    FaudioBytes := loadBinaryFile(filePath);
+    processBufferedAudio(True);
+  except
+    on E: Exception do
+      sendError('transcribe_file failed: ' + E.Message);
+  end;
+
+  clearSessionData(True);
+  FrequestId := '';
+end;
+
 procedure TWhisperDaemonSession.handleSessionStart(const aRoot: TJSONObject);
 var
   ack: TJSONObject;
@@ -1887,6 +1953,8 @@ begin
       handleDescribe
     else if eventName = 'health' then
       handleHealth
+    else if eventName = 'transcribe_file' then
+      handleTranscribeFile(root)
     else if eventName = 'cancel' then
     begin
       if not Fstarted then
