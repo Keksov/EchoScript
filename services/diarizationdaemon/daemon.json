@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "daemon": {
+    "name": "diarizationdaemon",
+    "kind": "diarization",
+    "engine": "sherpa-onnx",
+    "model_name": "diarizationdaemon"
+  },
+  "transport": {
+    "protocol": "ws",
+    "host": "127.0.0.1",
+    "port": 7900,
+    "resource": "/",
+    "note": "Значения host/port по умолчанию; фактические возвращает describe (задаются --host/--port при запуске)."
+  },
+  "input": {
+    "container": "raw",
+    "codec": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "byte_order": "little"
+  },
+  "api": {
+    "events": ["describe", "health"],
+    "describe": {
+      "request": { "event": "describe" },
+      "response_event": "describe_ack",
+      "response_note": "Возвращает этот дескриптор с фактическими transport.host/port. Рабочий протокол диаризации — события diar_*."
+    },
+    "health": {
+      "request": { "event": "health" },
+      "response_event": "health_ack",
+      "response_fields": { "state": "loading|ready|failed", "model_name": "string", "error": "string?" }
+    }
+  },
+  "capabilities": {
+    "asr": false,
+    "diarization": true,
+    "streaming_ws": true,
+    "file_api": false,
+    "protocol_events": ["diar_session_start", "diar_set_segments", "diar_flush", "diar_cancel"]
+  }
+}

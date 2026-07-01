@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T13:24:35Z",
+  "updatedAt": "2026-07-01T13:46:24Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -68,12 +68,17 @@
       "id": "M1.3",
       "phase": 1,
       "title": "diarizationdaemon: health/транспорт (выяснить + добавить или fallback)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M0.1"],
-      "artifacts": ["services/diarizationdaemon/", "orchestrator/monitor/daemons.json"],
+      "artifacts": ["services/diarizationdaemon/sherpa/app/src/DiarizationDaemon.pas", "services/diarizationdaemon/daemon.json"],
       "verify": "либо живой health-ответ, либо задокументированный fallback порт/процесс в инвентаре.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T13:46:24Z", "finishedAt": "2026-07-01T13:46:24Z", "blockedReason": null,
+      "evidence": [
+        "Транспорт diarizationdaemon = WS (TWebSocketServer, :7900), протокол diar_*. Значит describe/health добавлены единообразно (не fallback).",
+        "app/scripts/build_x64.bat -> EXITCODE=0 ('Build successful: DiarizationDaemon.exe').",
+        "Живой WS-опрос (демон :7898, Bun): describe -> describe_ack (port 7898, full descriptor); health -> health_ack state=ready (sherpa-модель прогрелась).",
+        "Особенности: getWorkspaceRootDir up-5 (exe глубже, под sherpa/); в options нет ModelName -> health.model_name='diarizationdaemon' (константа). EOL CRLF (bare-LF 0)."
+      ]
     },
     {
       "id": "M2.1",
@@ -156,6 +161,7 @@
   "log": [
     { "ts": "2026-07-01T13:00:17Z", "step": "M0.1", "event": "done", "note": "План+леджер инициативы Daemon Monitor: общее Pascal-ядро + CLI(FPC) + GUI(Lazarus/Pixie); фаза 1 добавляет WS health в vosk/vibevoice/diarization. JSON валиден, DAG ацикличен (11 шагов, 8 решений)." },
     { "ts": "2026-07-01T13:13:17Z", "step": "M1.1", "event": "done", "note": "voskdaemon получил WS describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (порт 7799, model vosk_ru), health_ack state=loading." },
-    { "ts": "2026-07-01T13:24:35Z", "step": "M1.2", "event": "done", "note": "vibevoicedaemon (Python) получил describe/health в Session + daemon.json; ленивый импорт модели; handler-тест под venv PASS (describe_ack/health_ack). Полный WS-сервер блокирован битым torch в env." }
+    { "ts": "2026-07-01T13:24:35Z", "step": "M1.2", "event": "done", "note": "vibevoicedaemon (Python) получил describe/health в Session + daemon.json; ленивый импорт модели; handler-тест под venv PASS (describe_ack/health_ack). Полный WS-сервер блокирован битым torch в env." },
+    { "ts": "2026-07-01T13:46:24Z", "step": "M1.3", "event": "done", "note": "diarizationdaemon (FPC WS) получил describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (7898), health_ack state=ready. Конец фазы 1 — единый health у всех 4 демонов." }
   ]
 }
