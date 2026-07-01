@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from .model import VibevoiceModel
+if TYPE_CHECKING:
+    from .model import VibevoiceModel
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,9 +36,19 @@ class _SessionSettings:
 class Session:
     """Per-connection session: buffers PCM, manages state, sends protocol events."""
 
-    def __init__(self, model: VibevoiceModel, connection_id: str) -> None:
+    def __init__(
+        self,
+        model: VibevoiceModel,
+        connection_id: str,
+        host: str = "127.0.0.1",
+        port: int = 7802,
+        model_name: str = "vibevoice",
+    ) -> None:
         self._model = model
         self._connection_id = connection_id
+        self._host = host
+        self._port = port
+        self._model_name = model_name
         self._started = False
         self._done = False
         self._settings = _SessionSettings()
@@ -58,6 +72,10 @@ class Session:
             return await self._handle_flush()
         if event == "cancel":
             return self._handle_cancel()
+        if event == "describe":
+            return self._handle_describe()
+        if event == "health":
+            return self._handle_health()
         return self._error("bad_request", f"Unknown event: {event}")
 
     async def handle_binary(self, data: bytes) -> dict[str, Any] | None:
@@ -165,6 +183,35 @@ class Session:
             speaker_count=result["speaker_count"],
             speaker_segments=result["speaker_segments"],
         )
+
+    def _handle_describe(self) -> dict[str, Any]:
+        descriptor_path = Path(__file__).resolve().parents[1] / "daemon.json"
+        try:
+            descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return self._error("internal_error", f"daemon descriptor unavailable: {exc}")
+        if not isinstance(descriptor, dict):
+            return self._error("internal_error", "daemon descriptor is not an object")
+        transport = descriptor.get("transport")
+        if isinstance(transport, dict):
+            transport["host"] = self._host
+            transport["port"] = self._port
+        daemon_obj = descriptor.get("daemon")
+        if isinstance(daemon_obj, dict):
+            daemon_obj["model_name"] = self._model_name
+        descriptor["event"] = "describe_ack"
+        return descriptor
+
+    def _handle_health(self) -> dict[str, Any]:
+        try:
+            loaded = self._model.is_loaded()
+        except (RuntimeError, OSError, ValueError):
+            loaded = False
+        return {
+            "event": "health_ack",
+            "state": "ready" if loaded else "loading",
+            "model_name": self._model_name,
+        }
 
     def _handle_cancel(self) -> dict[str, Any]:
         self._done = True

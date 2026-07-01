@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "daemon": {
+    "name": "vibevoicedaemon",
+    "kind": "asr-diarization",
+    "engine": "vibevoice",
+    "model_name": "vibevoice"
+  },
+  "transport": {
+    "protocol": "ws",
+    "host": "127.0.0.1",
+    "port": 7802,
+    "resource": "/",
+    "note": "Значения host/port и model_name по умолчанию; фактические возвращает describe (задаются --host/--port/--model-name при запуске)."
+  },
+  "input": {
+    "container": "raw",
+    "codec": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "byte_order": "little"
+  },
+  "api": {
+    "events": ["describe", "health"],
+    "describe": {
+      "request": { "event": "describe" },
+      "response_event": "describe_ack",
+      "response_note": "Возвращает этот дескриптор с фактическими transport.host/port и daemon.model_name."
+    },
+    "health": {
+      "request": { "event": "health" },
+      "response_event": "health_ack",
+      "response_fields": { "state": "loading|ready|failed", "model_name": "string", "error": "string?" }
+    }
+  },
+  "capabilities": {
+    "languages": ["ru", "en", "auto"],
+    "modes": ["diarize"],
+    "word_timestamps": false,
+    "diarization": true,
+    "streaming_ws": true,
+    "file_api": false
+  }
+}

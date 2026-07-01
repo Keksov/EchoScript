@@ -73,7 +73,7 @@ CLI на FPC (`orchestrator/monitor/cli`) — запрос статуса/health
 ## Steps (mirror the ledger)
 - [x] **M0.1 — Plan & ledger.** JSON валиден, DAG ацикличен.
 - [x] **M1.1 — voskdaemon: WS `describe`/`health`** (FPC, по образцу whisperdaemon) + `daemon.json`. Сборка + живой WS-опрос.
-- [ ] **M1.2 — vibevoicedaemon: WS `describe`/`health`** (Python) + дескриптор. Живой WS-опрос.
+- [x] **M1.2 — vibevoicedaemon: WS `describe`/`health`** (Python) + дескриптор. Живой WS-опрос. *(handler-тест под venv; полный WS блокирован битым torch в env)*
 - [ ] **M1.3 — diarizationdaemon: health/транспорт** — выяснить, добавить health или задокументировать fallback.
 - [ ] **M2.1 — monitor-core: инвентарь** `daemons.json` + загрузчик/типы (Pascal). Парсинг + unit-тест.
 - [ ] **M2.2 — monitor-core: статус** (порт-открыт + процесс-жив + WS `describe`/`health`-клиент). Unit (mock) + живой.

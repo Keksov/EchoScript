@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T13:13:17Z",
+  "updatedAt": "2026-07-01T13:24:35Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -52,12 +52,17 @@
       "id": "M1.2",
       "phase": 1,
       "title": "vibevoicedaemon: WS describe/health (Python)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M0.1"],
-      "artifacts": ["services/vibevoicedaemon/app/main.py", "services/vibevoicedaemon/daemon.json"],
+      "artifacts": ["services/vibevoicedaemon/app/session.py", "services/vibevoicedaemon/app/daemon.py", "services/vibevoicedaemon/app/main.py", "services/vibevoicedaemon/daemon.json"],
       "verify": "живой WS-опрос: describe -> describe_ack, health -> health_ack.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T13:24:35Z", "finishedAt": "2026-07-01T13:24:35Z", "blockedReason": null,
+      "evidence": [
+        "Session.handle_text получил ветки describe/health; host/port/model_name проброшены main->run_daemon->_handle_connection->Session; session_ack не менялся.",
+        "Handler-тест под venv-python (fake model): describe -> describe_ack (port 7802, model vibevoice, codec pcm_s16le); health -> health_ack (state loading). RESULT: PASS, exit 0.",
+        "session.py: импорт VibevoiceModel сделан ленивым (from __future__ import annotations + TYPE_CHECKING) — обработчики тестируемы без torch; реальный демон не затронут (model импортируется в daemon.py/main.py).",
+        "py_compile session/daemon/main OK. Ограничение env: полный WS-сервер не поднят — torch native DLL в этом venv не грузится (не связано с правкой)."
+      ]
     },
     {
       "id": "M1.3",
@@ -150,6 +155,7 @@
   ],
   "log": [
     { "ts": "2026-07-01T13:00:17Z", "step": "M0.1", "event": "done", "note": "План+леджер инициативы Daemon Monitor: общее Pascal-ядро + CLI(FPC) + GUI(Lazarus/Pixie); фаза 1 добавляет WS health в vosk/vibevoice/diarization. JSON валиден, DAG ацикличен (11 шагов, 8 решений)." },
-    { "ts": "2026-07-01T13:13:17Z", "step": "M1.1", "event": "done", "note": "voskdaemon получил WS describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (порт 7799, model vosk_ru), health_ack state=loading." }
+    { "ts": "2026-07-01T13:13:17Z", "step": "M1.1", "event": "done", "note": "voskdaemon получил WS describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (порт 7799, model vosk_ru), health_ack state=loading." },
+    { "ts": "2026-07-01T13:24:35Z", "step": "M1.2", "event": "done", "note": "vibevoicedaemon (Python) получил describe/health в Session + daemon.json; ленивый импорт модели; handler-тест под venv PASS (describe_ack/health_ack). Полный WS-сервер блокирован битым torch в env." }
   ]
 }

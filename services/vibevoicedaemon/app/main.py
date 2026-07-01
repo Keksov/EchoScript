@@ -46,7 +46,7 @@ async def _main_async(args: argparse.Namespace) -> None:
         print("[vibevoicedaemon] warmup ready", flush=True)
         print("[vibevoicedaemon] fully loaded and ready for requests", flush=True)
 
-    await run_daemon(args.host, args.port, model)
+    await run_daemon(args.host, args.port, model, args.model_name)
 
 
 def main() -> None:

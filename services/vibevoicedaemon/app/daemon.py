@@ -13,9 +13,15 @@ from .session import Session
 LOGGER = logging.getLogger(__name__)
 
 
-async def _handle_connection(websocket: Any, model: VibevoiceModel) -> None:
+async def _handle_connection(
+    websocket: Any,
+    model: VibevoiceModel,
+    host: str,
+    port: int,
+    model_name: str,
+) -> None:
     connection_id = str(uuid.uuid4())
-    session = Session(model, connection_id)
+    session = Session(model, connection_id, host, port, model_name)
     LOGGER.info("Connection opened %s from %s", connection_id, websocket.remote_address)
     try:
         async for message in websocket:
@@ -32,12 +38,17 @@ async def _handle_connection(websocket: Any, model: VibevoiceModel) -> None:
         LOGGER.exception("Unhandled error on connection %s: %s", connection_id, exc)
 
 
-async def run_daemon(host: str, port: int, model: VibevoiceModel) -> None:
+async def run_daemon(
+    host: str,
+    port: int,
+    model: VibevoiceModel,
+    model_name: str = "vibevoice",
+) -> None:
     """Start the WebSocket server and run until cancelled."""
 
     def _make_handler(m: VibevoiceModel) -> Any:
         async def handler(websocket: Any) -> None:
-            await _handle_connection(websocket, m)
+            await _handle_connection(websocket, m, host, port, model_name)
 
         return handler
 
