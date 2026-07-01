@@ -85,6 +85,8 @@ type
     procedure   freeRecognizer;
     procedure   handleBinary(const aBytes: TBytes);
     procedure   handleFlush;
+    procedure   handleDescribe;
+    procedure   handleHealth;
     procedure   handleSessionStart(const aRoot: TJSONObject);
     procedure   parsePartialPayload(
       const aJson: string;
@@ -117,6 +119,9 @@ type
     constructor Create(const aOptions: TVoskDaemonOptions);
     destructor  Destroy; override;
   end;
+
+var
+  gDaemonOptions: TVoskDaemonOptions;
 
 procedure requireArgValue(aIndex: Integer; const aName: string; out aValue: string);
 begin
@@ -229,6 +234,32 @@ end;
 function resolveVoskModelPath(const aModelName: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(resolveVoskModelsRoot) + resolveVoskModelName(aModelName);
+end;
+
+function resolveDaemonDescriptorPath: string;
+begin
+  Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
+    'services' + PathDelim + 'voskdaemon' + PathDelim + 'daemon.json';
+end;
+
+function loadTextFileUtf8(const aPath: string): string;
+var
+  stream: TFileStream;
+  raw: RawByteString;
+begin
+  Result := '';
+  stream := TFileStream.Create(aPath, fmOpenRead or fmShareDenyNone);
+  try
+    if stream.Size > 0 then
+    begin
+      SetLength(raw, stream.Size);
+      stream.ReadBuffer(raw[1], stream.Size);
+      SetCodePage(raw, 65001, False);
+      Result := raw;
+    end;
+  finally
+    stream.Free;
+  end;
 end;
 
 procedure prependDirectoryToPath(const aDirPath: string);
@@ -877,6 +908,71 @@ begin
   freeRecognizer;
 end;
 
+procedure TVoskDaemonSession.handleDescribe;
+var
+  descriptorPath: string;
+  descriptor: TJSONData;
+  root: TJSONObject;
+  transport: TJSONData;
+  daemonObj: TJSONData;
+begin
+  descriptorPath := resolveDaemonDescriptorPath;
+  if not FileExists(descriptorPath) then
+  begin
+    sendError('daemon descriptor not found: ' + descriptorPath);
+    Exit;
+  end;
+
+  descriptor := GetJSON(loadTextFileUtf8(descriptorPath));
+  try
+    if descriptor.JSONType <> jtObject then
+    begin
+      sendError('daemon descriptor is not a JSON object');
+      Exit;
+    end;
+
+    root := TJSONObject(descriptor);
+    transport := root.Find('transport');
+    if (transport <> nil) and (transport.JSONType = jtObject) then
+    begin
+      TJSONObject(transport).Strings['host'] := gDaemonOptions.Host;
+      TJSONObject(transport).Integers['port'] := gDaemonOptions.Port;
+    end;
+    daemonObj := root.Find('daemon');
+    if (daemonObj <> nil) and (daemonObj.JSONType = jtObject) then
+      TJSONObject(daemonObj).Strings['model_name'] := FModelName;
+    root.Add('event', 'describe_ack');
+    sendEvent(root);
+  finally
+    descriptor.Free;
+  end;
+end;
+
+procedure TVoskDaemonSession.handleHealth;
+var
+  root: TJSONObject;
+  stateText: string;
+begin
+  case gWarmupState of
+    mwsReady: stateText := 'ready';
+    mwsFailed: stateText := 'failed';
+  else
+    stateText := 'loading';
+  end;
+
+  root := TJSONObject.Create;
+  try
+    root.Add('event', 'health_ack');
+    root.Add('state', stateText);
+    root.Add('model_name', FModelName);
+    if (gWarmupState = mwsFailed) and (gWarmupError <> '') then
+      root.Add('error', gWarmupError);
+    sendEvent(root);
+  finally
+    root.Free;
+  end;
+end;
+
 procedure TVoskDaemonSession.handleSessionStart(const aRoot: TJSONObject);
 var
   ack: TJSONObject;
@@ -950,6 +1046,10 @@ begin
       handleSessionStart(root)
     else if eventName = 'flush' then
       handleFlush
+    else if eventName = 'describe' then
+      handleDescribe
+    else if eventName = 'health' then
+      handleHealth
     else if eventName = 'cancel' then
     begin
       freeRecognizer;
@@ -1021,6 +1121,7 @@ begin
   host := nil;
   try
     options := parseCommandLine;
+    gDaemonOptions := options;
     host := TVoskDaemonHost.Create(options);
     WriteLn('VoskDaemon listening on ws://', options.Host, ':', options.Port, '/ model=', options.ModelName);
     while True do

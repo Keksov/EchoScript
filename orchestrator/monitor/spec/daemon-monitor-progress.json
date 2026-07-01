@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T13:00:17Z",
+  "updatedAt": "2026-07-01T13:13:17Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -36,12 +36,17 @@
       "id": "M1.1",
       "phase": 1,
       "title": "voskdaemon: WS describe/health (FPC) + daemon.json",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M0.1"],
       "artifacts": ["services/voskdaemon/app/src/VoskDaemon.pas", "services/voskdaemon/daemon.json"],
       "verify": "build_voskdaemon.bat exit 0; живой WS-опрос: describe -> describe_ack, health -> health_ack (state).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T13:13:17Z", "finishedAt": "2026-07-01T13:13:17Z", "blockedReason": null,
+      "evidence": [
+        "build_voskdaemon.bat -> EXITCODE=0 ('Build successful: VoskDaemon.exe').",
+        "Живой WS-опрос (демон :7799, Bun): describe -> describe_ack с дескриптором, transport.port подменён на 7799, daemon.model_name=vosk_ru.",
+        "health -> {event:health_ack, state:loading, model_name:vosk_ru} (модель ещё грузилась; эндпойнт корректен).",
+        "Реализация как в whisperdaemon: gDaemonOptions + resolveDaemonDescriptorPath + loadTextFileUtf8 + handleDescribe/handleHealth + ветки dispatch. EOL CRLF (bare-LF 0)."
+      ]
     },
     {
       "id": "M1.2",
@@ -144,6 +149,7 @@
     }
   ],
   "log": [
-    { "ts": "2026-07-01T13:00:17Z", "step": "M0.1", "event": "done", "note": "План+леджер инициативы Daemon Monitor: общее Pascal-ядро + CLI(FPC) + GUI(Lazarus/Pixie); фаза 1 добавляет WS health в vosk/vibevoice/diarization. JSON валиден, DAG ацикличен (11 шагов, 8 решений)." }
+    { "ts": "2026-07-01T13:00:17Z", "step": "M0.1", "event": "done", "note": "План+леджер инициативы Daemon Monitor: общее Pascal-ядро + CLI(FPC) + GUI(Lazarus/Pixie); фаза 1 добавляет WS health в vosk/vibevoice/diarization. JSON валиден, DAG ацикличен (11 шагов, 8 решений)." },
+    { "ts": "2026-07-01T13:13:17Z", "step": "M1.1", "event": "done", "note": "voskdaemon получил WS describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (порт 7799, model vosk_ru), health_ack state=loading." }
   ]
 }
