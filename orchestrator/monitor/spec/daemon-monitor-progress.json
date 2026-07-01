@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "plan": "daemon-monitor",
+  "planDoc": "spec/daemon-monitor-plan.md",
+  "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
+  "status": "active",
+  "createdAt": "2026-07-01",
+  "updatedAt": "2026-07-01T13:00:17Z",
+  "decisions": [
+    { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
+    { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
+    { "id": "D3", "text": "Инвентарь демонов декларативный: orchestrator/monitor/daemons.json (name, kind, host, port, ws-resource, скрипты, health-метод)." },
+    { "id": "D4", "text": "Единый протокол статуса: добавить WS describe/health в voskdaemon (FPC) и vibevoicedaemon (Python); diarizationdaemon — если транспорт позволяет, иначе fallback. Статус всегда включает порт+процесс." },
+    { "id": "D5", "text": "GUI = Lazarus/LCL + Pixie.HtmlView (HTML-рендер, как EchoRecorder app); CLI/core — чистый FPC без LCL/Pixie." },
+    { "id": "D6", "text": "Управление вызывает существующие per-instance скрипты start_*/stop_*; логику жизненного цикла не переписываем." },
+    { "id": "D7", "text": "Тулчейн FPC из EchoRecorder/VendorsCore; Pixie из EchoRecorder/vendors/pixie (пути в .cfg/.lpi)." },
+    { "id": "D8", "text": "Правила METHODOLOGY + PASCAL_RULES: fcl-process/fpwebsocketclient в -Fu; CRLF-safe; SetExceptionMask при C; разделитель '.' в JSON." }
+  ],
+  "steps": [
+    {
+      "id": "M0.1",
+      "phase": 0,
+      "title": "Plan & ledger",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["spec/daemon-monitor-plan.md", "spec/daemon-monitor-progress.json"],
+      "verify": "JSON парсится; DAG ацикличен; оба файла на месте (после одобрения — атомарный коммит).",
+      "startedAt": "2026-07-01T13:00:17Z", "finishedAt": "2026-07-01T13:00:17Z", "blockedReason": null,
+      "evidence": [
+        "Валидатор: JSON OK | steps: 11 | decisions: 8 | DAG acyclic: yes | next: M0.1",
+        "Оба артефакта на месте: spec/daemon-monitor-plan.md, spec/daemon-monitor-progress.json",
+        "Решения D1..D8 отражают ответы владельца (общее ядро; мониторинг+управление; 4 демона; сразу WS health)"
+      ]
+    },
+    {
+      "id": "M1.1",
+      "phase": 1,
+      "title": "voskdaemon: WS describe/health (FPC) + daemon.json",
+      "status": "not-started",
+      "dependsOn": ["M0.1"],
+      "artifacts": ["services/voskdaemon/app/src/VoskDaemon.pas", "services/voskdaemon/daemon.json"],
+      "verify": "build_voskdaemon.bat exit 0; живой WS-опрос: describe -> describe_ack, health -> health_ack (state).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M1.2",
+      "phase": 1,
+      "title": "vibevoicedaemon: WS describe/health (Python)",
+      "status": "not-started",
+      "dependsOn": ["M0.1"],
+      "artifacts": ["services/vibevoicedaemon/app/main.py", "services/vibevoicedaemon/daemon.json"],
+      "verify": "живой WS-опрос: describe -> describe_ack, health -> health_ack.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M1.3",
+      "phase": 1,
+      "title": "diarizationdaemon: health/транспорт (выяснить + добавить или fallback)",
+      "status": "not-started",
+      "dependsOn": ["M0.1"],
+      "artifacts": ["services/diarizationdaemon/", "orchestrator/monitor/daemons.json"],
+      "verify": "либо живой health-ответ, либо задокументированный fallback порт/процесс в инвентаре.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M2.1",
+      "phase": 2,
+      "title": "monitor-core: инвентарь daemons.json + загрузчик/типы",
+      "status": "not-started",
+      "dependsOn": ["M0.1"],
+      "artifacts": ["orchestrator/monitor/daemons.json", "orchestrator/monitor/core/monitor_core.pas", "orchestrator/monitor/tests/"],
+      "verify": "FPC-сборка ядра exit 0; unit-тест парсинга inventory (Ok/пассы, exit 1 при провале).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M2.2",
+      "phase": 2,
+      "title": "monitor-core: статус (порт + процесс + WS describe/health)",
+      "status": "not-started",
+      "dependsOn": ["M2.1", "M1.1"],
+      "artifacts": ["orchestrator/monitor/core/monitor_status.pas", "orchestrator/monitor/tests/"],
+      "verify": "unit-тест на mock-WS (describe/health парсятся); живой опрос реального демона даёт up + health.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M2.3",
+      "phase": 2,
+      "title": "monitor-core: управление (start/stop/restart через скрипты)",
+      "status": "not-started",
+      "dependsOn": ["M2.1"],
+      "artifacts": ["orchestrator/monitor/core/monitor_control.pas", "orchestrator/monitor/tests/"],
+      "verify": "unit-тест с инъектируемым раннером (проверяется команда/скрипт/cwd без реального спавна).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M3.1",
+      "phase": 3,
+      "title": "CLI: list / status [--json] / start / stop / restart",
+      "status": "not-started",
+      "dependsOn": ["M2.2", "M2.3"],
+      "artifacts": ["orchestrator/monitor/cli/", "orchestrator/monitor/cli/scripts/"],
+      "verify": "сборка CLI exit 0; monitor status --json против поднятого демона корректен; start/stop меняет состояние (порт).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M4.1",
+      "phase": 4,
+      "title": "GUI (Lazarus+Pixie): таблица статусов с опросом ядра",
+      "status": "not-started",
+      "dependsOn": ["M2.2"],
+      "artifacts": ["orchestrator/monitor/app/"],
+      "verify": "manual/non-blocking: lazbuild зелёный; окно рендерит статусы демонов (скриншот).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M4.2",
+      "phase": 4,
+      "title": "GUI: действия start/stop/restart",
+      "status": "not-started",
+      "dependsOn": ["M4.1", "M2.3"],
+      "artifacts": ["orchestrator/monitor/app/"],
+      "verify": "manual/non-blocking: lazbuild зелёный; кнопки start/stop/restart меняют состояние демона.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "M5.1",
+      "phase": 5,
+      "title": "Документация и ops (README, build/run, daemons.json)",
+      "status": "not-started",
+      "dependsOn": ["M3.1", "M4.2"],
+      "artifacts": ["orchestrator/monitor/README.md", "orchestrator/monitor/*/scripts/"],
+      "verify": "README описывает CLI-команды, инвентарь daemons.json, сборку CLI/GUI, протокол health.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    }
+  ],
+  "log": [
+    { "ts": "2026-07-01T13:00:17Z", "step": "M0.1", "event": "done", "note": "План+леджер инициативы Daemon Monitor: общее Pascal-ядро + CLI(FPC) + GUI(Lazarus/Pixie); фаза 1 добавляет WS health в vosk/vibevoice/diarization. JSON валиден, DAG ацикличен (11 шагов, 8 решений)." }
+  ]
+}
