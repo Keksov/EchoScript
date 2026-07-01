@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "plan": "whisperdaemon-jobs",
+  "planDoc": "spec/whisperdaemon-jobs-plan.md",
+  "title": "Файловый интерфейс распознавания: file-daemon (оркестратор) + тонкий file-API демонов",
+  "status": "active",
+  "createdAt": "2026-07-01",
+  "updatedAt": "2026-07-01T09:24:08Z",
+  "decisions": [
+    { "id": "D1", "text": "File-daemon = расширенный оркестратор (TS): владелец watch, конвертации, lifecycle, status.json, артефактов, HTTP-статусов." },
+    { "id": "D2", "text": "Демоны распознавания тонкие: WS file-API (describe/health/transcribe_file); не читают jobs/, не пишут артефакты, не декодируют." },
+    { "id": "D3", "text": "Согласованный формат raw pcm16le 16kHz mono; конвертирует оркестратор через ffmpeg; демон только читает байты." },
+    { "id": "D4", "text": "Транспорт: существующий WebSocket демона (fpwebsocketserver) + новые события." },
+    { "id": "D5", "text": "Согласование формата/возможностей: settings-файл services/<daemon>/daemon.json + запрос describe с тем же дескриптором." },
+    { "id": "D6", "text": "Контракт jobs/ (result.json/plain/timestamp, status-переходы, output-маркер) пишет только оркестратор." },
+    { "id": "D7", "text": "Python-воркеры service_runner не трогаем; модель в config.json помечается python-worker | ws-daemon." },
+    { "id": "D8", "text": "Конкурентность: файловый и WS инференс в демоне сериализуются существующим gInferenceLock." },
+    { "id": "D9", "text": "Правила: FPC — EchoRecorder/PASCAL_RULES.md; TS — стиль оркестратора (Hono, JobManager/Scheduler, атомарные ренеймы)." },
+    { "id": "D10", "text": "Паритет = схема/контракт артефактов, не текст (whisper.cpp != HF transformers)." }
+  ],
+  "steps": [
+    {
+      "id": "F0.1",
+      "phase": 0,
+      "title": "Пересмотр плана + леджера (новая архитектура)",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["spec/whisperdaemon-jobs-plan.md", "spec/whisperdaemon-jobs-progress.json"],
+      "verify": "JSON парсится; DAG ацикличен; оба файла отражают согласованную архитектуру (после одобрения — коммит).",
+      "startedAt": "2026-07-01T09:24:08Z", "finishedAt": "2026-07-01T09:24:08Z", "blockedReason": null,
+      "evidence": [
+        "Валидатор: JSON OK | steps: 11 | decisions: 10 | DAG acyclic: yes | next: F0.1",
+        "Оба артефакта на месте: spec/whisperdaemon-jobs-plan.md, spec/whisperdaemon-jobs-progress.json",
+        "Архитектура отражает решения D1..D10 (file-daemon=оркестратор, тонкий WS file-API демонов)"
+      ]
+    },
+    {
+      "id": "F1.1",
+      "phase": 1,
+      "title": "Контракт дескриптора + services/whisperdaemon/daemon.json",
+      "status": "not-started",
+      "dependsOn": ["F0.1"],
+      "artifacts": ["services/whisperdaemon/daemon.json", "spec/whisperdaemon-jobs-plan.md"],
+      "verify": "daemon.json валиден; описаны input {container:raw,codec:pcm_s16le,rate:16000,ch:1}, transport {ws host/port}, capabilities; схема задокументирована.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F2.1",
+      "phase": 2,
+      "title": "FPC: вынести ядро инференса в переиспользуемую функцию",
+      "status": "not-started",
+      "dependsOn": ["F0.1"],
+      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas", "services/whisperdaemon/app/src/whisperdaemon_infer.pas"],
+      "verify": "build_x64.bat exit 0; WS-смоук (session_start/flush) даёт прежний session_final на фикстуре.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F2.2",
+      "phase": 2,
+      "title": "FPC: события describe + health",
+      "status": "not-started",
+      "dependsOn": ["F1.1", "F2.1"],
+      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
+      "verify": "build green; WS-клиент получает по describe дескриптор из daemon.json и по health состояние прогрева.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F2.3",
+      "phase": 2,
+      "title": "FPC: событие transcribe_file (чтение pcm16le-файла + инференс)",
+      "status": "not-started",
+      "dependsOn": ["F2.1", "F1.1"],
+      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
+      "verify": "build green; transcribe_file на известном pcm16le-файле отдаёт segment_final/session_final с ожидаемым непустым текстом; инференс под gInferenceLock.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F3.1",
+      "phase": 3,
+      "title": "TS: ffmpeg-конвертация input -> pcm16le 16k mono",
+      "status": "not-started",
+      "dependsOn": ["F1.1"],
+      "artifacts": ["orchestrator/src/job-manager.ts", "orchestrator/src/config.ts", "config.json"],
+      "verify": "bun typecheck/test зелёный; конвертация flac-фикстуры -> audio.pcm, число сэмплов ~= durationSec*16000 (±1%); путь ffmpeg из конфига/env.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F3.2",
+      "phase": 3,
+      "title": "TS: daemon-driver (WS-клиент) + конфиг ws-daemon моделей",
+      "status": "not-started",
+      "dependsOn": ["F1.1", "F2.2"],
+      "artifacts": ["orchestrator/src/daemon-driver.ts", "orchestrator/src/config.ts", "config.json"],
+      "verify": "bun test зелёный; driver против запущенного whisperdaemon: describe -> transcribe_file -> собранный normalized-результат (сегменты, текст, язык).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F3.3",
+      "phase": 3,
+      "title": "TS: интеграция driver в Scheduler + запись артефактов для ws-daemon",
+      "status": "not-started",
+      "dependsOn": ["F3.1", "F3.2", "F2.3"],
+      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/job-manager.ts"],
+      "verify": "bun test зелёный; для ws-daemon модели: convert+driver вместо python-воркера; пишутся result.json (секунды)/result_plain.txt/result_timestamp.txt/переходы status.json/output-маркер по контракту.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F4.1",
+      "phase": 4,
+      "title": "Интеграционный E2E-тест",
+      "status": "not-started",
+      "dependsOn": ["F3.3"],
+      "artifacts": ["tests/whisperdaemon-file-api.ps1"],
+      "verify": "поднять whisperdaemon + оркестратор; POST /add_file фикстуры -> status=ready + все артефакты; GET /get_job_status и /get_job_result?type=timestamp корректны.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F4.2",
+      "phase": 4,
+      "title": "Ops: конфиг/скрипты запуска ws-daemon пути",
+      "status": "not-started",
+      "dependsOn": ["F3.3"],
+      "artifacts": ["scripts/", "services/whisperdaemon/scripts/"],
+      "verify": "manual/non-blocking: скрипты поднимают whisperdaemon и оркестратор в правильном порядке; модель помечена ws-daemon.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "F4.3",
+      "phase": 4,
+      "title": "Документация (file-API, дескриптор, ws-daemon vs python-worker)",
+      "status": "not-started",
+      "dependsOn": ["F3.3"],
+      "artifacts": ["EchoRecorder/docs/ARCHITECTURE.md", "services/whisperdaemon/README.md"],
+      "verify": "doc описывает describe/health/transcribe_file, daemon.json, конвертацию в оркестраторе, различие путей.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    }
+  ],
+  "log": [
+    { "ts": "2026-07-01T09:24:08Z", "step": "F0.1", "event": "done", "note": "План+леджер пересмотрены под file-daemon(оркестратор)+тонкий file-API; JSON валиден, DAG ацикличен (11 шагов, 10 решений)." }
+  ]
+}
