@@ -16,9 +16,12 @@ import {
  * window, yields incremental `segment_final`, removes the 10-min one-shot wall
  * (per-event heartbeat instead), and lets us report real progress.
  *
- * The daemon is unchanged (see SB-D1): it already appends + auto-commits on
- * binary frames and finalizes on `flush`. Rollover across the 30-min buffer cap
- * (SB-D7/SB-D8) is a follow-up (SB3.1); this module streams one session.
+ * The daemon is unchanged (see SB-D1). Rollover (SB-D7/SB-D8): if audio piles up
+ * uncommitted toward the daemon's 30-min session cap, we finalize the current
+ * session and continue on a *fresh WS connection* (the daemon does not reset a
+ * session on `flush`), shifting timestamps by the audio already consumed. In
+ * practice sentence-boundary auto-commits keep the buffer tiny, so rollover is a
+ * safety net for pathological no-boundary audio.
  */
 
 // PCM format agreed with the daemon (session_start guards these exact values).
@@ -158,58 +161,53 @@ const openPcmFile = async (filePath: string): Promise<PcmSource> => {
   };
 };
 
+/** Cumulative counters shared across the sessions of one file. */
+interface StreamState {
+  bytesSent: number;
+  windowsSent: number;
+  processedMs: number;
+}
+
+interface SessionResult {
+  readonly endedByRollover: boolean;
+  readonly text: string;
+  readonly language: string;
+  readonly detectedLanguage: string | null;
+  readonly durationMs: number;
+}
+
+interface SessionContext {
+  readonly url: string;
+  readonly source: PcmSource;
+  readonly windowBytes: number;
+  readonly rolloverMs: number;
+  readonly heartbeatTimeoutMs: number;
+  readonly highWaterBytes: number;
+  readonly createSocket: (url: string) => StreamSocket;
+  readonly requestId: string;
+  readonly language: string;
+  readonly mode: string;
+  readonly bytesTotal: number;
+  readonly offsetMs: number;
+  readonly segBase: number;
+  readonly state: StreamState;
+  readonly segments: DaemonSegment[];
+  readonly words: DaemonWord[];
+  readonly emitProgress: () => void;
+}
+
 /**
- * Stream a pre-converted pcm16le file to the daemon over its live-session
- * protocol and collect the transcription. Emits incremental progress; resolves
- * on the daemon's terminal `session_final`.
+ * Run one WS session over a fresh connection, streaming windows from the shared
+ * source until EOF or the rollover threshold. Pushes offset-adjusted segments/words
+ * into the shared sink and resolves on the daemon's `session_final`.
  */
-export const transcribeFileStreaming = async (
-  endpoint: WsDaemonConfig,
-  pcmPath: string,
-  options: TranscribeStreamOptions = {},
-  onProgress?: ProgressListener,
-): Promise<DaemonTranscription> => {
-  const requestId = options.requestId ?? crypto.randomUUID();
-  const language = options.language ?? "auto";
-  const mode = options.mode ?? "dictation";
-  const windowBytes = Math.max(BYTES_PER_SAMPLE, options.windowBytes ?? bytesForMs(DEFAULT_STREAM_WINDOW_MS));
-  const heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS;
-  const highWaterBytes = Math.max(windowBytes * 2, options.highWaterBytes ?? MIN_HIGH_WATER_BYTES);
-  const createSocket = options.createSocket ?? createDefaultSocket;
-  const openPcm = options.openPcm ?? openPcmFile;
-
-  const source = await openPcm(pcmPath);
-  const bytesTotal = source.byteLength;
-  const windowsTotal = Math.max(1, Math.ceil(bytesTotal / windowBytes));
-  const totalMs = msForBytes(bytesTotal);
-
-  const segments: DaemonSegment[] = [];
-  const words: DaemonWord[] = [];
-
-  let windowsSent = 0;
-  let bytesSent = 0;
-  let processedMs = 0;
-
-  return new Promise<DaemonTranscription>((resolve, reject) => {
-    const url = daemonUrl(endpoint);
-    const socket = createSocket(url);
+const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
+  return new Promise<SessionResult>((resolve, reject) => {
+    const socket = ctx.createSocket(ctx.url);
     let settled = false;
     let heartbeat: ReturnType<typeof setTimeout> | null = null;
-
-    const emitProgress = (): void => {
-      if (onProgress === undefined) {
-        return;
-      }
-      onProgress({
-        windowsSent,
-        windowsTotal,
-        bytesSent,
-        bytesTotal,
-        processedMs,
-        totalMs,
-        progressPct: totalMs > 0 ? clampPct((processedMs / totalMs) * 100) : 0,
-      });
-    };
+    let rolloverRequested = false;
+    let sessionMaxEndMs = 0;
 
     const cleanup = (): void => {
       if (heartbeat !== null) {
@@ -217,55 +215,65 @@ export const transcribeFileStreaming = async (
         heartbeat = null;
       }
       socket.close();
-      void source.close().catch(() => undefined);
     };
-
-    const done = (value: DaemonTranscription): void => {
+    const done = (value: SessionResult): void => {
       if (settled) return;
       settled = true;
       cleanup();
       resolve(value);
     };
-
     const fail = (error: Error): void => {
       if (settled) return;
       settled = true;
       cleanup();
       reject(error);
     };
-
     const touchHeartbeat = (): void => {
       if (heartbeat !== null) {
         clearTimeout(heartbeat);
       }
       heartbeat = setTimeout(
-        () => fail(new DaemonDriverError(`daemon ${url} stalled: no event for ${heartbeatTimeoutMs}ms`)),
-        heartbeatTimeoutMs,
+        () => fail(new DaemonDriverError(`daemon ${ctx.url} stalled: no event for ${ctx.heartbeatTimeoutMs}ms`)),
+        ctx.heartbeatTimeoutMs,
       );
+    };
+
+    const maybeRollover = (): void => {
+      if (rolloverRequested) {
+        return;
+      }
+      const uncommittedMs = msForBytes(ctx.state.bytesSent) - ctx.state.processedMs;
+      if (uncommittedMs >= ctx.rolloverMs) {
+        rolloverRequested = true;
+        socket.send(JSON.stringify({ event: "flush" }));
+      }
     };
 
     const pump = async (): Promise<void> => {
       socket.send(
         JSON.stringify({
           event: "session_start",
-          request_id: requestId,
+          request_id: ctx.requestId,
           sample_rate_hz: SAMPLE_RATE_HZ,
           channels: CHANNELS,
           audio_format: AUDIO_FORMAT,
-          language,
-          mode,
+          language: ctx.language,
+          mode: ctx.mode,
         }),
       );
 
-      while (!settled) {
-        const window = await source.read(windowBytes);
+      while (!settled && !rolloverRequested) {
+        const window = await ctx.source.read(ctx.windowBytes);
         if (window === null) {
-          break;
+          if (!settled) {
+            socket.send(JSON.stringify({ event: "flush" }));
+          }
+          return;
         }
 
         // Backpressure: don't buffer the whole file on our side; let the daemon
         // (which reads frames sequentially) set the pace.
-        while (!settled && socket.bufferedAmount > highWaterBytes) {
+        while (!settled && socket.bufferedAmount > ctx.highWaterBytes) {
           await sleep(5);
         }
         if (settled) {
@@ -273,18 +281,15 @@ export const transcribeFileStreaming = async (
         }
 
         socket.send(window);
-        bytesSent += window.length;
-        windowsSent += 1;
-        emitProgress();
-      }
-
-      if (!settled) {
-        socket.send(JSON.stringify({ event: "flush" }));
+        ctx.state.bytesSent += window.length;
+        ctx.state.windowsSent += 1;
+        ctx.emitProgress();
+        maybeRollover();
       }
     };
 
     socket.onError((error) => fail(error));
-    socket.onClose(() => fail(new DaemonDriverError(`connection to ${url} closed before completion`)));
+    socket.onClose(() => fail(new DaemonDriverError(`connection to ${ctx.url} closed before completion`)));
 
     socket.onMessage((data) => {
       if (data.length === 0) {
@@ -306,45 +311,49 @@ export const transcribeFileStreaming = async (
         case "session_ack":
           break;
         case "segment_final": {
-          const endMs = toInt(message.end_ms);
-          segments.push({
-            segmentId: toInt(message.segment_id),
+          const startMs = toInt(message.start_ms) + ctx.offsetMs;
+          const endMs = toInt(message.end_ms) + ctx.offsetMs;
+          ctx.segments.push({
+            segmentId: ctx.segBase + toInt(message.segment_id),
             text: toStr(message.text),
-            startMs: toInt(message.start_ms),
+            startMs,
             endMs,
           });
-          if (endMs > processedMs) {
-            processedMs = endMs;
+          const localEnd = toInt(message.end_ms);
+          if (localEnd > sessionMaxEndMs) {
+            sessionMaxEndMs = localEnd;
           }
-          emitProgress();
+          const absoluteProcessed = ctx.offsetMs + sessionMaxEndMs;
+          if (absoluteProcessed > ctx.state.processedMs) {
+            ctx.state.processedMs = absoluteProcessed;
+          }
+          ctx.emitProgress();
           break;
         }
         case "word_committed":
-          words.push({
+          ctx.words.push({
             text: toStr(message.text),
-            segmentId: toInt(message.segment_id),
+            segmentId: ctx.segBase + toInt(message.segment_id),
             indexInSegment: toInt(message.index_in_segment),
-            startMs: toInt(message.start_ms),
-            endMs: toInt(message.end_ms),
+            startMs: toInt(message.start_ms) + ctx.offsetMs,
+            endMs: toInt(message.end_ms) + ctx.offsetMs,
             confidence: toFloat(message.confidence),
           });
           break;
         case "session_final": {
-          const durationMs = toInt(message.duration_ms) || totalMs;
-          if (durationMs > processedMs) {
-            processedMs = durationMs;
+          const sessionDurationMs = toInt(message.duration_ms);
+          const absoluteProcessed = ctx.offsetMs + Math.max(sessionDurationMs, sessionMaxEndMs);
+          if (absoluteProcessed > ctx.state.processedMs) {
+            ctx.state.processedMs = absoluteProcessed;
           }
-          emitProgress();
+          ctx.emitProgress();
           done({
+            endedByRollover: rolloverRequested,
             text: toStr(message.text),
-            language: toStr(message.language) || language,
+            language: toStr(message.language),
             detectedLanguage:
               typeof message.detected_language === "string" ? message.detected_language : null,
-            durationMs,
-            segmentCount:
-              typeof message.segment_count === "number" ? toInt(message.segment_count) : segments.length,
-            segments,
-            words,
+            durationMs: sessionDurationMs,
           });
           break;
         }
@@ -361,4 +370,106 @@ export const transcribeFileStreaming = async (
       void pump().catch((error) => fail(error instanceof Error ? error : new DaemonDriverError(String(error))));
     });
   });
+};
+
+/**
+ * Stream a pre-converted pcm16le file to the daemon over its live-session
+ * protocol and collect the transcription. Emits incremental progress; spans
+ * multiple sessions if rollover triggers, stitching timestamps and segment ids.
+ */
+export const transcribeFileStreaming = async (
+  endpoint: WsDaemonConfig,
+  pcmPath: string,
+  options: TranscribeStreamOptions = {},
+  onProgress?: ProgressListener,
+): Promise<DaemonTranscription> => {
+  const requestId = options.requestId ?? crypto.randomUUID();
+  const language = options.language ?? "auto";
+  const mode = options.mode ?? "dictation";
+  const windowBytes = Math.max(BYTES_PER_SAMPLE, options.windowBytes ?? bytesForMs(DEFAULT_STREAM_WINDOW_MS));
+  const rolloverBytes = Math.max(windowBytes, options.rolloverBytes ?? bytesForMs(DEFAULT_STREAM_ROLLOVER_MS));
+  const rolloverMs = msForBytes(rolloverBytes);
+  const heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS;
+  const highWaterBytes = Math.max(windowBytes * 2, options.highWaterBytes ?? MIN_HIGH_WATER_BYTES);
+  const createSocket = options.createSocket ?? createDefaultSocket;
+  const openPcm = options.openPcm ?? openPcmFile;
+  const url = daemonUrl(endpoint);
+
+  const source = await openPcm(pcmPath);
+  const bytesTotal = source.byteLength;
+  const windowsTotal = Math.max(1, Math.ceil(bytesTotal / windowBytes));
+  const totalMs = msForBytes(bytesTotal);
+
+  const segments: DaemonSegment[] = [];
+  const words: DaemonWord[] = [];
+  const state: StreamState = { bytesSent: 0, windowsSent: 0, processedMs: 0 };
+
+  const emitProgress = (): void => {
+    onProgress?.({
+      windowsSent: state.windowsSent,
+      windowsTotal,
+      bytesSent: state.bytesSent,
+      bytesTotal,
+      processedMs: state.processedMs,
+      totalMs,
+      progressPct: totalMs > 0 ? clampPct((state.processedMs / totalMs) * 100) : 0,
+    });
+  };
+
+  let fullText = "";
+  let resolvedLanguage = language;
+  let detectedLanguage: string | null = null;
+  let durationMs = 0;
+
+  try {
+    let more = true;
+    while (more) {
+      const offsetMs = msForBytes(state.bytesSent);
+      const session = await runStreamSession({
+        url,
+        source,
+        windowBytes,
+        rolloverMs,
+        heartbeatTimeoutMs,
+        highWaterBytes,
+        createSocket,
+        requestId,
+        language: resolvedLanguage,
+        mode,
+        bytesTotal,
+        offsetMs,
+        segBase: segments.length,
+        state,
+        segments,
+        words,
+        emitProgress,
+      });
+
+      if (session.text.trim().length > 0) {
+        fullText = fullText.length === 0 ? session.text.trim() : `${fullText} ${session.text.trim()}`;
+      }
+      if (session.language.length > 0) {
+        resolvedLanguage = session.language;
+      }
+      if (detectedLanguage === null) {
+        detectedLanguage = session.detectedLanguage;
+      }
+      durationMs = offsetMs + session.durationMs;
+
+      // Continue only if the session cut off for rollover and there is more audio.
+      more = session.endedByRollover && state.bytesSent < bytesTotal;
+    }
+  } finally {
+    await source.close().catch(() => undefined);
+  }
+
+  return {
+    text: fullText,
+    language: resolvedLanguage.length > 0 ? resolvedLanguage : language,
+    detectedLanguage,
+    durationMs: durationMs > 0 ? durationMs : totalMs,
+    segmentCount: segments.length,
+    segments,
+    words,
+  };
 };

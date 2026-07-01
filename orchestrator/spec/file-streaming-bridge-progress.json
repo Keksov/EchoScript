@@ -76,12 +76,12 @@
       "id": "SB3.1",
       "phase": 3,
       "title": "Cutover + rollover-гвард (SB-D7)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["SB2.2"],
-      "artifacts": ["orchestrator/src/daemon-stream-driver.ts", "orchestrator/src/ws-daemon-runner.ts"],
+      "artifacts": ["orchestrator/src/daemon-stream-driver.ts", "orchestrator/src/daemon-stream-driver.test.ts"],
       "verify": "bun test: one-shot убран из джоб-пути; при накоплении ~20 мин без коммита драйвер делает session_final->session_start rollover со сдвигом таймстампов (тест с инъекцией).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T08:30:00Z", "finishedAt": "2026-07-02T08:44:00Z", "blockedReason": null,
+      "evidence": ["Cutover в джоб-пути уже сделан в SB2.1 (раннер по умолчанию = transcribeFileStreaming). SB3.1 добавил rollover.", "Рефактор драйвера: внешний цикл по сессиям поверх runStreamSession; rollover = новое WS-соединение (демон не сбрасывает сессию на flush), сдвиг offsetMs + сквозная нумерация сегментов", "Триггер: uncommittedMs = msForBytes(bytesSent) - processedMs >= rolloverMs", "Интеграционный тест rollover: 3 сессии/соединения, сегменты [0,2000][2000,4000][4000,5000], id 0/1/2, 160000 байт получены, progress 100%", "8 прежних одно-сессионных тестов зелёные; bun test 18 pass / 0 fail; tsc 0"]
     },
     {
       "id": "SB3.2",
@@ -123,6 +123,7 @@
     { "ts": "2026-07-01T19:48:00Z", "step": "SB1.1", "event": "done", "note": "daemon-stream-driver.ts: transcribeFileStreaming с DI (StreamSocket/PcmSource), окна pcm16le, backpressure, heartbeat, инкрементальная агрегация segment_final/word_committed, progress по processedMs. tsc --noEmit exit 0." },
     { "ts": "2026-07-01T19:58:00Z", "step": "SB1.2", "event": "done", "note": "daemon-stream-driver.test.ts: 8 тестов (DI + интеграция с реальным сокетом). bun test полный сьют 14 pass / 0 fail. Конец фазы 1 — пауза на ревью." },
     { "ts": "2026-07-01T20:16:00Z", "step": "SB2.1", "event": "done", "note": "Конфиг stream_window_ms/stream_rollover_ms (дефолт 30000/1200000); раннер переключён на transcribeFileStreaming; progress.json пишется через createProgressWriter; scheduler пробрасывает окно/rollover из конфига. bun test 15 pass / 0 fail; tsc 0." },
-    { "ts": "2026-07-01T20:34:00Z", "step": "SB2.2", "event": "done", "note": "Прогресс в API аддитивно: ListedJob.progress, /get_job_progress, active_progress в GET /. SB-D6 уточнён: /get_job_status оставлен массивом, чтобы не ломать контракт status.json. bun test 17 pass / 0 fail. Конец фазы 2 — пауза на ревью." }
+    { "ts": "2026-07-01T20:34:00Z", "step": "SB2.2", "event": "done", "note": "Прогресс в API аддитивно: ListedJob.progress, /get_job_progress, active_progress в GET /. SB-D6 уточнён: /get_job_status оставлен массивом, чтобы не ломать контракт status.json. bun test 17 pass / 0 fail. Конец фазы 2 — пауза на ревью." },
+    { "ts": "2026-07-02T08:44:00Z", "step": "SB3.1", "event": "done", "note": "Rollover через новое WS-соединение (демон не трогаем): внешний цикл по сессиям, сдвиг offsetMs, сквозная нумерация сегментов. Интеграционный тест: 3 сессии, сшитые таймстампы. bun test 18 pass / 0 fail." }
   ]
 }

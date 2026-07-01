@@ -97,7 +97,8 @@ Authoritative progress ledger: [file-streaming-bridge-progress.json](file-stream
 - [x] **SB2.2 — Статус-API отдаёт прогресс.** `getJobProgress` читает `progress.json`; `/list_jobs`
   (поле `progress`), новый `/get_job_progress`, `active_progress` в `GET /`. `/get_job_status` без
   изменений (контракт-массив).
-- [ ] **SB3.1 — Cutover + rollover-гвард (SB-D7).** Убрать one-shot из джоб-пути; страховка от cap.
+- [x] **SB3.1 — Cutover + rollover-гвард (SB-D7).** Cutover сделан в SB2.1; rollover через новое
+  WS-соединение со сдвигом таймстампов + интеграционный тест.
 - [ ] **SB3.2 — E2E на длинном файле** против реального whisperdaemon (гейт приёмки).
 - [ ] **SB3.3 — Docs.** Обновить `docs/ARCHITECTURE.md` и кросс-ссылку из whisperdaemon-jobs-plan.
 - [ ] **SB4.1 — (non-blocking) Прогресс в мониторе.** Карточка оркестратора показывает `progress_pct`

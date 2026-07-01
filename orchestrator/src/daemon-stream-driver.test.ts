@@ -231,6 +231,74 @@ test("backpressure gates sending until bufferedAmount drains", async () => {
   await p;
 });
 
+test("integration: rollover spans multiple sessions and stitches timestamps", async () => {
+  const total = 160000; // 5s -> 5 windows of 1s
+  const tmpPath = path.join(tmpdir(), `stream-rollover-${crypto.randomUUID()}.pcm`);
+  await writeFile(tmpPath, Buffer.alloc(total, 1));
+
+  let connectionCount = 0;
+  let totalReceived = 0;
+  const perConn = new WeakMap<object, { bytes: number }>();
+  const server = Bun.serve({
+    port: 0,
+    fetch(req, srv) {
+      if (srv.upgrade(req)) return undefined;
+      return new Response("expected websocket", { status: 400 });
+    },
+    websocket: {
+      open(ws) {
+        connectionCount += 1;
+        perConn.set(ws, { bytes: 0 });
+      },
+      message(ws, message) {
+        const conn = perConn.get(ws) ?? { bytes: 0 };
+        if (typeof message === "string") {
+          const parsed = JSON.parse(message);
+          if (parsed.event === "session_start") {
+            ws.send(JSON.stringify({ event: "session_ack" }));
+          } else if (parsed.event === "flush") {
+            const localMs = msForBytes(conn.bytes);
+            ws.send(JSON.stringify({ event: "segment_final", segment_id: 0, text: "seg", start_ms: 0, end_ms: localMs }));
+            ws.send(JSON.stringify({ event: "session_final", text: "seg", language: "ru", duration_ms: localMs, segment_count: 1 }));
+          }
+        } else {
+          conn.bytes += message.length;
+          totalReceived += message.length;
+          perConn.set(ws, conn);
+        }
+      },
+    },
+  });
+
+  try {
+    const endpoint: WsDaemonConfig = { host: "127.0.0.1", port: server.port ?? 0, modelName: "mock" };
+    let lastPct = 0;
+    const result = await transcribeFileStreaming(
+      endpoint,
+      tmpPath,
+      { windowBytes: 32000, rolloverBytes: 64000 }, // rollover every 2s of uncommitted audio
+      (pr) => {
+        lastPct = pr.progressPct;
+      },
+    );
+
+    expect(connectionCount).toBe(3); // 2s + 2s + 1s
+    expect(totalReceived).toBe(total);
+    expect(result.segments.map((s) => [s.startMs, s.endMs])).toEqual([
+      [0, 2000],
+      [2000, 4000],
+      [4000, 5000],
+    ]);
+    expect(result.segments.map((s) => s.segmentId)).toEqual([0, 1, 2]);
+    expect(result.text).toBe("seg seg seg");
+    expect(result.durationMs).toBe(5000);
+    expect(Math.round(lastPct)).toBe(100);
+  } finally {
+    server.stop(true);
+    await unlink(tmpPath).catch(() => undefined);
+  }
+});
+
 test("integration: real socket delivers windows as binary frames end-to-end", async () => {
   const total = 100000;
   const tmpPath = path.join(tmpdir(), `stream-bridge-${crypto.randomUUID()}.pcm`);
