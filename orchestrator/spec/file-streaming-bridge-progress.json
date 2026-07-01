@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "plan": "file-streaming-bridge",
+  "planDoc": "spec/file-streaming-bridge-plan.md",
+  "title": "Файловый ввод через стриминговый мост оркестратора + прогресс",
+  "status": "active",
+  "createdAt": "2026-07-01",
+  "updatedAt": "2026-07-01T19:29:55Z",
+  "decisions": [
+    { "id": "SB-D1", "text": "Большие файлы идут через существующий стриминговый протокол демона (session_start -> бинарные окна pcm16le -> flush -> session_final), а не одним transcribe_file; демон не меняем." },
+    { "id": "SB-D2", "text": "Мост — чистый TS-модуль orchestrator/src/daemon-stream-driver.ts; WS-фабрика и чтение файла инъектируются (DI) для тестов." },
+    { "id": "SB-D3", "text": "Окно = 30 c pcm16le (960000 байт), один бинарный кадр на окно, flush после каждого окна; размер конфигурируем, обсуждается на ревью P0." },
+    { "id": "SB-D4", "text": "Единый путь: все файловые задачи через мост; transcribeFileViaDaemon остаётся только для юнит-тестов/совместимости, из джоб-раннера убирается." },
+    { "id": "SB-D5", "text": "Таймаут per-окно/heartbeat без глобального 10-мин потолка; сбрасывается на каждом входящем событии демона." },
+    { "id": "SB-D6", "text": "Прогресс — отдельный overwrite-файл data/<id>/progress.json {progress_pct, windows_done, windows_total, updated_at}; status.json остаётся append-лентой lifecycle; API отдаёт progress_pct." },
+    { "id": "SB-D7", "text": "Rollover против 30-мин лимита демона: при ~20 мин без коммита session_final -> новый session_start со сдвигом таймстампов." }
+  ],
+  "steps": [
+    {
+      "id": "SB0.1",
+      "phase": 0,
+      "title": "Plan & ledger",
+      "status": "not-started",
+      "dependsOn": [],
+      "artifacts": ["orchestrator/spec/file-streaming-bridge-plan.md", "orchestrator/spec/file-streaming-bridge-progress.json"],
+      "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB1.1",
+      "phase": 1,
+      "title": "Стрим-драйвер (чистый модуль, DI)",
+      "status": "not-started",
+      "dependsOn": ["SB0.1"],
+      "artifacts": ["orchestrator/src/daemon-stream-driver.ts"],
+      "verify": "tsc/линт зелёные; экспортирован transcribeFileStreaming(endpoint, pcmPath, options, onProgress) с инъекцией WS-фабрики и reader.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB1.2",
+      "phase": 1,
+      "title": "Юнит-тесты стрим-драйвера",
+      "status": "not-started",
+      "dependsOn": ["SB1.1"],
+      "artifacts": ["orchestrator/src/daemon-stream-driver.test.ts"],
+      "verify": "bun test: оконная математика, порядок кадров (session_start -> N бинарных -> flush -> session_final), инкрементальная агрегация segment_final/word_committed, значения onProgress, сброс per-окно таймаута, ошибки, бинарность кадров.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB2.1",
+      "phase": 2,
+      "title": "progress.json в раннере + переключение на мост",
+      "status": "not-started",
+      "dependsOn": ["SB1.2"],
+      "artifacts": ["orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/ws-daemon-runner.test.ts"],
+      "verify": "bun test: runWsDaemonJob вызывает transcribeFileStreaming; onProgress пишет data/<id>/progress.json (атомарно, overwrite); status.json сохраняет processing/ready/failed.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB2.2",
+      "phase": 2,
+      "title": "Статус-API отдаёт прогресс",
+      "status": "not-started",
+      "dependsOn": ["SB2.1"],
+      "artifacts": ["orchestrator/src/job-manager.ts", "orchestrator/src/index.ts"],
+      "verify": "bun test: getJobStatus читает progress.json и включает progress_pct/windows; /get_job_status и /list_jobs возвращают progress активной задачи.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB3.1",
+      "phase": 3,
+      "title": "Cutover + rollover-гвард (SB-D7)",
+      "status": "not-started",
+      "dependsOn": ["SB2.2"],
+      "artifacts": ["orchestrator/src/daemon-stream-driver.ts", "orchestrator/src/ws-daemon-runner.ts"],
+      "verify": "bun test: one-shot убран из джоб-пути; при накоплении ~20 мин без коммита драйвер делает session_final->session_start rollover со сдвигом таймстампов (тест с инъекцией).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB3.2",
+      "phase": 3,
+      "title": "E2E на длинном файле против реального whisperdaemon",
+      "status": "not-started",
+      "dependsOn": ["SB3.1"],
+      "artifacts": ["orchestrator/spec/file-streaming-bridge-plan.md"],
+      "verify": "Реальный прогон: инкрементальные segment_final, progress.json 0->100, result.* записаны, status.json -> ready, без таймаута. Регресс на 'Два человека.wav' совпадает.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB3.3",
+      "phase": 3,
+      "title": "Docs",
+      "status": "not-started",
+      "dependsOn": ["SB3.2"],
+      "artifacts": ["EchoRecorder/docs/ARCHITECTURE.md", "services/whisperdaemon/spec/whisperdaemon-jobs-plan.md"],
+      "verify": "ARCHITECTURE.md описывает стриминговый файловый путь и progress.json; в whisperdaemon-jobs-plan добавлена кросс-ссылка на эту инициативу.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SB4.1",
+      "phase": 4,
+      "title": "(non-blocking) Прогресс в мониторе",
+      "status": "not-started",
+      "dependsOn": ["SB2.2"],
+      "artifacts": ["orchestrator/monitor/app/src/main_form.pas"],
+      "verify": "Карточка оркестратора в мониторе показывает progress_pct активной задачи (manual/non-blocking, визуальная проверка).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    }
+  ],
+  "log": []
+}
