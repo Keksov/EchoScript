@@ -9,11 +9,12 @@
   "decisions": [
     { "id": "SB-D1", "text": "Большие файлы идут через существующий стриминговый протокол демона (session_start -> бинарные окна pcm16le -> flush -> session_final), а не одним transcribe_file; демон не меняем." },
     { "id": "SB-D2", "text": "Мост — чистый TS-модуль orchestrator/src/daemon-stream-driver.ts; WS-фабрика и чтение файла инъектируются (DI) для тестов." },
-    { "id": "SB-D3", "text": "Окно = 30 c pcm16le (960000 байт), один бинарный кадр на окно, flush после каждого окна; размер конфигурируем, обсуждается на ревью P0." },
-    { "id": "SB-D4", "text": "Единый путь: все файловые задачи через мост; transcribeFileViaDaemon остаётся только для юнит-тестов/совместимости, из джоб-раннера убирается." },
+    { "id": "SB-D3", "text": "Окно настраивается через config.json (stream_window_ms, дефолт 30000 = 30 c / 960000 байт pcm16le, клампится); один бинарный кадр на окно, flush после каждого окна. Подтверждено владельцем." },
+    { "id": "SB-D4", "text": "Единый путь: ВСЕ файловые задачи через мост; transcribeFileViaDaemon остаётся только для юнит-тестов/совместимости, из джоб-раннера убирается. Подтверждено владельцем." },
     { "id": "SB-D5", "text": "Таймаут per-окно/heartbeat без глобального 10-мин потолка; сбрасывается на каждом входящем событии демона." },
     { "id": "SB-D6", "text": "Прогресс — отдельный overwrite-файл data/<id>/progress.json {progress_pct, windows_done, windows_total, updated_at}; status.json остаётся append-лентой lifecycle; API отдаёт progress_pct." },
-    { "id": "SB-D7", "text": "Rollover против 30-мин лимита демона: при ~20 мин без коммита session_final -> новый session_start со сдвигом таймстампов." }
+    { "id": "SB-D7", "text": "Rollover против 30-мин лимита демона: при ~20 мин без коммита session_final -> новый session_start со сдвигом таймстампов." },
+    { "id": "SB-D8", "text": "Rollover-порог из конфига: config.json stream_rollover_ms, дефолт 1200000 (20 мин)." }
   ],
   "steps": [
     {
@@ -34,7 +35,7 @@
       "status": "not-started",
       "dependsOn": ["SB0.1"],
       "artifacts": ["orchestrator/src/daemon-stream-driver.ts"],
-      "verify": "tsc/линт зелёные; экспортирован transcribeFileStreaming(endpoint, pcmPath, options, onProgress) с инъекцией WS-фабрики и reader.",
+      "verify": "tsc/линт зелёные; экспортирован transcribeFileStreaming(endpoint, pcmPath, options, onProgress) с инъекцией WS-фабрики и reader; размер окна и rollover — параметры options (дефолты 30000/1200000 мс).",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
       "evidence": []
     },
@@ -55,8 +56,8 @@
       "title": "progress.json в раннере + переключение на мост",
       "status": "not-started",
       "dependsOn": ["SB1.2"],
-      "artifacts": ["orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/ws-daemon-runner.test.ts"],
-      "verify": "bun test: runWsDaemonJob вызывает transcribeFileStreaming; onProgress пишет data/<id>/progress.json (атомарно, overwrite); status.json сохраняет processing/ready/failed.",
+      "artifacts": ["orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/ws-daemon-runner.test.ts", "orchestrator/src/config.ts", "config.json"],
+      "verify": "bun test: config.ts читает stream_window_ms (дефолт 30000) и stream_rollover_ms (дефолт 1200000); runWsDaemonJob вызывает transcribeFileStreaming с этими значениями; onProgress пишет data/<id>/progress.json (атомарно, overwrite); status.json сохраняет processing/ready/failed.",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
       "evidence": []
     },
@@ -117,6 +118,7 @@
     }
   ],
   "log": [
-    { "ts": "2026-07-01T19:31:00Z", "step": "SB0.1", "event": "done", "note": "План+леджер созданы; JSON парсится, 9 шагов, DAG ацикличен; commit ce79dff. Пауза на границе фазы 0 для ревью решений SB-D1..SB-D7." }
+    { "ts": "2026-07-01T19:31:00Z", "step": "SB0.1", "event": "done", "note": "План+леджер созданы; JSON парсится, 9 шагов, DAG ацикличен; commit ce79dff. Пауза на границе фазы 0 для ревью решений SB-D1..SB-D7." },
+    { "ts": "2026-07-01T19:33:00Z", "step": "SB0.1", "event": "decisions-refined", "note": "Ревью владельца: SB-D3 — размер окна из config.json (stream_window_ms, дефолт 30000); SB-D4 подтверждён (все файлы через мост); добавлен SB-D8 (stream_rollover_ms, дефолт 1200000)." }
   ]
 }
