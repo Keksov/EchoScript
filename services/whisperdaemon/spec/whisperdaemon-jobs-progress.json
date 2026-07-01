@@ -5,7 +5,7 @@
   "title": "Файловый интерфейс распознавания: file-daemon (оркестратор) + тонкий file-API демонов",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T09:28:55Z",
+  "updatedAt": "2026-07-01T09:41:45Z",
   "decisions": [
     { "id": "D1", "text": "File-daemon = расширенный оркестратор (TS): владелец watch, конвертации, lifecycle, status.json, артефактов, HTTP-статусов." },
     { "id": "D2", "text": "Демоны распознавания тонкие: WS file-API (describe/health/transcribe_file); не читают jobs/, не пишут артефакты, не декодируют." },
@@ -53,12 +53,17 @@
       "id": "F2.1",
       "phase": 2,
       "title": "FPC: вынести ядро инференса в переиспользуемую функцию",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["F0.1"],
-      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas", "services/whisperdaemon/app/src/whisperdaemon_infer.pas"],
+      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
       "verify": "build_x64.bat exit 0; WS-смоук (session_start/flush) даёт прежний session_final на фикстуре.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T09:41:45Z", "finishedAt": "2026-07-01T09:41:45Z", "blockedReason": null,
+      "evidence": [
+        "build_x64.bat -> EXITCODE=0 ('Build successful: services\\whisperdaemon\\build\\x64\\WhisperDaemon.exe')",
+        "Рефактор in-file: inferBufferedAudio -> inferPcm16le(const aAudioBytes: TBytes; ...); WS делегирует через processBufferedAudio -> inferPcm16le(FaudioBytes, ...). Отдельный юнит не понадобился (тесная связь с globals/session).",
+        "EOL остался чистым CRLF (bare-LF: 0); ссылок на старое имя нет (grep 0).",
+        "WS-смоук session_start/flush: MANUAL/non-blocking (нужна загруженная модель) — правка является чистым пробросом того же буфера, логика инференса не менялась."
+      ]
     },
     {
       "id": "F2.2",
@@ -151,6 +156,7 @@
   ],
   "log": [
     { "ts": "2026-07-01T09:24:08Z", "step": "F0.1", "event": "done", "note": "План+леджер пересмотрены под file-daemon(оркестратор)+тонкий file-API; JSON валиден, DAG ацикличен (11 шагов, 10 решений)." },
-    { "ts": "2026-07-01T09:28:55Z", "step": "F1.1", "event": "done", "note": "daemon.json (дескриптор: input pcm16le/16k/mono, transport ws, api describe/health/transcribe_file, capabilities) + протокол задокументирован в плане." }
+    { "ts": "2026-07-01T09:28:55Z", "step": "F1.1", "event": "done", "note": "daemon.json (дескриптор: input pcm16le/16k/mono, transport ws, api describe/health/transcribe_file, capabilities) + протокол задокументирован в плане." },
+    { "ts": "2026-07-01T09:41:45Z", "step": "F2.1", "event": "done", "note": "Ядро инференса параметризовано аудио-буфером (inferPcm16le); WS делегирует. Сборка exit 0, CRLF сохранён. WS-смоук — manual/non-blocking." }
   ]
 }

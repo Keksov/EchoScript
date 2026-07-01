@@ -206,7 +206,7 @@ type
                   var aWordEvents: TWhisperWordEvents;
                   var aWordEventCount: Integer
                 );
-    procedure   inferBufferedAudio(
+    procedure   inferPcm16le(const aAudioBytes: TBytes;
                   out aBatchText: string;
                   out aSegmentTexts: TStringArray;
                   out aSegmentT0s: TInt64Array;
@@ -1255,7 +1255,7 @@ begin
   flushWord;
 end;
 
-procedure TWhisperDaemonSession.inferBufferedAudio(
+procedure TWhisperDaemonSession.inferPcm16le(const aAudioBytes: TBytes;
   out aBatchText: string;
   out aSegmentTexts: TStringArray;
   out aSegmentT0s: TInt64Array;
@@ -1299,7 +1299,7 @@ begin
   ]);
 
   ensureWarmupReady(FmodelName);
-  pcm := bytesToPcmFloat(FaudioBytes);
+  pcm := bytesToPcmFloat(aAudioBytes);
   if Length(pcm) = 0 then
     Exit;
 
@@ -1433,7 +1433,7 @@ begin
     Exit;
   end;
 
-  inferBufferedAudio(batchText, segmentTexts, segmentT0s, segmentT1s, wordEvents, wordEventCount, collectedCount);
+  inferPcm16le(FaudioBytes, batchText, segmentTexts, segmentT0s, segmentT1s, wordEvents, wordEventCount, collectedCount);
   if aFinalizeSession then
     shouldCommit := True
   else

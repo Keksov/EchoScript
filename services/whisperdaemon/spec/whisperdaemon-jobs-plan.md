@@ -75,7 +75,7 @@ Authoritative progress ledger: [whisperdaemon-jobs-progress.json](whisperdaemon-
 ## Steps (mirror the ledger)
 - [x] **F0.1 — Пересмотр плана + леджера.** JSON валиден, DAG ацикличен.
 - [x] **F1.1 — Контракт дескриптора + `services/whisperdaemon/daemon.json`** (accepted input pcm16le/16k/mono, transport ws host/port, capabilities). Документируем схему.
-- [ ] **F2.1 — FPC: вынести ядро инференса** в переиспользуемую функцию (pcm16le+lang → segments/words/text/lang); WS-путь делегирует. Поведение WS без изменений.
+- [x] **F2.1 — FPC: вынести ядро инференса** в переиспользуемую функцию (pcm16le+lang → segments/words/text/lang); WS-путь делегирует. Поведение WS без изменений. *(in-file: `inferBufferedAudio`→`inferPcm16le(aAudioBytes)`; отдельный юнит не понадобился)*
 - [ ] **F2.2 — FPC: события `describe` + `health`** (отдают дескриптор из `daemon.json` / состояние прогрева).
 - [ ] **F2.3 — FPC: событие `transcribe_file`** (читает pcm16le-файл по пути, инференс под `gInferenceLock`, отдаёт segment_final/word_committed/session_final).
 - [ ] **F3.1 — TS: ffmpeg-конвертация** input → `data/<id>/audio.pcm` (pcm16le 16k mono) в конвейере диспетча; путь ffmpeg из конфига/env.
