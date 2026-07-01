@@ -78,7 +78,7 @@ CLI на FPC (`orchestrator/monitor/cli`) — запрос статуса/health
 - [x] **M2.1 — monitor-core: инвентарь** `daemons.json` + загрузчик/типы (Pascal). Парсинг + unit-тест (10/10).
 - [x] **M2.2 — monitor-core: статус** (порт-открыт + WS `health`-клиент). Unit 6/6 + живой опрос реального демона. *(процесс-живость = порт-открыт для server-демона)*
 - [x] **M2.3 — monitor-core: управление** (start/stop/restart через скрипты; спавн инъектируется для тестов). *(unit 10/10)*
-- [ ] **M3.1 — CLI** (`orchestrator/monitor/cli`): `list`, `status [--json]`, `start/stop/restart <name>`. Сборка + E2E.
+- [x] **M3.1 — CLI** (`orchestrator/monitor/cli`): `list`, `status [--json]`, `start/stop/restart <name>`. Сборка + E2E (live diarization). 
 - [ ] **M4.1 — GUI** (`orchestrator/monitor/app`, Lazarus+Pixie): таблица статусов с опросом ядра. `lazbuild` + скриншот.
 - [ ] **M4.2 — GUI: действия** start/stop/restart (кнопки → ядро). `lazbuild` + ручная проверка.
 - [ ] **M5.1 — Документация и ops** (README, build/run-скрипты, описание `daemons.json`).
