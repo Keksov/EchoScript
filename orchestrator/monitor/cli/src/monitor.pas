@@ -215,6 +215,21 @@ begin
     Exit(2);
   end;
 
+  if SameText(it.HealthKind, 'http') then
+  begin
+    if httpGetRoot(it.Host, it.Port, 3000, json) then
+    begin
+      WriteLn(json);
+      Result := 0;
+    end
+    else
+    begin
+      WriteLn(StdErr, aName, ': describe unavailable (HTTP GET / не удался)');
+      Result := 1;
+    end;
+    Exit;
+  end;
+
   if queryDaemonDescribe(it, json, 3000) then
   begin
     WriteLn(json);

@@ -29,6 +29,7 @@ type
   TGuiStatus = record
     Name        : string;
     Endpoint    : string;
+    Port        : Integer;
     State       : string;
     Pid         : Integer;
     Reachable   : Boolean;
@@ -215,6 +216,7 @@ begin
         Continue;
       obj := TJSONObject(arr.Items[idx]);
       aStatuses[idx].Name := obj.Get('name', '');
+      aStatuses[idx].Port := obj.Get('port', 0);
       aStatuses[idx].Endpoint := obj.Get('host', '') + ':' + IntToStr(obj.Get('port', 0));
       aStatuses[idx].State := obj.Get('state', '');
       aStatuses[idx].Pid := obj.Get('pid', 0);
@@ -299,6 +301,7 @@ begin
   for idx := 0 to High(Finv) do
   begin
     Fstatuses[idx].Name := Finv[idx].Name;
+    Fstatuses[idx].Port := Finv[idx].Port;
     Fstatuses[idx].Endpoint := Finv[idx].Host + ':' + IntToStr(Finv[idx].Port);
     Fstatuses[idx].State := 'ожидание';
     Fstatuses[idx].Pid := 0;
@@ -458,13 +461,23 @@ begin
 
   if root <> nil then
   begin
-    html := html + row('Формат входа', htmlEscape(fmt));
-    html := html + row('Языки', htmlEscape(langs));
-    html := html + row('Режимы', htmlEscape(modes));
-    html := html + row('Диаризация', boolStr(capObj, 'diarization'));
-    html := html + row('Word timestamps', boolStr(capObj, 'word_timestamps'));
-    html := html + row('Streaming WS', boolStr(capObj, 'streaming_ws'));
-    html := html + row('File API', boolStr(capObj, 'file_api'));
+    if root.Find('jobs_root') <> nil then
+    begin
+      { HTTP-демон (оркестратор / file-daemon) }
+      html := html + row('Jobs-директория', htmlEscape(strOf(root, 'jobs_root')));
+      html := html + row('Активная модель', htmlEscape(strOf(root, 'active_model')));
+      html := html + row('Запущенные модели', htmlEscape(arrStr(root, 'running_models')));
+    end
+    else
+    begin
+      html := html + row('Формат входа', htmlEscape(fmt));
+      html := html + row('Языки', htmlEscape(langs));
+      html := html + row('Режимы', htmlEscape(modes));
+      html := html + row('Диаризация', boolStr(capObj, 'diarization'));
+      html := html + row('Word timestamps', boolStr(capObj, 'word_timestamps'));
+      html := html + row('Streaming WS', boolStr(capObj, 'streaming_ws'));
+      html := html + row('File API', boolStr(capObj, 'file_api'));
+    end;
   end
   else
     html := html + row('Дескриптор', '<span style="color:#9a3412">недоступен (демон не отвечает)</span>');
@@ -512,7 +525,7 @@ begin
         chevron := '&#9656; ';
       html.Add(
         '<tr><td><a href="toggle:' + htmlEscape(s.Name) + '" style="text-decoration:none;color:#1c1917;font-weight:600">' +
-          chevron + htmlEscape(s.Name) + '</a></td>' +
+          chevron + htmlEscape(s.Name) + '</a> <span style="color:#6b7280;font-weight:400">:' + IntToStr(s.Port) + '</span></td>' +
         '<td><span class="dot" style="background:' + stateColor(s.State) + '"></span>' +
           '<strong style="color:' + stateColor(s.State) + '">' + htmlEscape(s.State) + '</strong></td>' +
         '<td class="muted">' + htmlEscape(s.Endpoint) + '</td>' +

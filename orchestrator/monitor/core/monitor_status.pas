@@ -33,6 +33,7 @@ function    isPortOpen(const aHost: string; aPort: Integer): Boolean;
 function    queryDaemonStatus(const aItem: TDaemonInventoryItem; aWsTimeoutMs: Integer = 2000): TDaemonStatus;
 function    queryInventoryStatuses(const aInventory: TDaemonInventory; aWsTimeoutMs: Integer = 2000): TDaemonStatuses;
 function    queryDaemonDescribe(const aItem: TDaemonInventoryItem; out aJson: string; aTimeoutMs: Integer = 3000): Boolean;
+function    httpGetRoot(const aHost: string; aPort: Integer; aTimeoutMs: Integer; out aBody: string): Boolean;
 
 implementation
 
@@ -371,6 +372,29 @@ begin
   finally
     client.Free;
     probe.Free;
+  end;
+end;
+
+{ Сырой GET / (для http-демонов: дескриптор = тело ответа, напр. с jobs_root). }
+function httpGetRoot(const aHost: string; aPort: Integer; aTimeoutMs: Integer; out aBody: string): Boolean;
+var
+  client: TFPHTTPClient;
+begin
+  Result := False;
+  aBody := '';
+  client := TFPHTTPClient.Create(nil);
+  try
+    client.ConnectTimeout := aTimeoutMs;
+    client.IOTimeout := aTimeoutMs;
+    try
+      aBody := client.Get('http://' + aHost + ':' + IntToStr(aPort) + '/');
+      Result := Trim(aBody) <> '';
+    except
+      on E: Exception do
+        Result := False;
+    end;
+  finally
+    client.Free;
   end;
 end;
 

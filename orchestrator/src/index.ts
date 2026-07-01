@@ -183,6 +183,7 @@ app.get("/", async (c) => {
   return c.json({
     service: "echoscript-orchestrator",
     status: "ok",
+    jobs_root: config.jobsRoot,
     active_job_id: schedulerState.activeJobId,
     active_model: schedulerState.activeModel,
     running_models: runningModels,
