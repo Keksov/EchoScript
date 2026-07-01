@@ -69,6 +69,7 @@ begin
   WriteLn('  start <name>                запустить демон (start-скрипт)');
   WriteLn('  stop <name>                 остановить демон (stop-скрипт)');
   WriteLn('  restart <name>              перезапустить (stop -> start)');
+  WriteLn('  describe <name>             дескриптор демона (JSON) через WS describe');
   WriteLn('  -h, --help                  показать справку');
 end;
 
@@ -198,6 +199,34 @@ begin
   Result := rc;
 end;
 
+function cmdDescribe(const aInv: TDaemonInventory; const aName: string): Integer;
+var
+  it: TDaemonInventoryItem;
+  json: string;
+begin
+  if aName = '' then
+  begin
+    WriteLn(StdErr, 'describe requires a daemon name');
+    Exit(2);
+  end;
+  if not findDaemon(aInv, aName, it) then
+  begin
+    WriteLn(StdErr, 'Unknown daemon: ', aName);
+    Exit(2);
+  end;
+
+  if queryDaemonDescribe(it, json, 3000) then
+  begin
+    WriteLn(json);
+    Result := 0;
+  end
+  else
+  begin
+    WriteLn(StdErr, aName, ': describe unavailable (демон недоступен)');
+    Result := 1;
+  end;
+end;
+
 var
   command: string;
   inv: TDaemonInventory;
@@ -233,6 +262,8 @@ begin
       Halt(cmdStatus(inv, positionalArg(2), hasFlag('--json')))
     else if (command = 'start') or (command = 'stop') or (command = 'restart') then
       Halt(cmdControl(inv, command, positionalArg(2), resolveProjectRoot))
+    else if command = 'describe' then
+      Halt(cmdDescribe(inv, positionalArg(2)))
     else
     begin
       WriteLn(StdErr, 'Unknown command: ', command);

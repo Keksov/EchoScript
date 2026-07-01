@@ -32,6 +32,7 @@ function    parseHealthAck(const aJson: string; out aState, aModel, aError: stri
 function    isPortOpen(const aHost: string; aPort: Integer): Boolean;
 function    queryDaemonStatus(const aItem: TDaemonInventoryItem; aWsTimeoutMs: Integer = 2000): TDaemonStatus;
 function    queryInventoryStatuses(const aInventory: TDaemonInventory; aWsTimeoutMs: Integer = 2000): TDaemonStatuses;
+function    queryDaemonDescribe(const aItem: TDaemonInventoryItem; out aJson: string; aTimeoutMs: Integer = 3000): Boolean;
 
 implementation
 
@@ -270,6 +271,100 @@ begin
       aState := probe.State;
       aModel := probe.Model;
       aError := probe.Err;
+      Result := True;
+    end;
+  finally
+    client.Free;
+    probe.Free;
+  end;
+end;
+
+type
+  TWsDescribeProbe = class
+  private
+    FGot  : Boolean;
+    FJson : string;
+  public
+    procedure   onMessage(Sender: TObject; const aMessage: TWSMessage);
+    property    Got: Boolean read FGot;
+    property    Json: string read FJson;
+  end;
+
+procedure TWsDescribeProbe.onMessage(Sender: TObject; const aMessage: TWSMessage);
+var
+  data: TJSONData;
+  root: TJSONObject;
+begin
+  if not aMessage.IsText then
+    Exit;
+  data := nil;
+  try
+    data := GetJSON(aMessage.AsString);
+  except
+    on E: Exception do
+      Exit;
+  end;
+  try
+    if data.JSONType <> jtObject then
+      Exit;
+    root := TJSONObject(data);
+    if LowerCase(Trim(jsonStr(root, 'event'))) = 'describe_ack' then
+    begin
+      FJson := aMessage.AsString;
+      FGot := True;
+    end;
+  finally
+    data.Free;
+  end;
+end;
+
+function queryDaemonDescribe(const aItem: TDaemonInventoryItem; out aJson: string; aTimeoutMs: Integer = 3000): Boolean;
+var
+  client: TWebsocketClient;
+  probe: TWsDescribeProbe;
+  endTick: QWord;
+  rc: TIncomingResult;
+  resource: string;
+begin
+  Result := False;
+  aJson := '';
+  probe := TWsDescribeProbe.Create;
+  client := TWebsocketClient.Create(nil);
+  try
+    client.ConnectTimeout := 1500;
+    client.CheckTimeout := 50;
+    client.HostName := aItem.Host;
+    client.Port := aItem.Port;
+    resource := Trim(aItem.WsResource);
+    if resource = '' then
+      resource := '/';
+    client.Resource := resource;
+    client.OnMessageReceived := @probe.onMessage;
+
+    try
+      client.Connect;
+    except
+      on E: Exception do
+        Exit(False);
+    end;
+
+    client.SendMessage('{"event":"describe"}');
+
+    endTick := GetTickCount64 + QWord(aTimeoutMs);
+    repeat
+      rc := client.CheckIncoming;
+      if probe.Got then
+        Break;
+      if rc = irClose then
+        Break;
+      if GetTickCount64 >= endTick then
+        Break;
+      Sleep(10);
+    until False;
+
+    if probe.Got then
+    begin
+      aJson := probe.Json;
       Result := True;
     end;
   finally

@@ -58,6 +58,8 @@ type
     Fstatuses         : TGuiStatuses;
     FlastUpdated      : TDateTime;
     Fbusy             : Boolean;
+    FexpandedName     : string;
+    FdetailJson       : string;
     procedure   buildUi;
     procedure   buildSkeleton;
     procedure   asyncFirstRefresh({%H-}aData: PtrInt);
@@ -78,6 +80,8 @@ type
     function    inventoryPath: string;
     function    runMonitor(const aArgs: array of string; out aOutput: string): Boolean;
     function    parseStatuses(const aJson: string; out aStatuses: TGuiStatuses): Boolean;
+    procedure   onAnchorClick({%H-}Sender: TObject; const aUrl: string);
+    function    detailCardHtml(const aStatus: TGuiStatus): string;
     procedure   renderStatuses(const aNote: string);
     procedure   renderError(const aMessage: string);
   end;
@@ -328,6 +332,7 @@ begin
   FhtmlView.Parent := Self;
   FhtmlView.Align := alClient;
   FhtmlView.Color := $00F4F0E8;
+  FhtmlView.OnAnchorClick := @onAnchorClick;
 
   Ftimer := TTimer.Create(Self);
   Ftimer.Interval := 5000;
@@ -406,6 +411,7 @@ var
   idx: Integer;
   s: TGuiStatus;
   html: TStringList;
+  chevron: string;
 begin
   html := TStringList.Create;
   try
@@ -423,8 +429,13 @@ begin
     for idx := 0 to High(Fstatuses) do
     begin
       s := Fstatuses[idx];
+      if s.Name = FexpandedName then
+        chevron := '&#9662; '
+      else
+        chevron := '&#9656; ';
       html.Add(
-        '<tr><td>' + htmlEscape(s.Name) + '</td>' +
+        '<tr><td><a href="toggle:' + htmlEscape(s.Name) + '" style="text-decoration:none;color:#1c1917;font-weight:600">' +
+          chevron + htmlEscape(s.Name) + '</a></td>' +
         '<td><span class="dot" style="background:' + stateColor(s.State) + '"></span>' +
           '<strong style="color:' + stateColor(s.State) + '">' + htmlEscape(s.State) + '</strong></td>' +
         '<td class="muted">' + htmlEscape(s.Endpoint) + '</td>' +
@@ -432,6 +443,8 @@ begin
         '<td>' + BoolToStr(s.Reachable, 'да', 'нет') + '</td>' +
         '<td>' + htmlEscape(s.Model) + '</td></tr>'
       );
+      if s.Name = FexpandedName then
+        html.Add('<tr><td colspan="6" style="padding:0;background:#f8f4ec;">' + detailCardHtml(s) + '</td></tr>');
     end;
     html.Add('</table>');
     html.Add('<p class="muted" style="margin-top:14px;">' + htmlEscape(aNote) + '</p>');
@@ -440,6 +453,178 @@ begin
   finally
     html.Free;
   end;
+end;
+
+procedure TMonitorForm.onAnchorClick(Sender: TObject; const aUrl: string);
+var
+  daemonName: string;
+  descJson: string;
+begin
+  if Copy(aUrl, 1, 7) <> 'toggle:' then
+    Exit;
+  daemonName := Copy(aUrl, 8, MaxInt);
+  if Fbusy then
+    Exit;
+
+  { повторный клик по раскрытому — закрыть }
+  if SameText(FexpandedName, daemonName) then
+  begin
+    FexpandedName := '';
+    FdetailJson := '';
+    renderStatuses(footerNote);
+    Exit;
+  end;
+
+  FexpandedName := daemonName;
+  FdetailJson := '';
+  setBusy(True);
+  Screen.Cursor := crAppStart;
+  try
+    if runMonitor(['describe', daemonName], descJson) then
+      FdetailJson := descJson;
+  finally
+    Screen.Cursor := crDefault;
+    setBusy(False);
+  end;
+  renderStatuses(footerNote);
+end;
+
+function TMonitorForm.detailCardHtml(const aStatus: TGuiStatus): string;
+var
+  invItem: TDaemonInventoryItem;
+  hasInv: Boolean;
+  data: TJSONData;
+  root: TJSONObject;
+  daeObj, inpObj, capObj: TJSONObject;
+  engine, codec, langs, modes, fmt, html: string;
+
+  function objOf(const aName: string): TJSONObject;
+  var d: TJSONData;
+  begin
+    Result := nil;
+    if root = nil then Exit;
+    d := root.Find(aName);
+    if (d <> nil) and (d.JSONType = jtObject) then
+      Result := TJSONObject(d);
+  end;
+
+  function arrStr(aObj: TJSONObject; const aName: string): string;
+  var d: TJSONData; a: TJSONArray; i: Integer;
+  begin
+    Result := '';
+    if aObj = nil then Exit;
+    d := aObj.Find(aName);
+    if (d = nil) or (d.JSONType <> jtArray) then Exit;
+    a := TJSONArray(d);
+    for i := 0 to a.Count - 1 do
+    begin
+      if Result <> '' then Result := Result + ', ';
+      Result := Result + a.Items[i].AsString;
+    end;
+  end;
+
+  function boolStr(aObj: TJSONObject; const aName: string): string;
+  var d: TJSONData;
+  begin
+    Result := '—';
+    if aObj = nil then Exit;
+    d := aObj.Find(aName);
+    if (d <> nil) and (d.JSONType = jtBoolean) then
+    begin
+      if d.AsBoolean then Result := 'да' else Result := 'нет';
+    end;
+  end;
+
+  function strOf(aObj: TJSONObject; const aName: string): string;
+  var d: TJSONData;
+  begin
+    Result := '';
+    if aObj = nil then Exit;
+    d := aObj.Find(aName);
+    if (d <> nil) and (d.JSONType <> jtNull) then Result := d.AsString;
+  end;
+
+  function intOf(aObj: TJSONObject; const aName: string): Integer;
+  var d: TJSONData;
+  begin
+    Result := 0;
+    if aObj = nil then Exit;
+    d := aObj.Find(aName);
+    if (d <> nil) and (d.JSONType = jtNumber) then Result := d.AsInteger;
+  end;
+
+  function row(const aLabel, aValue: string): string;
+  begin
+    Result := '<div style="display:flex;gap:10px;margin:3px 0;">' +
+      '<div style="min-width:150px;color:#6b7280;">' + aLabel + '</div>' +
+      '<div>' + aValue + '</div></div>';
+  end;
+
+begin
+  hasInv := findDaemon(Finv, aStatus.Name, invItem);
+  root := nil;
+  data := nil;
+  if Trim(FdetailJson) <> '' then
+  begin
+    try
+      data := GetJSON(FdetailJson);
+    except
+      on E: Exception do
+        data := nil;
+    end;
+    if (data <> nil) and (data.JSONType = jtObject) then
+      root := TJSONObject(data);
+  end;
+
+  daeObj := objOf('daemon');
+  inpObj := objOf('input');
+  capObj := objOf('capabilities');
+
+  engine := strOf(daeObj, 'engine');
+  codec := strOf(inpObj, 'codec');
+  if codec <> '' then
+    fmt := codec + ' · ' + IntToStr(intOf(inpObj, 'sample_rate_hz')) + ' Hz · ' +
+      IntToStr(intOf(inpObj, 'channels')) + ' ch'
+  else
+    fmt := '—';
+  langs := arrStr(capObj, 'languages');
+  modes := arrStr(capObj, 'modes');
+
+  html := '<div style="padding:14px 18px;border-top:1px solid #e5dccd;">';
+  html := html + '<div style="font-weight:600;margin-bottom:8px;">Подробности: ' + htmlEscape(aStatus.Name) + '</div>';
+  html := html + row('Состояние', htmlEscape(aStatus.State) +
+    '  ·  reachable: ' + BoolToStr(aStatus.Reachable, 'да', 'нет') +
+    '  ·  PID: ' + BoolToStr(aStatus.Pid > 0, IntToStr(aStatus.Pid), '—'));
+  html := html + row('Подключение', 'ws://' + htmlEscape(aStatus.Endpoint) + '/');
+  if hasInv then
+    html := html + row('Тип', htmlEscape(invItem.Kind) +
+      BoolToStr(engine <> '', '  ·  движок: ' + htmlEscape(engine), ''));
+  html := html + row('Модель', htmlEscape(aStatus.Model));
+
+  if root <> nil then
+  begin
+    html := html + row('Формат входа', htmlEscape(fmt));
+    html := html + row('Языки', htmlEscape(langs));
+    html := html + row('Режимы', htmlEscape(modes));
+    html := html + row('Диаризация', boolStr(capObj, 'diarization'));
+    html := html + row('Word timestamps', boolStr(capObj, 'word_timestamps'));
+    html := html + row('Streaming WS', boolStr(capObj, 'streaming_ws'));
+    html := html + row('File API', boolStr(capObj, 'file_api'));
+  end
+  else
+    html := html + row('Дескриптор', '<span style="color:#9a3412">недоступен (демон не отвечает)</span>');
+
+  if hasInv then
+  begin
+    html := html + row('Start-скрипт', '<span style="color:#6b7280">' + htmlEscape(invItem.StartScript) + '</span>');
+    html := html + row('Stop-скрипт', '<span style="color:#6b7280">' + htmlEscape(invItem.StopScript) + '</span>');
+  end;
+
+  html := html + '</div>';
+
+  if data <> nil then
+    data.Free;
+  Result := html;
 end;
 
 { Первоначальный полный опрос — прогрессивно, по одному демону (видно прогрев). }
