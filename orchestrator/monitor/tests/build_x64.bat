@@ -18,6 +18,7 @@ echo Using FPC: %FPC%
 
 call :build_run test_monitor_core || goto :fail
 call :build_run test_monitor_status || goto :fail
+call :build_run test_monitor_control || goto :fail
 
 popd
 endlocal
