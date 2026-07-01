@@ -12,6 +12,12 @@ export interface SpeechConfig {
   readonly commandGrammars: Readonly<Record<string, readonly string[]>>;
 }
 
+export interface WsDaemonConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly modelName: string;
+}
+
 export interface AppConfig {
   readonly projectRoot: string;
   readonly jobsRoot: string;
@@ -23,6 +29,7 @@ export interface AppConfig {
   readonly ffmpegPath: string;
   readonly speech: SpeechConfig;
   readonly models: Readonly<Record<string, ModelConfig>>;
+  readonly wsDaemons: Readonly<Record<string, WsDaemonConfig>>;
 }
 
 interface RawModelConfig {
@@ -45,6 +52,7 @@ interface RawConfig {
   readonly ffmpeg_path?: unknown;
   readonly speech?: unknown;
   readonly models?: unknown;
+  readonly ws_daemons?: unknown;
 }
 
 const defaultVenvPython = process.platform === "win32" ? "venv/Scripts/python.exe" : "venv/bin/python";
@@ -159,6 +167,32 @@ const resolveSpeechConfig = (rawConfig: RawSpeechConfig | null): SpeechConfig =>
   };
 };
 
+const resolveWsDaemons = (raw: unknown): Record<string, WsDaemonConfig> => {
+  const result: Record<string, WsDaemonConfig> = {};
+  if (!isRecord(raw)) {
+    return result;
+  }
+
+  for (const [name, value] of Object.entries(raw)) {
+    if (!isRecord(value)) {
+      continue;
+    }
+
+    const port = asNumber(value.port);
+    if (port === null) {
+      throw new Error(`ws_daemons.${name}: numeric port is required`);
+    }
+
+    result[name] = {
+      host: asString(value.host) ?? "127.0.0.1",
+      port,
+      modelName: asString(value.model_name) ?? name,
+    };
+  }
+
+  return result;
+};
+
 export const loadConfig = async (): Promise<AppConfig> => {
   const configPath = path.join(PROJECT_ROOT, "config.json");
   const rawText = await readFile(configPath, "utf-8");
@@ -215,5 +249,6 @@ export const loadConfig = async (): Promise<AppConfig> => {
     ffmpegPath: path.resolve(PROJECT_ROOT, configuredFfmpegPath),
     speech: resolveSpeechConfig(isRecord(rawConfig.speech) ? (rawConfig.speech as RawSpeechConfig) : null),
     models,
+    wsDaemons: resolveWsDaemons(rawConfig.ws_daemons),
   };
 };

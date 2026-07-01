@@ -5,7 +5,7 @@
   "title": "Файловый интерфейс распознавания: file-daemon (оркестратор) + тонкий file-API демонов",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T10:17:58Z",
+  "updatedAt": "2026-07-01T10:34:27Z",
   "decisions": [
     { "id": "D1", "text": "File-daemon = расширенный оркестратор (TS): владелец watch, конвертации, lifecycle, status.json, артефактов, HTTP-статусов." },
     { "id": "D2", "text": "Демоны распознавания тонкие: WS file-API (describe/health/transcribe_file); не читают jobs/, не пишут артефакты, не декодируют." },
@@ -117,12 +117,18 @@
       "id": "F3.2",
       "phase": 3,
       "title": "TS: daemon-driver (WS-клиент) + конфиг ws-daemon моделей",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["F1.1", "F2.2"],
-      "artifacts": ["orchestrator/src/daemon-driver.ts", "orchestrator/src/config.ts", "config.json"],
+      "artifacts": ["orchestrator/src/daemon-driver.ts", "orchestrator/src/daemon-driver.test.ts", "orchestrator/src/config.ts", "config.json"],
       "verify": "bun test зелёный; driver против запущенного whisperdaemon: describe -> transcribe_file -> собранный normalized-результат (сегменты, текст, язык).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T10:34:27Z", "finishedAt": "2026-07-01T10:34:27Z", "blockedReason": null,
+      "evidence": [
+        "bun test: 4 pass / 0 fail (mock WS-демон: describe_ack; сбор segment/word + session_final; reject на error).",
+        "tsc --noEmit: exit 0.",
+        "Живой прогон драйвера против реального whisperdaemon (:7899) на dva.pcm: lang=ru, durationMs=65088, segments=17, words=98, связный текст.",
+        "config.wsDaemons (секция ws_daemons; whisperdaemon -> 127.0.0.1:7801, model whisper_podlodka), аддитивно, ProcessManager/models не затронуты.",
+        "Примечание: разовый холодный флейк audio-convert теста на первом прогоне; стабильно зелёный на повторах."
+      ]
     },
     {
       "id": "F3.3",
@@ -175,6 +181,8 @@
     { "ts": "2026-07-01T09:41:45Z", "step": "F2.1", "event": "done", "note": "Ядро инференса параметризовано аудио-буфером (inferPcm16le); WS делегирует. Сборка exit 0, CRLF сохранён. WS-смоук — manual/non-blocking." },
     { "ts": "2026-07-01T09:50:09Z", "step": "F2.2", "event": "done", "note": "describe/health реализованы и проверены живым WS-опросом (describe_ack с подменой порта, health_ack state=ready). Сборка exit 0." },
     { "ts": "2026-07-01T10:05:32Z", "step": "F2.3", "event": "done", "note": "transcribe_file реализован и проверен живьём на файле пользователя: session_final request_id=t1, ru, 17 сегментов, 98 слов, связный текст. Конец фазы 2." },
-    { "ts": "2026-07-01T10:17:58Z", "step": "F3.1", "event": "done", "note": "ffmpeg-конвертация (audio-convert.ts) + config.ffmpegPath; ffmpeg скопирован в tools/ffmpeg (gitignored). bun test зелёный. Предсущ. tsc-ошибки в job-manager.ts вне scope." }
+    { "ts": "2026-07-01T10:17:58Z", "step": "F3.1", "event": "done", "note": "ffmpeg-конвертация (audio-convert.ts) + config.ffmpegPath; ffmpeg скопирован в tools/ffmpeg (gitignored). bun test зелёный. Предсущ. tsc-ошибки в job-manager.ts вне scope." },
+    { "ts": "2026-07-01T10:30:00Z", "step": "fix", "event": "done", "note": "Отдельный фикс: tsc-ошибки в job-manager.ts readJobStatusSummary устранены (явные Record|null + bracket-доступ); tsc exit 0." },
+    { "ts": "2026-07-01T10:34:27Z", "step": "F3.2", "event": "done", "note": "daemon-driver (describe/transcribeFileViaDaemon) + config.wsDaemons. bun test 4 pass, tsc 0. Живой прогон против whisperdaemon: ru, 17 сегментов, 98 слов." }
   ]
 }
