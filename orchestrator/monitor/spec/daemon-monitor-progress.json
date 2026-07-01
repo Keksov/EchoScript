@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T14:19:52Z",
+  "updatedAt": "2026-07-01T14:31:47Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -147,12 +147,17 @@
       "id": "M4.1",
       "phase": 4,
       "title": "GUI (Lazarus+Pixie): таблица статусов с опросом ядра",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M2.2"],
-      "artifacts": ["orchestrator/monitor/app/"],
+      "artifacts": ["orchestrator/monitor/app/MonitorApp.lpr", "orchestrator/monitor/app/MonitorApp.lpi", "orchestrator/monitor/app/src/main_form.pas", "orchestrator/monitor/app/src/main_form.lfm", "orchestrator/monitor/app/scripts/build_x64.bat"],
       "verify": "manual/non-blocking: lazbuild зелёный; окно рендерит статусы демонов (скриншот).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T14:31:47Z", "finishedAt": "2026-07-01T14:31:47Z", "blockedReason": null,
+      "evidence": [
+        "lazbuild MonitorApp.lpi -> exit 0 (реальный гейт, не только manual): MonitorApp.exe собран (LCL + Pixie.HtmlView).",
+        "Runtime-smoke: запуск MonitorApp.exe при живом diarizationdaemon:7900 -> процесс жив 5с (FormCreate -> buildUi -> doRefresh -> spawn monitor status --json -> parse -> Pixie render), без краха.",
+        "ОТСТУПЛЕНИЕ (D5a): GUI не линкует monitor_status (fpwebsocket отсутствует в FPC Lazarus 3.2.4; .ppu VendorsCore 3.3.x несовместимы). GUI вызывает CLI monitor status --json (TProcess) и парсит fpjson. Требует собранного CLI.",
+        "Визуальный скриншот — ручной шаг (пиксели в автосреде не снять). build/*.res/*.lps -> .gitignore."
+      ]
     },
     {
       "id": "M4.2",
@@ -185,6 +190,7 @@
     { "ts": "2026-07-01T13:53:36Z", "step": "M2.1", "event": "done", "note": "monitor-core: daemons.json (5 инстансов) + monitor_core.pas (типы + loadDaemonInventory/findDaemon) + unit-тест 10/10 (build exit 0). Начало ядра." },
     { "ts": "2026-07-01T14:03:01Z", "step": "M2.2", "event": "done", "note": "monitor_status.pas: порт (ssockets) + WS health-клиент (fpwebsocketclient); parseHealthAck. Тест 6/6; живой опрос voskdaemon:7799 -> reachable state=loading model=vosk_ru; закрытый порт -> down." },
     { "ts": "2026-07-01T14:10:33Z", "step": "M2.3", "event": "done", "note": "monitor_control.pas: start/stop/restart через скрипты (TScriptRunner инъектируемый; TRealScriptRunner=TProcess). Тест 10/10; fcl-process в -Fu. Конец фазы 2 (ядро готово)." },
-    { "ts": "2026-07-01T14:19:52Z", "step": "M3.1", "event": "done", "note": "CLI monitor.pas (list/status[--json]/start|stop|restart) поверх ядра; сборка exit 0; E2E против живого diarizationdaemon:7900 (list, status table, status --json корректны)." }
+    { "ts": "2026-07-01T14:19:52Z", "step": "M3.1", "event": "done", "note": "CLI monitor.pas (list/status[--json]/start|stop|restart) поверх ядра; сборка exit 0; E2E против живого diarizationdaemon:7900 (list, status table, status --json корректны)." },
+    { "ts": "2026-07-01T14:31:47Z", "step": "M4.1", "event": "done", "note": "GUI (Lazarus+Pixie) MonitorApp: lazbuild exit 0 + runtime-smoke (spawn CLI status --json, Pixie render, без краха). Отступление D5a: GUI поверх CLI (fpwebsocket нет в FPC Lazarus)." }
   ]
 }

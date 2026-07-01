@@ -41,6 +41,11 @@ CLI на FPC (`orchestrator/monitor/cli`) — запрос статуса/health
   включает порт-открыт + процесс-жив; health/describe — где доступно. *(ответ владельца: «сразу добавить WS health»)*
 - **D5 — GUI = Lazarus/LCL + `Pixie.HtmlView`** (как EchoRecorder app; интерфейс рендерится как HTML).
   CLI и core — чистый FPC, без LCL/Pixie.
+- **D5a (уточнение по факту M4.1):** GUI **не линкует** `monitor_status`/`monitor_control`, т.к. `fpwebsocket`
+  отсутствует в FPC Lazarus (3.2.4), а `.ppu` VendorsCore FPC (3.3.x) несовместимы по версии. Поэтому GUI —
+  **тонкий фронт над CLI**: вызывает `monitor status --json` (собран правильным FPC) и рендерит. Это частичное
+  отступление от D1 (общее ядро) в пользу «GUI поверх CLI»; ядро остаётся общим для CLI, а `monitor_core`
+  собирается и под Lazarus. Требует, чтобы CLI был собран до запуска GUI.
 - **D6 — Управление вызывает существующие per-instance скрипты** (`start_*`/`stop_*`), а не переписывает старт/стоп.
 - **D7 — Тулчейн/зависимости:** FPC из `EchoRecorder/VendorsCore`; Pixie из `EchoRecorder/vendors/pixie`
   (пути в `.cfg`/`.lpi`, как у существующих проектов).
@@ -79,7 +84,7 @@ CLI на FPC (`orchestrator/monitor/cli`) — запрос статуса/health
 - [x] **M2.2 — monitor-core: статус** (порт-открыт + WS `health`-клиент). Unit 6/6 + живой опрос реального демона. *(процесс-живость = порт-открыт для server-демона)*
 - [x] **M2.3 — monitor-core: управление** (start/stop/restart через скрипты; спавн инъектируется для тестов). *(unit 10/10)*
 - [x] **M3.1 — CLI** (`orchestrator/monitor/cli`): `list`, `status [--json]`, `start/stop/restart <name>`. Сборка + E2E (live diarization). 
-- [ ] **M4.1 — GUI** (`orchestrator/monitor/app`, Lazarus+Pixie): таблица статусов с опросом ядра. `lazbuild` + скриншот.
+- [x] **M4.1 — GUI** (`orchestrator/monitor/app`, Lazarus+Pixie): таблица статусов через CLI `status --json`. `lazbuild` exit 0 + runtime-smoke. *(скриншот — ручной)*
 - [ ] **M4.2 — GUI: действия** start/stop/restart (кнопки → ядро). `lazbuild` + ручная проверка.
 - [ ] **M5.1 — Документация и ops** (README, build/run-скрипты, описание `daemons.json`).
 

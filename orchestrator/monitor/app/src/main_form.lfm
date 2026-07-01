@@ -1,0 +1,11 @@
+object MonitorForm: TMonitorForm
+  Left = 360
+  Height = 460
+  Top = 200
+  Width = 760
+  Caption = 'Daemon Monitor'
+  ClientHeight = 460
+  ClientWidth = 760
+  LCLVersion = '4.99.0.0'
+  OnCreate = FormCreate
+end
