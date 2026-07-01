@@ -355,6 +355,24 @@ export class JobManager {
     };
   }
 
+  /**
+   * Claim a queued job for external (in-process) processing by a ws-daemon:
+   * mark it pending and remove the queue marker so it is not re-dispatched.
+   * The caller (ws-daemon runner) writes result artifacts and the output marker.
+   */
+  public async claimExternalJob(jobId: string): Promise<void> {
+    assertValidJobId(jobId);
+    await this.ensureJobDataDir(jobId);
+    await this.appendStatus(this.getDataDir(jobId), "pending");
+    try {
+      await unlink(path.join(this.getQueueDir(), `${jobId}.json`));
+    } catch (error) {
+      if (getNodeErrorCode(error) !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+
   public async getJobStatus(jobId: string): Promise<unknown> {
     assertValidJobId(jobId);
     await this.ensureJobDataDir(jobId);

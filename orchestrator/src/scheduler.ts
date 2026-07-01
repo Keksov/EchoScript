@@ -2,10 +2,11 @@ import { watch, type FSWatcher } from "node:fs";
 import { readdir, rename, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
-import type { AppConfig } from "./config";
+import type { AppConfig, WsDaemonConfig } from "./config";
 import { JobManager } from "./job-manager";
 import { getNodeErrorCode } from "./node-error";
 import { ProcessManager } from "./process-manager";
+import { runWsDaemonJob } from "./ws-daemon-runner";
 
 interface SchedulerState {
   readonly activeJobId: string | null;
@@ -169,10 +170,54 @@ export class Scheduler {
       return;
     }
 
+    const wsDaemon = this.findWsDaemonForModel(queuedJob.targetModel);
+    if (wsDaemon !== null) {
+      await this.dispatchWsDaemonJob(queuedJob.jobId, queuedJob.targetModel, wsDaemon);
+      return;
+    }
+
     await this.switchToModel(queuedJob.targetModel);
     await this.jobManager.dispatchJob(queuedJob.jobId, queuedJob.targetModel);
     this.activeJobId = queuedJob.jobId;
     this.activeModel = queuedJob.targetModel;
+  }
+
+  private findWsDaemonForModel(modelName: string): WsDaemonConfig | null {
+    for (const daemon of Object.values(this.config.wsDaemons)) {
+      if (daemon.modelName === modelName) {
+        return daemon;
+      }
+    }
+    return null;
+  }
+
+  private async dispatchWsDaemonJob(
+    jobId: string,
+    targetModel: string,
+    endpoint: WsDaemonConfig,
+  ): Promise<void> {
+    // The ws-daemon is an external always-on process; free any python worker slots first.
+    const runningModels = await this.processManager.listRunningModels();
+    for (const runningModel of runningModels) {
+      await this.processManager.stopModel(runningModel);
+    }
+
+    await this.jobManager.claimExternalJob(jobId);
+    this.activeJobId = jobId;
+    this.activeModel = targetModel;
+
+    // Fire-and-forget: the runner writes result artifacts + output marker (even on
+    // failure), which the scheduler detects to clear the active job.
+    void runWsDaemonJob(jobId, this.jobManager.getDataDir(jobId), this.jobManager.getOutputDir(), {
+      ffmpegPath: this.config.ffmpegPath,
+      endpoint,
+    })
+      .catch((error) => {
+        console.error(`ws-daemon job ${jobId} failed unexpectedly`, error);
+      })
+      .finally(() => {
+        this.triggerDispatch();
+      });
   }
 
   private async switchToModel(modelName: string): Promise<void> {

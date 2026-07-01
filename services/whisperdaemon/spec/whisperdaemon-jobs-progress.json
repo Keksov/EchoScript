@@ -5,7 +5,7 @@
   "title": "Файловый интерфейс распознавания: file-daemon (оркестратор) + тонкий file-API демонов",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T10:34:27Z",
+  "updatedAt": "2026-07-01T10:42:55Z",
   "decisions": [
     { "id": "D1", "text": "File-daemon = расширенный оркестратор (TS): владелец watch, конвертации, lifecycle, status.json, артефактов, HTTP-статусов." },
     { "id": "D2", "text": "Демоны распознавания тонкие: WS file-API (describe/health/transcribe_file); не читают jobs/, не пишут артефакты, не декодируют." },
@@ -134,12 +134,18 @@
       "id": "F3.3",
       "phase": 3,
       "title": "TS: интеграция driver в Scheduler + запись артефактов для ws-daemon",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["F3.1", "F3.2", "F2.3"],
-      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/job-manager.ts"],
+      "artifacts": ["orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/ws-daemon-runner.test.ts", "orchestrator/src/scheduler.ts", "orchestrator/src/job-manager.ts"],
       "verify": "bun test зелёный; для ws-daemon модели: convert+driver вместо python-воркера; пишутся result.json (секунды)/result_plain.txt/result_timestamp.txt/переходы status.json/output-маркер по контракту.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T10:42:55Z", "finishedAt": "2026-07-01T10:42:55Z", "blockedReason": null,
+      "evidence": [
+        "bun test: 6 pass / 0 fail (31 expect) — включая 2 теста ws-daemon-runner: контракт артефактов (result.json секунды, plain, timestamp '[hh:mm:ss.mmm --> ...]', status processing->ready, output-маркер) и путь ошибки (failed + маркер).",
+        "tsc --noEmit: exit 0.",
+        "Scheduler.dispatchNext: ws-daemon модель (findWsDaemonForModel) -> stop python workers, claimExternalJob (снять queue-маркер, status pending), fire-and-forget runWsDaemonJob; python-путь без изменений.",
+        "JobManager.claimExternalJob добавлен. Полная интеграция scheduler<->реальный демон проверяется E2E в F4.1.",
+        "Известный edge (R2): краш оркестратора в середине ws-задания оставляет job в processing без маркера (не ре-диспатчится). Отмечено для доработки."
+      ]
     },
     {
       "id": "F4.1",
@@ -183,6 +189,7 @@
     { "ts": "2026-07-01T10:05:32Z", "step": "F2.3", "event": "done", "note": "transcribe_file реализован и проверен живьём на файле пользователя: session_final request_id=t1, ru, 17 сегментов, 98 слов, связный текст. Конец фазы 2." },
     { "ts": "2026-07-01T10:17:58Z", "step": "F3.1", "event": "done", "note": "ffmpeg-конвертация (audio-convert.ts) + config.ffmpegPath; ffmpeg скопирован в tools/ffmpeg (gitignored). bun test зелёный. Предсущ. tsc-ошибки в job-manager.ts вне scope." },
     { "ts": "2026-07-01T10:30:00Z", "step": "fix", "event": "done", "note": "Отдельный фикс: tsc-ошибки в job-manager.ts readJobStatusSummary устранены (явные Record|null + bracket-доступ); tsc exit 0." },
-    { "ts": "2026-07-01T10:34:27Z", "step": "F3.2", "event": "done", "note": "daemon-driver (describe/transcribeFileViaDaemon) + config.wsDaemons. bun test 4 pass, tsc 0. Живой прогон против whisperdaemon: ru, 17 сегментов, 98 слов." }
+    { "ts": "2026-07-01T10:34:27Z", "step": "F3.2", "event": "done", "note": "daemon-driver (describe/transcribeFileViaDaemon) + config.wsDaemons. bun test 4 pass, tsc 0. Живой прогон против whisperdaemon: ru, 17 сегментов, 98 слов." },
+    { "ts": "2026-07-01T10:42:55Z", "step": "F3.3", "event": "done", "note": "ws-daemon-runner (convert->driver->артефакты) + JobManager.claimExternalJob + Scheduler.dispatchWsDaemonJob. bun test 6 pass, tsc 0. Конец фазы 3." }
   ]
 }
