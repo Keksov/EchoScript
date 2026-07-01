@@ -85,7 +85,7 @@ Authoritative progress ledger: [file-streaming-bridge-progress.json](file-stream
 
 ## Steps (mirror the ledger)
 - [x] **SB0.1 — Plan & ledger.** Создать оба файла, DAG ацикличен, атомарный коммит.
-- [ ] **SB1.1 — Стрим-драйвер (чистый модуль, DI).** `daemon-stream-driver.ts`:
+- [x] **SB1.1 — Стрим-драйвер (чистый модуль, DI).** `daemon-stream-driver.ts`:
   `transcribeFileStreaming(endpoint, pcmPath, options, onProgress)`.
 - [ ] **SB1.2 — Юнит-тесты драйвера.** Оконная математика, порядок кадров, инкрементальная агрегация,
   прогресс-колбэк, сброс таймаута, ошибки, бинарность кадров.
