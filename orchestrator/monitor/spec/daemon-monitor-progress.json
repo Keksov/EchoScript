@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "complete",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T15:24:23Z",
+  "updatedAt": "2026-07-01T15:37:33Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -222,6 +222,7 @@
     { "ts": "2026-07-01T14:42:32Z", "step": "-", "event": "complete", "note": "Инициатива завершена: 11/11 шагов. 4 демона -> единый WS describe/health; ядро (инвентарь/статус/управление) юнит-тестировано; CLI (E2E) + GUI (lazbuild) работают. build_all зелёный." },
     { "ts": "2026-07-01T14:53:50Z", "step": "M6.1", "event": "done", "note": "Реальная PID-детекция (GetExtendedTcpTable) в ядре/CLI/GUI. build_all exit 0; живая сверка: CLI показал реальный PID демона 16760, закрытые -> 0." },
     { "ts": "2026-07-01T14:53:50Z", "step": "-", "event": "complete", "note": "Доработка 3.а завершена: 12/12 шагов." },
-    { "ts": "2026-07-01T15:24:23Z", "step": "fix", "event": "done", "note": "GUI UX-фикс: окно показывается сразу (скелет из daemons.json), опрос отложен через Application.QueueAsyncCall и идёт по одному демону с ProcessMessages; runMonitor читает неблокирующе. Устранены медленный старт и зависание окна. Проверено: process.Responding=True во время опроса." }
+    { "ts": "2026-07-01T15:24:23Z", "step": "fix", "event": "done", "note": "GUI UX-фикс: окно показывается сразу (скелет из daemons.json), опрос отложен через Application.QueueAsyncCall и идёт по одному демону с ProcessMessages; runMonitor читает неблокирующе. Устранены медленный старт и зависание окна. Проверено: process.Responding=True во время опроса." },
+    { "ts": "2026-07-01T15:37:33Z", "step": "feat", "event": "done", "note": "GUI режимы обновления: Manual по умолчанию (кнопка Refresh, таймер off) + галочка Auto-refresh + Timeout (сек, 5). Старт -> полный опрос (прогрессивный), далее по настройкам. Последующие обновления — тихий полный опрос без 'проверка…' в строках; футер 'Последнее обновление: чч:мм:сс · режим'. lazbuild exit 0, smoke Responding=True." }
   ]
 }

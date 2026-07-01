@@ -2,10 +2,10 @@ unit main_form;
 
 {$mode objfpc}{$H+}
 
-{ GUI-оболочка монитора. Окно показывается сразу (скелет из daemons.json), затем
-  асинхронно опрашивает демонов ПО ОДНОМУ через CLI (monitor status <name> --json),
-  показывая прогресс. WS-часть (fpwebsocket) отсутствует в FPC Lazarus, поэтому health
-  берётся из CLI; инвентарь — из общего ядра monitor_core (без WS). }
+{ GUI-оболочка монитора. Окно показывается сразу (скелет из daemons.json), при старте
+  делается полный опрос (прогрессивно, по одному демону — видно прогрев). Далее —
+  режим Manual (кнопка Refresh) по умолчанию, либо Auto-refresh по таймеру (Timeout, сек).
+  Health берётся из CLI (fpwebsocket отсутствует в FPC Lazarus); инвентарь — из monitor_core. }
 
 interface
 
@@ -21,6 +21,7 @@ uses
   Dialogs,
   ExtCtrls,
   StdCtrls,
+  Spin,
   Pixie.HtmlView,
   monitor_core;
 
@@ -38,31 +39,41 @@ type
   TMonitorForm = class(TForm)
     procedure FormCreate({%H-}Sender: TObject);
   private
-    FhtmlView       : TPixieHtmlView;
-    FtopPanel       : TPanel;
-    FtitleLabel     : TLabel;
-    FdaemonLabel    : TLabel;
-    FdaemonBox      : TComboBox;
-    FstartButton    : TButton;
-    FstopButton     : TButton;
-    FrestartButton  : TButton;
-    FrefreshButton  : TButton;
-    Ftimer          : TTimer;
-    FmonitorExe     : string;
-    FloadError      : string;
-    Finv            : TDaemonInventory;
-    Fstatuses       : TGuiStatuses;
-    Fbusy           : Boolean;
+    FhtmlView         : TPixieHtmlView;
+    FtopPanel         : TPanel;
+    FtitleLabel       : TLabel;
+    FdaemonLabel      : TLabel;
+    FdaemonBox        : TComboBox;
+    FstartButton      : TButton;
+    FstopButton       : TButton;
+    FrestartButton    : TButton;
+    FrefreshButton    : TButton;
+    FautoRefreshCheck : TCheckBox;
+    FtimeoutLabel     : TLabel;
+    FtimeoutSpin      : TSpinEdit;
+    Ftimer            : TTimer;
+    FmonitorExe       : string;
+    FloadError        : string;
+    Finv              : TDaemonInventory;
+    Fstatuses         : TGuiStatuses;
+    FlastUpdated      : TDateTime;
+    Fbusy             : Boolean;
     procedure   buildUi;
     procedure   buildSkeleton;
     procedure   asyncFirstRefresh({%H-}aData: PtrInt);
-    procedure   doRefresh({%H-}Sender: TObject);
-    procedure   progressiveRefresh;
+    procedure   onRefreshClick({%H-}Sender: TObject);
+    procedure   onTimer({%H-}Sender: TObject);
+    procedure   onAutoRefreshChanged({%H-}Sender: TObject);
+    procedure   onTimeoutChanged({%H-}Sender: TObject);
+    procedure   applyRefreshMode;
+    procedure   initialRefresh;
+    procedure   quietRefresh;
     procedure   onStart({%H-}Sender: TObject);
     procedure   onStop({%H-}Sender: TObject);
     procedure   onRestart({%H-}Sender: TObject);
     procedure   controlAction(const aAction: string);
     procedure   setBusy(aBusy: Boolean);
+    function    footerNote: string;
     function    resolveMonitorExe: string;
     function    inventoryPath: string;
     function    runMonitor(const aArgs: array of string; out aOutput: string): Boolean;
@@ -103,7 +114,6 @@ var
   dir: string;
   idx: Integer;
 begin
-  { GUI exe: orchestrator/monitor/app/build/x64 -> monitor.exe в orchestrator/monitor/build/x64 }
   dir := ExtractFileDir(ExpandFileName(ParamStr(0)));
   for idx := 1 to 3 do
     dir := ExtractFileDir(dir);
@@ -115,7 +125,6 @@ var
   dir: string;
   idx: Integer;
 begin
-  { GUI exe: orchestrator/monitor/app/build/x64 -> daemons.json на 3 уровня выше }
   dir := ExtractFileDir(ExpandFileName(ParamStr(0)));
   for idx := 1 to 3 do
     dir := ExtractFileDir(dir);
@@ -164,7 +173,6 @@ begin
       end;
     end;
 
-    { Дочитать остаток после завершения. }
     repeat
       avail := proc.Output.NumBytesAvailable;
       if avail = 0 then
@@ -229,52 +237,53 @@ begin
   FtopPanel := TPanel.Create(Self);
   FtopPanel.Parent := Self;
   FtopPanel.Align := alTop;
-  FtopPanel.Height := 88;
+  FtopPanel.Height := 120;
   FtopPanel.BevelOuter := bvNone;
   FtopPanel.Color := $00E6DED0;
 
   FtitleLabel := TLabel.Create(FtopPanel);
   FtitleLabel.Parent := FtopPanel;
   FtitleLabel.Left := 18;
-  FtitleLabel.Top := 12;
+  FtitleLabel.Top := 10;
   FtitleLabel.Caption := 'Daemon Monitor — статус и управление демонами распознавания';
 
+  { Row 2: выбор демона + управление + Refresh }
   FdaemonLabel := TLabel.Create(FtopPanel);
   FdaemonLabel.Parent := FtopPanel;
   FdaemonLabel.Left := 18;
-  FdaemonLabel.Top := 52;
+  FdaemonLabel.Top := 46;
   FdaemonLabel.Caption := 'Демон:';
 
   FdaemonBox := TComboBox.Create(FtopPanel);
   FdaemonBox.Parent := FtopPanel;
   FdaemonBox.Left := 72;
-  FdaemonBox.Top := 48;
-  FdaemonBox.Width := 200;
+  FdaemonBox.Top := 42;
+  FdaemonBox.Width := 190;
   FdaemonBox.Style := csDropDownList;
 
   FstartButton := TButton.Create(FtopPanel);
   FstartButton.Parent := FtopPanel;
-  FstartButton.Left := 284;
-  FstartButton.Top := 47;
-  FstartButton.Width := 78;
+  FstartButton.Left := 272;
+  FstartButton.Top := 41;
+  FstartButton.Width := 74;
   FstartButton.Height := 28;
   FstartButton.Caption := 'Старт';
   FstartButton.OnClick := @onStart;
 
   FstopButton := TButton.Create(FtopPanel);
   FstopButton.Parent := FtopPanel;
-  FstopButton.Left := 368;
-  FstopButton.Top := 47;
-  FstopButton.Width := 78;
+  FstopButton.Left := 352;
+  FstopButton.Top := 41;
+  FstopButton.Width := 74;
   FstopButton.Height := 28;
   FstopButton.Caption := 'Стоп';
   FstopButton.OnClick := @onStop;
 
   FrestartButton := TButton.Create(FtopPanel);
   FrestartButton.Parent := FtopPanel;
-  FrestartButton.Left := 452;
-  FrestartButton.Top := 47;
-  FrestartButton.Width := 92;
+  FrestartButton.Left := 432;
+  FrestartButton.Top := 41;
+  FrestartButton.Width := 88;
   FrestartButton.Height := 28;
   FrestartButton.Caption := 'Рестарт';
   FrestartButton.OnClick := @onRestart;
@@ -282,12 +291,38 @@ begin
   FrefreshButton := TButton.Create(FtopPanel);
   FrefreshButton.Parent := FtopPanel;
   FrefreshButton.Left := 620;
-  FrefreshButton.Top := 47;
+  FrefreshButton.Top := 41;
   FrefreshButton.Width := 120;
   FrefreshButton.Height := 28;
   FrefreshButton.Anchors := [akTop, akRight];
-  FrefreshButton.Caption := 'Обновить';
-  FrefreshButton.OnClick := @doRefresh;
+  FrefreshButton.Caption := 'Refresh';
+  FrefreshButton.OnClick := @onRefreshClick;
+
+  { Row 3: режим обновления }
+  FautoRefreshCheck := TCheckBox.Create(FtopPanel);
+  FautoRefreshCheck.Parent := FtopPanel;
+  FautoRefreshCheck.Left := 18;
+  FautoRefreshCheck.Top := 84;
+  FautoRefreshCheck.Width := 140;
+  FautoRefreshCheck.Caption := 'Auto-refresh';
+  FautoRefreshCheck.Checked := False;   { Manual по умолчанию }
+  FautoRefreshCheck.OnChange := @onAutoRefreshChanged;
+
+  FtimeoutLabel := TLabel.Create(FtopPanel);
+  FtimeoutLabel.Parent := FtopPanel;
+  FtimeoutLabel.Left := 168;
+  FtimeoutLabel.Top := 86;
+  FtimeoutLabel.Caption := 'Timeout, сек:';
+
+  FtimeoutSpin := TSpinEdit.Create(FtopPanel);
+  FtimeoutSpin.Parent := FtopPanel;
+  FtimeoutSpin.Left := 262;
+  FtimeoutSpin.Top := 82;
+  FtimeoutSpin.Width := 70;
+  FtimeoutSpin.MinValue := 1;
+  FtimeoutSpin.MaxValue := 3600;
+  FtimeoutSpin.Value := 5;
+  FtimeoutSpin.OnChange := @onTimeoutChanged;
 
   FhtmlView := TPixieHtmlView.Create(Self);
   FhtmlView.Parent := Self;
@@ -296,8 +331,8 @@ begin
 
   Ftimer := TTimer.Create(Self);
   Ftimer.Interval := 5000;
-  Ftimer.OnTimer := @doRefresh;
-  Ftimer.Enabled := True;
+  Ftimer.OnTimer := @onTimer;
+  Ftimer.Enabled := False;   { включается только в режиме Auto-refresh }
 end;
 
 procedure TMonitorForm.buildSkeleton;
@@ -324,7 +359,7 @@ begin
   end;
   if FdaemonBox.Items.Count > 0 then
     FdaemonBox.ItemIndex := 0;
-  renderStatuses('Готовим опрос…');
+  renderStatuses('Готовим первоначальный опрос…');
 end;
 
 procedure TMonitorForm.setBusy(aBusy: Boolean);
@@ -334,6 +369,18 @@ begin
   FstopButton.Enabled := not aBusy;
   FrestartButton.Enabled := not aBusy;
   FrefreshButton.Enabled := not aBusy;
+end;
+
+function TMonitorForm.footerNote: string;
+begin
+  if FlastUpdated > 0 then
+    Result := 'Последнее обновление: ' + FormatDateTime('hh:nn:ss', FlastUpdated)
+  else
+    Result := 'Ещё не обновлялось';
+  if FautoRefreshCheck.Checked then
+    Result := Result + ' · авто-обновление каждые ' + IntToStr(FtimeoutSpin.Value) + ' с'
+  else
+    Result := Result + ' · режим: Manual (кнопка Refresh)';
 end;
 
 procedure TMonitorForm.renderError(const aMessage: string);
@@ -387,10 +434,7 @@ begin
       );
     end;
     html.Add('</table>');
-    if aNote <> '' then
-      html.Add('<p class="muted" style="margin-top:14px;">' + htmlEscape(aNote) + '</p>')
-    else
-      html.Add('<p class="muted" style="margin-top:14px;">Автообновление каждые 5 с. Управление — через CLI monitor.</p>');
+    html.Add('<p class="muted" style="margin-top:14px;">' + htmlEscape(aNote) + '</p>');
     html.Add('</body></html>');
     FhtmlView.LoadFromString(html.Text);
   finally
@@ -398,7 +442,8 @@ begin
   end;
 end;
 
-procedure TMonitorForm.progressiveRefresh;
+{ Первоначальный полный опрос — прогрессивно, по одному демону (видно прогрев). }
+procedure TMonitorForm.initialRefresh;
 var
   idx: Integer;
   json: string;
@@ -418,7 +463,7 @@ begin
     for idx := 0 to High(Finv) do
     begin
       Fstatuses[idx].State := 'проверка…';
-      renderStatuses(Format('Проверка %d/%d: %s (%s:%d)…',
+      renderStatuses(Format('Первоначальный опрос %d/%d: %s (%s:%d)…',
         [idx + 1, Length(Finv), Finv[idx].Name, Finv[idx].Host, Finv[idx].Port]));
       Application.ProcessMessages;
 
@@ -431,25 +476,86 @@ begin
         Fstatuses[idx].Reachable := False;
         Fstatuses[idx].Pid := 0;
       end;
-
-      renderStatuses(Format('Опрошено %d/%d…', [idx + 1, Length(Finv)]));
       Application.ProcessMessages;
     end;
+    FlastUpdated := Now;
   finally
     Screen.Cursor := crDefault;
     setBusy(False);
   end;
-  renderStatuses('');
+  renderStatuses(footerNote);
+end;
+
+{ Обычное обновление — тихий полный опрос одним вызовом, без «проверки» по строкам. }
+procedure TMonitorForm.quietRefresh;
+var
+  json: string;
+  all: TGuiStatuses;
+begin
+  if Fbusy then
+    Exit;
+  if FloadError <> '' then
+  begin
+    renderError(FloadError);
+    Exit;
+  end;
+
+  setBusy(True);
+  Screen.Cursor := crAppStart;
+  renderStatuses('Обновление…');
+  Application.ProcessMessages;
+  try
+    if runMonitor(['status', '--json'], json) and parseStatuses(json, all) and (Length(all) = Length(Fstatuses)) then
+      Fstatuses := all;
+    FlastUpdated := Now;
+  finally
+    Screen.Cursor := crDefault;
+    setBusy(False);
+  end;
+  renderStatuses(footerNote);
+end;
+
+procedure TMonitorForm.applyRefreshMode;
+begin
+  if FautoRefreshCheck.Checked then
+  begin
+    Ftimer.Interval := FtimeoutSpin.Value * 1000;
+    Ftimer.Enabled := True;
+  end
+  else
+    Ftimer.Enabled := False;
+  { обновить подпись «режим …» }
+  if not Fbusy then
+    renderStatuses(footerNote);
+end;
+
+procedure TMonitorForm.onAutoRefreshChanged(Sender: TObject);
+begin
+  FtimeoutSpin.Enabled := FautoRefreshCheck.Checked;
+  applyRefreshMode;
+  if FautoRefreshCheck.Checked then
+    quietRefresh;
+end;
+
+procedure TMonitorForm.onTimeoutChanged(Sender: TObject);
+begin
+  applyRefreshMode;
+end;
+
+procedure TMonitorForm.onTimer(Sender: TObject);
+begin
+  quietRefresh;
+end;
+
+procedure TMonitorForm.onRefreshClick(Sender: TObject);
+begin
+  quietRefresh;
 end;
 
 procedure TMonitorForm.asyncFirstRefresh(aData: PtrInt);
 begin
-  progressiveRefresh;
-end;
-
-procedure TMonitorForm.doRefresh(Sender: TObject);
-begin
-  progressiveRefresh;
+  initialRefresh;
+  applyRefreshMode;
 end;
 
 procedure TMonitorForm.controlAction(const aAction: string);
@@ -477,7 +583,7 @@ begin
     setBusy(False);
   end;
 
-  progressiveRefresh;
+  quietRefresh;
 end;
 
 procedure TMonitorForm.onStart(Sender: TObject);
@@ -500,6 +606,7 @@ begin
   Caption := 'Daemon Monitor';
   Fbusy := False;
   FloadError := '';
+  FlastUpdated := 0;
   FmonitorExe := resolveMonitorExe;
   buildUi;
 
@@ -513,7 +620,7 @@ begin
     end;
   end;
 
-  { Первый опрос — асинхронно, ПОСЛЕ показа окна: UI появляется сразу. }
+  { Первый (полный) опрос — асинхронно, ПОСЛЕ показа окна: UI появляется сразу. }
   Application.QueueAsyncCall(@asyncFirstRefresh, 0);
 end;
 
