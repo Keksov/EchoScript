@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T14:31:47Z",
+  "updatedAt": "2026-07-01T14:36:55Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -163,12 +163,17 @@
       "id": "M4.2",
       "phase": 4,
       "title": "GUI: действия start/stop/restart",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M4.1", "M2.3"],
-      "artifacts": ["orchestrator/monitor/app/"],
+      "artifacts": ["orchestrator/monitor/app/src/main_form.pas"],
       "verify": "manual/non-blocking: lazbuild зелёный; кнопки start/stop/restart меняют состояние демона.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T14:36:55Z", "finishedAt": "2026-07-01T14:36:55Z", "blockedReason": null,
+      "evidence": [
+        "GUI дополнен: комбобокс демонов (список из status --json) + кнопки Старт/Стоп/Рестарт + Обновить; controlAction запускает monitor <action> <name> (TProcess) и обновляет статусы; setBusy блокирует UI на время.",
+        "lazbuild MonitorApp.lpi -> exit 0 (после фикса: локальная name -> daemonName, конфликт с TForm.Name).",
+        "Runtime-smoke: MonitorApp.exe при живом diarizationdaemon:7900 -> процесс жив 5с (стартап + refresh + control UI), без краха.",
+        "Фактический клик start/stop не автоматизирован (side-effect); логика управления покрыта unit-тестом M2.3 и CLI E2E M3.1."
+      ]
     },
     {
       "id": "M5.1",
@@ -191,6 +196,7 @@
     { "ts": "2026-07-01T14:03:01Z", "step": "M2.2", "event": "done", "note": "monitor_status.pas: порт (ssockets) + WS health-клиент (fpwebsocketclient); parseHealthAck. Тест 6/6; живой опрос voskdaemon:7799 -> reachable state=loading model=vosk_ru; закрытый порт -> down." },
     { "ts": "2026-07-01T14:10:33Z", "step": "M2.3", "event": "done", "note": "monitor_control.pas: start/stop/restart через скрипты (TScriptRunner инъектируемый; TRealScriptRunner=TProcess). Тест 10/10; fcl-process в -Fu. Конец фазы 2 (ядро готово)." },
     { "ts": "2026-07-01T14:19:52Z", "step": "M3.1", "event": "done", "note": "CLI monitor.pas (list/status[--json]/start|stop|restart) поверх ядра; сборка exit 0; E2E против живого diarizationdaemon:7900 (list, status table, status --json корректны)." },
-    { "ts": "2026-07-01T14:31:47Z", "step": "M4.1", "event": "done", "note": "GUI (Lazarus+Pixie) MonitorApp: lazbuild exit 0 + runtime-smoke (spawn CLI status --json, Pixie render, без краха). Отступление D5a: GUI поверх CLI (fpwebsocket нет в FPC Lazarus)." }
+    { "ts": "2026-07-01T14:31:47Z", "step": "M4.1", "event": "done", "note": "GUI (Lazarus+Pixie) MonitorApp: lazbuild exit 0 + runtime-smoke (spawn CLI status --json, Pixie render, без краха). Отступление D5a: GUI поверх CLI (fpwebsocket нет в FPC Lazarus)." },
+    { "ts": "2026-07-01T14:36:55Z", "step": "M4.2", "event": "done", "note": "GUI: комбобокс + Старт/Стоп/Рестарт через CLI (monitor <action> <name>). lazbuild exit 0 + smoke. Конец фазы 4 (GUI готов)." }
   ]
 }

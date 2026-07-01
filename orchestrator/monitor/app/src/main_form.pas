@@ -3,8 +3,8 @@ unit main_form;
 {$mode objfpc}{$H+}
 
 { GUI-оболочка монитора. WS-часть (fpwebsocket) отсутствует в FPC Lazarus, поэтому
-  статусы берутся из CLI `monitor status --json` (собран VendorsCore FPC). GUI —
-  тонкий фронт над CLI: рендер таблицы (Pixie) + кнопка/таймер обновления. }
+  и статусы, и управление идут через CLI (monitor.exe, собран VendorsCore FPC).
+  GUI — тонкий фронт над CLI: таблица статусов (Pixie) + управление (LCL-контролы). }
 
 interface
 
@@ -17,6 +17,7 @@ uses
   Forms,
   Controls,
   Graphics,
+  Dialogs,
   ExtCtrls,
   StdCtrls,
   Pixie.HtmlView;
@@ -36,15 +37,27 @@ type
   private
     FhtmlView       : TPixieHtmlView;
     FtopPanel       : TPanel;
-    FrefreshButton  : TButton;
     FtitleLabel     : TLabel;
+    FdaemonLabel    : TLabel;
+    FdaemonBox      : TComboBox;
+    FstartButton    : TButton;
+    FstopButton     : TButton;
+    FrestartButton  : TButton;
+    FrefreshButton  : TButton;
     Ftimer          : TTimer;
     FmonitorExe     : string;
+    Fbusy           : Boolean;
     procedure   buildUi;
     procedure   doRefresh({%H-}Sender: TObject);
+    procedure   onStart({%H-}Sender: TObject);
+    procedure   onStop({%H-}Sender: TObject);
+    procedure   onRestart({%H-}Sender: TObject);
+    procedure   controlAction(const aAction: string);
+    procedure   setBusy(aBusy: Boolean);
     function    resolveMonitorExe: string;
-    function    runMonitorJson(out aJson: string): Boolean;
+    function    runMonitor(const aArgs: array of string; out aOutput: string): Boolean;
     function    parseStatuses(const aJson: string; out aStatuses: TGuiStatuses): Boolean;
+    procedure   populateDaemonBox(const aStatuses: TGuiStatuses);
     procedure   renderStatuses(const aStatuses: TGuiStatuses);
     procedure   renderError(const aMessage: string);
   end;
@@ -88,27 +101,25 @@ begin
   Result := IncludeTrailingPathDelimiter(dir) + 'build' + PathDelim + 'x64' + PathDelim + 'monitor.exe';
 end;
 
-function TMonitorForm.runMonitorJson(out aJson: string): Boolean;
+function TMonitorForm.runMonitor(const aArgs: array of string; out aOutput: string): Boolean;
 var
   proc: TProcess;
   buf: array[0..8191] of Byte;
   n: LongInt;
+  idx: Integer;
   outStream: TStringStream;
 begin
   Result := False;
-  aJson := '';
+  aOutput := '';
   if not FileExists(FmonitorExe) then
-  begin
-    aJson := '';
     Exit(False);
-  end;
 
   proc := TProcess.Create(nil);
   outStream := TStringStream.Create('');
   try
     proc.Executable := FmonitorExe;
-    proc.Parameters.Add('status');
-    proc.Parameters.Add('--json');
+    for idx := 0 to High(aArgs) do
+      proc.Parameters.Add(aArgs[idx]);
     proc.Options := [poUsePipes, poNoConsole];
     proc.Execute;
     repeat
@@ -116,8 +127,8 @@ begin
       if n > 0 then
         outStream.Write(buf, n);
     until n <= 0;
-    aJson := outStream.DataString;
-    Result := Trim(aJson) <> '';
+    aOutput := outStream.DataString;
+    Result := True;
   finally
     outStream.Free;
     proc.Free;
@@ -168,20 +179,60 @@ begin
   FtopPanel := TPanel.Create(Self);
   FtopPanel.Parent := Self;
   FtopPanel.Align := alTop;
-  FtopPanel.Height := 52;
+  FtopPanel.Height := 88;
   FtopPanel.BevelOuter := bvNone;
   FtopPanel.Color := $00E6DED0;
 
   FtitleLabel := TLabel.Create(FtopPanel);
   FtitleLabel.Parent := FtopPanel;
   FtitleLabel.Left := 18;
-  FtitleLabel.Top := 18;
-  FtitleLabel.Caption := 'Daemon Monitor — статус демонов распознавания';
+  FtitleLabel.Top := 12;
+  FtitleLabel.Caption := 'Daemon Monitor — статус и управление демонами распознавания';
+
+  FdaemonLabel := TLabel.Create(FtopPanel);
+  FdaemonLabel.Parent := FtopPanel;
+  FdaemonLabel.Left := 18;
+  FdaemonLabel.Top := 52;
+  FdaemonLabel.Caption := 'Демон:';
+
+  FdaemonBox := TComboBox.Create(FtopPanel);
+  FdaemonBox.Parent := FtopPanel;
+  FdaemonBox.Left := 72;
+  FdaemonBox.Top := 48;
+  FdaemonBox.Width := 200;
+  FdaemonBox.Style := csDropDownList;
+
+  FstartButton := TButton.Create(FtopPanel);
+  FstartButton.Parent := FtopPanel;
+  FstartButton.Left := 284;
+  FstartButton.Top := 47;
+  FstartButton.Width := 78;
+  FstartButton.Height := 28;
+  FstartButton.Caption := 'Старт';
+  FstartButton.OnClick := @onStart;
+
+  FstopButton := TButton.Create(FtopPanel);
+  FstopButton.Parent := FtopPanel;
+  FstopButton.Left := 368;
+  FstopButton.Top := 47;
+  FstopButton.Width := 78;
+  FstopButton.Height := 28;
+  FstopButton.Caption := 'Стоп';
+  FstopButton.OnClick := @onStop;
+
+  FrestartButton := TButton.Create(FtopPanel);
+  FrestartButton.Parent := FtopPanel;
+  FrestartButton.Left := 452;
+  FrestartButton.Top := 47;
+  FrestartButton.Width := 92;
+  FrestartButton.Height := 28;
+  FrestartButton.Caption := 'Рестарт';
+  FrestartButton.OnClick := @onRestart;
 
   FrefreshButton := TButton.Create(FtopPanel);
   FrefreshButton.Parent := FtopPanel;
   FrefreshButton.Left := 620;
-  FrefreshButton.Top := 12;
+  FrefreshButton.Top := 47;
   FrefreshButton.Width := 120;
   FrefreshButton.Height := 28;
   FrefreshButton.Anchors := [akTop, akRight];
@@ -197,6 +248,19 @@ begin
   Ftimer.Interval := 5000;
   Ftimer.OnTimer := @doRefresh;
   Ftimer.Enabled := True;
+end;
+
+procedure TMonitorForm.setBusy(aBusy: Boolean);
+begin
+  Fbusy := aBusy;
+  FstartButton.Enabled := not aBusy;
+  FstopButton.Enabled := not aBusy;
+  FrestartButton.Enabled := not aBusy;
+  FrefreshButton.Enabled := not aBusy;
+  if aBusy then
+    Screen.Cursor := crHourGlass
+  else
+    Screen.Cursor := crDefault;
 end;
 
 procedure TMonitorForm.renderError(const aMessage: string);
@@ -215,6 +279,18 @@ begin
   finally
     html.Free;
   end;
+end;
+
+procedure TMonitorForm.populateDaemonBox(const aStatuses: TGuiStatuses);
+var
+  idx: Integer;
+begin
+  if FdaemonBox.Items.Count > 0 then
+    Exit;
+  for idx := 0 to High(aStatuses) do
+    FdaemonBox.Items.Add(aStatuses[idx].Name);
+  if FdaemonBox.Items.Count > 0 then
+    FdaemonBox.ItemIndex := 0;
 end;
 
 procedure TMonitorForm.renderStatuses(const aStatuses: TGuiStatuses);
@@ -249,7 +325,7 @@ begin
       );
     end;
     html.Add('</table>');
-    html.Add('<p class="muted" style="margin-top:14px;">Автообновление каждые 5 с (через CLI monitor status --json).</p>');
+    html.Add('<p class="muted" style="margin-top:14px;">Автообновление каждые 5 с. Управление — через CLI monitor.</p>');
     html.Add('</body></html>');
     FhtmlView.LoadFromString(html.Text);
   finally
@@ -262,10 +338,11 @@ var
   json: string;
   statuses: TGuiStatuses;
 begin
-  Screen.Cursor := crHourGlass;
-  FrefreshButton.Enabled := False;
+  if Fbusy then
+    Exit;
+  setBusy(True);
   try
-    if not runMonitorJson(json) then
+    if not runMonitor(['status', '--json'], json) or (Trim(json) = '') then
     begin
       renderError('Не удалось запустить CLI или пустой ответ.');
       Exit;
@@ -275,16 +352,56 @@ begin
       renderError('Не удалось разобрать JSON статуса.');
       Exit;
     end;
+    populateDaemonBox(statuses);
     renderStatuses(statuses);
   finally
-    FrefreshButton.Enabled := True;
-    Screen.Cursor := crDefault;
+    setBusy(False);
   end;
+end;
+
+procedure TMonitorForm.controlAction(const aAction: string);
+var
+  daemonName: string;
+  output: string;
+begin
+  if Fbusy then
+    Exit;
+  if FdaemonBox.ItemIndex < 0 then
+  begin
+    ShowMessage('Выберите демон.');
+    Exit;
+  end;
+  daemonName := FdaemonBox.Items[FdaemonBox.ItemIndex];
+
+  setBusy(True);
+  try
+    runMonitor([aAction, daemonName], output);
+  finally
+    setBusy(False);
+  end;
+
+  doRefresh(nil);
+end;
+
+procedure TMonitorForm.onStart(Sender: TObject);
+begin
+  controlAction('start');
+end;
+
+procedure TMonitorForm.onStop(Sender: TObject);
+begin
+  controlAction('stop');
+end;
+
+procedure TMonitorForm.onRestart(Sender: TObject);
+begin
+  controlAction('restart');
 end;
 
 procedure TMonitorForm.FormCreate(Sender: TObject);
 begin
   Caption := 'Daemon Monitor';
+  Fbusy := False;
   FmonitorExe := resolveMonitorExe;
   buildUi;
   doRefresh(nil);
