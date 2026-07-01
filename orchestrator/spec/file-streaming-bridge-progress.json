@@ -43,12 +43,12 @@
       "id": "SB1.2",
       "phase": 1,
       "title": "Юнит-тесты стрим-драйвера",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["SB1.1"],
       "artifacts": ["orchestrator/src/daemon-stream-driver.test.ts"],
       "verify": "bun test: оконная математика, порядок кадров (session_start -> N бинарных -> flush -> session_final), инкрементальная агрегация segment_final/word_committed, значения onProgress, сброс per-окно таймаута, ошибки, бинарность кадров.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T19:50:00Z", "finishedAt": "2026-07-01T19:58:00Z", "blockedReason": null,
+      "evidence": ["bun test src/daemon-stream-driver.test.ts -> 8 pass / 0 fail (31 expect)", "полный сьют bun test -> 14 pass / 0 fail (4 файла)", "tsc --noEmit -> exit 0", "покрыто: bytesForMs/msForBytes, оконная нарезка+порядок кадров+поля session_start, агрегация+progress 50->100, error, close, heartbeat stall, backpressure, интеграция с реальным сокетом (бинарные кадры, 100000 байт получены)"]
     },
     {
       "id": "SB2.1",
@@ -120,6 +120,7 @@
   "log": [
     { "ts": "2026-07-01T19:31:00Z", "step": "SB0.1", "event": "done", "note": "План+леджер созданы; JSON парсится, 9 шагов, DAG ацикличен; commit ce79dff. Пауза на границе фазы 0 для ревью решений SB-D1..SB-D7." },
     { "ts": "2026-07-01T19:33:00Z", "step": "SB0.1", "event": "decisions-refined", "note": "Ревью владельца: SB-D3 — размер окна из config.json (stream_window_ms, дефолт 30000); SB-D4 подтверждён (все файлы через мост); добавлен SB-D8 (stream_rollover_ms, дефолт 1200000)." },
-    { "ts": "2026-07-01T19:48:00Z", "step": "SB1.1", "event": "done", "note": "daemon-stream-driver.ts: transcribeFileStreaming с DI (StreamSocket/PcmSource), окна pcm16le, backpressure, heartbeat, инкрементальная агрегация segment_final/word_committed, progress по processedMs. tsc --noEmit exit 0." }
+    { "ts": "2026-07-01T19:48:00Z", "step": "SB1.1", "event": "done", "note": "daemon-stream-driver.ts: transcribeFileStreaming с DI (StreamSocket/PcmSource), окна pcm16le, backpressure, heartbeat, инкрементальная агрегация segment_final/word_committed, progress по processedMs. tsc --noEmit exit 0." },
+    { "ts": "2026-07-01T19:58:00Z", "step": "SB1.2", "event": "done", "note": "daemon-stream-driver.test.ts: 8 тестов (DI + интеграция с реальным сокетом). bun test полный сьют 14 pass / 0 fail. Конец фазы 1 — пауза на ревью." }
   ]
 }
