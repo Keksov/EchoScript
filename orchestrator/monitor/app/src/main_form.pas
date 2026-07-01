@@ -3,9 +3,10 @@ unit main_form;
 {$mode objfpc}{$H+}
 
 { GUI-оболочка монитора. Окно показывается сразу (скелет из daemons.json), при старте
-  делается полный опрос (прогрессивно, по одному демону — видно прогрев). Далее —
-  режим Manual (кнопка Refresh) по умолчанию, либо Auto-refresh по таймеру (Timeout, сек).
-  Health берётся из CLI (fpwebsocket отсутствует в FPC Lazarus); инвентарь — из monitor_core. }
+  полный опрос (прогрессивно). Режим Manual (кнопка Refresh) по умолчанию, либо
+  Auto-refresh по таймеру (Timeout, сек). Управление демонами — прямо в гриде (ссылки
+  Старт/Стоп/Рестарт на каждой строке). Клик по имени раскрывает карточку (аккордеон).
+  Health/describe/управление — через CLI monitor; инвентарь — из monitor_core. }
 
 interface
 
@@ -18,7 +19,6 @@ uses
   Forms,
   Controls,
   Graphics,
-  Dialogs,
   ExtCtrls,
   StdCtrls,
   Spin,
@@ -42,11 +42,6 @@ type
     FhtmlView         : TPixieHtmlView;
     FtopPanel         : TPanel;
     FtitleLabel       : TLabel;
-    FdaemonLabel      : TLabel;
-    FdaemonBox        : TComboBox;
-    FstartButton      : TButton;
-    FstopButton       : TButton;
-    FrestartButton    : TButton;
     FrefreshButton    : TButton;
     FautoRefreshCheck : TCheckBox;
     FtimeoutLabel     : TLabel;
@@ -70,10 +65,7 @@ type
     procedure   applyRefreshMode;
     procedure   initialRefresh;
     procedure   quietRefresh;
-    procedure   onStart({%H-}Sender: TObject);
-    procedure   onStop({%H-}Sender: TObject);
-    procedure   onRestart({%H-}Sender: TObject);
-    procedure   controlAction(const aAction: string);
+    procedure   controlByName(const aAction, aName: string);
     procedure   setBusy(aBusy: Boolean);
     function    footerNote: string;
     function    resolveMonitorExe: string;
@@ -158,7 +150,6 @@ begin
     proc.Options := [poUsePipes, poNoConsole];
     proc.Execute;
 
-    { Неблокирующее чтение: пока процесс работает — качаем сообщения (окно отзывчиво). }
     while proc.Running do
     begin
       avail := proc.Output.NumBytesAvailable;
@@ -241,72 +232,20 @@ begin
   FtopPanel := TPanel.Create(Self);
   FtopPanel.Parent := Self;
   FtopPanel.Align := alTop;
-  FtopPanel.Height := 120;
+  FtopPanel.Height := 84;
   FtopPanel.BevelOuter := bvNone;
   FtopPanel.Color := $00E6DED0;
 
   FtitleLabel := TLabel.Create(FtopPanel);
   FtitleLabel.Parent := FtopPanel;
   FtitleLabel.Left := 18;
-  FtitleLabel.Top := 10;
+  FtitleLabel.Top := 12;
   FtitleLabel.Caption := 'Daemon Monitor — статус и управление демонами распознавания';
 
-  { Row 2: выбор демона + управление + Refresh }
-  FdaemonLabel := TLabel.Create(FtopPanel);
-  FdaemonLabel.Parent := FtopPanel;
-  FdaemonLabel.Left := 18;
-  FdaemonLabel.Top := 46;
-  FdaemonLabel.Caption := 'Демон:';
-
-  FdaemonBox := TComboBox.Create(FtopPanel);
-  FdaemonBox.Parent := FtopPanel;
-  FdaemonBox.Left := 72;
-  FdaemonBox.Top := 42;
-  FdaemonBox.Width := 190;
-  FdaemonBox.Style := csDropDownList;
-
-  FstartButton := TButton.Create(FtopPanel);
-  FstartButton.Parent := FtopPanel;
-  FstartButton.Left := 272;
-  FstartButton.Top := 41;
-  FstartButton.Width := 74;
-  FstartButton.Height := 28;
-  FstartButton.Caption := 'Старт';
-  FstartButton.OnClick := @onStart;
-
-  FstopButton := TButton.Create(FtopPanel);
-  FstopButton.Parent := FtopPanel;
-  FstopButton.Left := 352;
-  FstopButton.Top := 41;
-  FstopButton.Width := 74;
-  FstopButton.Height := 28;
-  FstopButton.Caption := 'Стоп';
-  FstopButton.OnClick := @onStop;
-
-  FrestartButton := TButton.Create(FtopPanel);
-  FrestartButton.Parent := FtopPanel;
-  FrestartButton.Left := 432;
-  FrestartButton.Top := 41;
-  FrestartButton.Width := 88;
-  FrestartButton.Height := 28;
-  FrestartButton.Caption := 'Рестарт';
-  FrestartButton.OnClick := @onRestart;
-
-  FrefreshButton := TButton.Create(FtopPanel);
-  FrefreshButton.Parent := FtopPanel;
-  FrefreshButton.Left := 620;
-  FrefreshButton.Top := 41;
-  FrefreshButton.Width := 120;
-  FrefreshButton.Height := 28;
-  FrefreshButton.Anchors := [akTop, akRight];
-  FrefreshButton.Caption := 'Refresh';
-  FrefreshButton.OnClick := @onRefreshClick;
-
-  { Row 3: режим обновления }
   FautoRefreshCheck := TCheckBox.Create(FtopPanel);
   FautoRefreshCheck.Parent := FtopPanel;
   FautoRefreshCheck.Left := 18;
-  FautoRefreshCheck.Top := 84;
+  FautoRefreshCheck.Top := 48;
   FautoRefreshCheck.Width := 140;
   FautoRefreshCheck.Caption := 'Auto-refresh';
   FautoRefreshCheck.Checked := False;   { Manual по умолчанию }
@@ -315,18 +254,29 @@ begin
   FtimeoutLabel := TLabel.Create(FtopPanel);
   FtimeoutLabel.Parent := FtopPanel;
   FtimeoutLabel.Left := 168;
-  FtimeoutLabel.Top := 86;
+  FtimeoutLabel.Top := 50;
   FtimeoutLabel.Caption := 'Timeout, сек:';
 
   FtimeoutSpin := TSpinEdit.Create(FtopPanel);
   FtimeoutSpin.Parent := FtopPanel;
   FtimeoutSpin.Left := 262;
-  FtimeoutSpin.Top := 82;
+  FtimeoutSpin.Top := 46;
   FtimeoutSpin.Width := 70;
   FtimeoutSpin.MinValue := 1;
   FtimeoutSpin.MaxValue := 3600;
   FtimeoutSpin.Value := 5;
+  FtimeoutSpin.Enabled := False;   { активно только в режиме Auto-refresh }
   FtimeoutSpin.OnChange := @onTimeoutChanged;
+
+  FrefreshButton := TButton.Create(FtopPanel);
+  FrefreshButton.Parent := FtopPanel;
+  FrefreshButton.Left := 620;
+  FrefreshButton.Top := 45;
+  FrefreshButton.Width := 120;
+  FrefreshButton.Height := 28;
+  FrefreshButton.Anchors := [akTop, akRight];
+  FrefreshButton.Caption := 'Refresh';
+  FrefreshButton.OnClick := @onRefreshClick;
 
   FhtmlView := TPixieHtmlView.Create(Self);
   FhtmlView.Parent := Self;
@@ -346,33 +296,21 @@ var
 begin
   Finv := loadDaemonInventory(inventoryPath);
   SetLength(Fstatuses, Length(Finv));
-  FdaemonBox.Items.BeginUpdate;
-  try
-    FdaemonBox.Items.Clear;
-    for idx := 0 to High(Finv) do
-    begin
-      Fstatuses[idx].Name := Finv[idx].Name;
-      Fstatuses[idx].Endpoint := Finv[idx].Host + ':' + IntToStr(Finv[idx].Port);
-      Fstatuses[idx].State := 'ожидание';
-      Fstatuses[idx].Pid := 0;
-      Fstatuses[idx].Reachable := False;
-      Fstatuses[idx].Model := '';
-      FdaemonBox.Items.Add(Finv[idx].Name);
-    end;
-  finally
-    FdaemonBox.Items.EndUpdate;
+  for idx := 0 to High(Finv) do
+  begin
+    Fstatuses[idx].Name := Finv[idx].Name;
+    Fstatuses[idx].Endpoint := Finv[idx].Host + ':' + IntToStr(Finv[idx].Port);
+    Fstatuses[idx].State := 'ожидание';
+    Fstatuses[idx].Pid := 0;
+    Fstatuses[idx].Reachable := False;
+    Fstatuses[idx].Model := '';
   end;
-  if FdaemonBox.Items.Count > 0 then
-    FdaemonBox.ItemIndex := 0;
   renderStatuses('Готовим первоначальный опрос…');
 end;
 
 procedure TMonitorForm.setBusy(aBusy: Boolean);
 begin
   Fbusy := aBusy;
-  FstartButton.Enabled := not aBusy;
-  FstopButton.Enabled := not aBusy;
-  FrestartButton.Enabled := not aBusy;
   FrefreshButton.Enabled := not aBusy;
 end;
 
@@ -404,89 +342,6 @@ begin
   finally
     html.Free;
   end;
-end;
-
-procedure TMonitorForm.renderStatuses(const aNote: string);
-var
-  idx: Integer;
-  s: TGuiStatus;
-  html: TStringList;
-  chevron: string;
-begin
-  html := TStringList.Create;
-  try
-    html.Add('<!doctype html><html><head><style>');
-    html.Add('body{margin:0;padding:24px;background:#f4f0e8;color:#1c1917;font-family:"Segoe UI";}');
-    html.Add('h1{margin:0 0 14px 0;font-size:22px;}');
-    html.Add('table{width:100%;border-collapse:collapse;background:#fffdf8;border:1px solid #d6cfc0;border-radius:12px;overflow:hidden;}');
-    html.Add('th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #eee5d6;font-size:14px;}');
-    html.Add('th{background:#eee5d6;font-weight:600;}');
-    html.Add('.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle;}');
-    html.Add('.muted{color:#6b7280;}');
-    html.Add('</style></head><body>');
-    html.Add('<h1>Демоны распознавания</h1>');
-    html.Add('<table><tr><th>Демон</th><th>Статус</th><th>Endpoint</th><th>PID</th><th>Reachable</th><th>Модель</th></tr>');
-    for idx := 0 to High(Fstatuses) do
-    begin
-      s := Fstatuses[idx];
-      if s.Name = FexpandedName then
-        chevron := '&#9662; '
-      else
-        chevron := '&#9656; ';
-      html.Add(
-        '<tr><td><a href="toggle:' + htmlEscape(s.Name) + '" style="text-decoration:none;color:#1c1917;font-weight:600">' +
-          chevron + htmlEscape(s.Name) + '</a></td>' +
-        '<td><span class="dot" style="background:' + stateColor(s.State) + '"></span>' +
-          '<strong style="color:' + stateColor(s.State) + '">' + htmlEscape(s.State) + '</strong></td>' +
-        '<td class="muted">' + htmlEscape(s.Endpoint) + '</td>' +
-        '<td class="muted">' + BoolToStr(s.Pid > 0, IntToStr(s.Pid), '—') + '</td>' +
-        '<td>' + BoolToStr(s.Reachable, 'да', 'нет') + '</td>' +
-        '<td>' + htmlEscape(s.Model) + '</td></tr>'
-      );
-      if s.Name = FexpandedName then
-        html.Add('<tr><td colspan="6" style="padding:0;background:#f8f4ec;">' + detailCardHtml(s) + '</td></tr>');
-    end;
-    html.Add('</table>');
-    html.Add('<p class="muted" style="margin-top:14px;">' + htmlEscape(aNote) + '</p>');
-    html.Add('</body></html>');
-    FhtmlView.LoadFromString(html.Text);
-  finally
-    html.Free;
-  end;
-end;
-
-procedure TMonitorForm.onAnchorClick(Sender: TObject; const aUrl: string);
-var
-  daemonName: string;
-  descJson: string;
-begin
-  if Copy(aUrl, 1, 7) <> 'toggle:' then
-    Exit;
-  daemonName := Copy(aUrl, 8, MaxInt);
-  if Fbusy then
-    Exit;
-
-  { повторный клик по раскрытому — закрыть }
-  if SameText(FexpandedName, daemonName) then
-  begin
-    FexpandedName := '';
-    FdetailJson := '';
-    renderStatuses(footerNote);
-    Exit;
-  end;
-
-  FexpandedName := daemonName;
-  FdetailJson := '';
-  setBusy(True);
-  Screen.Cursor := crAppStart;
-  try
-    if runMonitor(['describe', daemonName], descJson) then
-      FdetailJson := descJson;
-  finally
-    Screen.Cursor := crDefault;
-    setBusy(False);
-  end;
-  renderStatuses(footerNote);
 end;
 
 function TMonitorForm.detailCardHtml(const aStatus: TGuiStatus): string;
@@ -627,6 +482,106 @@ begin
   Result := html;
 end;
 
+procedure TMonitorForm.renderStatuses(const aNote: string);
+var
+  idx: Integer;
+  s: TGuiStatus;
+  html: TStringList;
+  chevron: string;
+begin
+  html := TStringList.Create;
+  try
+    html.Add('<!doctype html><html><head><style>');
+    html.Add('body{margin:0;padding:24px;background:#f4f0e8;color:#1c1917;font-family:"Segoe UI";}');
+    html.Add('h1{margin:0 0 14px 0;font-size:22px;}');
+    html.Add('table{width:100%;border-collapse:collapse;background:#fffdf8;border:1px solid #d6cfc0;border-radius:12px;overflow:hidden;}');
+    html.Add('th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #eee5d6;font-size:14px;}');
+    html.Add('th{background:#eee5d6;font-weight:600;}');
+    html.Add('.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle;}');
+    html.Add('.muted{color:#6b7280;}');
+    html.Add('.act{color:#1d4ed8;text-decoration:none;margin-right:10px;}');
+    html.Add('</style></head><body>');
+    html.Add('<h1>Демоны распознавания</h1>');
+    html.Add('<table><tr><th>Демон</th><th>Статус</th><th>Endpoint</th><th>PID</th><th>Reachable</th><th>Модель</th><th>Действия</th></tr>');
+    for idx := 0 to High(Fstatuses) do
+    begin
+      s := Fstatuses[idx];
+      if s.Name = FexpandedName then
+        chevron := '&#9662; '
+      else
+        chevron := '&#9656; ';
+      html.Add(
+        '<tr><td><a href="toggle:' + htmlEscape(s.Name) + '" style="text-decoration:none;color:#1c1917;font-weight:600">' +
+          chevron + htmlEscape(s.Name) + '</a></td>' +
+        '<td><span class="dot" style="background:' + stateColor(s.State) + '"></span>' +
+          '<strong style="color:' + stateColor(s.State) + '">' + htmlEscape(s.State) + '</strong></td>' +
+        '<td class="muted">' + htmlEscape(s.Endpoint) + '</td>' +
+        '<td class="muted">' + BoolToStr(s.Pid > 0, IntToStr(s.Pid), '—') + '</td>' +
+        '<td>' + BoolToStr(s.Reachable, 'да', 'нет') + '</td>' +
+        '<td>' + htmlEscape(s.Model) + '</td>' +
+        '<td>' +
+          '<a class="act" href="start:' + htmlEscape(s.Name) + '">Старт</a>' +
+          '<a class="act" href="stop:' + htmlEscape(s.Name) + '">Стоп</a>' +
+          '<a class="act" href="restart:' + htmlEscape(s.Name) + '">Рестарт</a>' +
+        '</td></tr>'
+      );
+      if s.Name = FexpandedName then
+        html.Add('<tr><td colspan="7" style="padding:0;background:#f8f4ec;">' + detailCardHtml(s) + '</td></tr>');
+    end;
+    html.Add('</table>');
+    html.Add('<p class="muted" style="margin-top:14px;">' + htmlEscape(aNote) + '</p>');
+    html.Add('</body></html>');
+    FhtmlView.LoadFromString(html.Text);
+  finally
+    html.Free;
+  end;
+end;
+
+procedure TMonitorForm.onAnchorClick(Sender: TObject; const aUrl: string);
+var
+  colonPos: Integer;
+  act: string;
+  daemonName: string;
+  descJson: string;
+begin
+  colonPos := Pos(':', aUrl);
+  if colonPos <= 0 then
+    Exit;
+  act := Copy(aUrl, 1, colonPos - 1);
+  daemonName := Copy(aUrl, colonPos + 1, MaxInt);
+  if daemonName = '' then
+    Exit;
+  if Fbusy then
+    Exit;
+
+  if act = 'toggle' then
+  begin
+    if SameText(FexpandedName, daemonName) then
+    begin
+      FexpandedName := '';
+      FdetailJson := '';
+      renderStatuses(footerNote);
+      Exit;
+    end;
+    FexpandedName := daemonName;
+    FdetailJson := '';
+    setBusy(True);
+    Screen.Cursor := crAppStart;
+    try
+      if runMonitor(['describe', daemonName], descJson) then
+        FdetailJson := descJson;
+    finally
+      Screen.Cursor := crDefault;
+      setBusy(False);
+    end;
+    renderStatuses(footerNote);
+    Exit;
+  end;
+
+  if (act = 'start') or (act = 'stop') or (act = 'restart') then
+    controlByName(act, daemonName);
+end;
+
 { Первоначальный полный опрос — прогрессивно, по одному демону (видно прогрев). }
 procedure TMonitorForm.initialRefresh;
 var
@@ -709,7 +664,6 @@ begin
   end
   else
     Ftimer.Enabled := False;
-  { обновить подпись «режим …» }
   if not Fbusy then
     renderStatuses(footerNote);
 end;
@@ -743,47 +697,27 @@ begin
   applyRefreshMode;
 end;
 
-procedure TMonitorForm.controlAction(const aAction: string);
+procedure TMonitorForm.controlByName(const aAction, aName: string);
 var
-  daemonName: string;
   output: string;
 begin
   if Fbusy then
     Exit;
-  if FdaemonBox.ItemIndex < 0 then
-  begin
-    ShowMessage('Выберите демон.');
+  if aName = '' then
     Exit;
-  end;
-  daemonName := FdaemonBox.Items[FdaemonBox.ItemIndex];
 
   setBusy(True);
   Screen.Cursor := crAppStart;
-  renderStatuses(Format('%s: %s…', [aAction, daemonName]));
+  renderStatuses(Format('%s: %s…', [aAction, aName]));
   Application.ProcessMessages;
   try
-    runMonitor([aAction, daemonName], output);
+    runMonitor([aAction, aName], output);
   finally
     Screen.Cursor := crDefault;
     setBusy(False);
   end;
 
   quietRefresh;
-end;
-
-procedure TMonitorForm.onStart(Sender: TObject);
-begin
-  controlAction('start');
-end;
-
-procedure TMonitorForm.onStop(Sender: TObject);
-begin
-  controlAction('stop');
-end;
-
-procedure TMonitorForm.onRestart(Sender: TObject);
-begin
-  controlAction('restart');
 end;
 
 procedure TMonitorForm.FormCreate(Sender: TObject);
@@ -805,7 +739,6 @@ begin
     end;
   end;
 
-  { Первый (полный) опрос — асинхронно, ПОСЛЕ показа окна: UI появляется сразу. }
   Application.QueueAsyncCall(@asyncFirstRefresh, 0);
 end;
 
