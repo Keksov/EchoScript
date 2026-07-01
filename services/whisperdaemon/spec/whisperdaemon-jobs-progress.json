@@ -3,9 +3,9 @@
   "plan": "whisperdaemon-jobs",
   "planDoc": "spec/whisperdaemon-jobs-plan.md",
   "title": "Файловый интерфейс распознавания: file-daemon (оркестратор) + тонкий file-API демонов",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T12:21:58Z",
+  "updatedAt": "2026-07-01T12:24:20Z",
   "decisions": [
     { "id": "D1", "text": "File-daemon = расширенный оркестратор (TS): владелец watch, конвертации, lifecycle, status.json, артефактов, HTTP-статусов." },
     { "id": "D2", "text": "Демоны распознавания тонкие: WS file-API (describe/health/transcribe_file); не читают jobs/, не пишут артефакты, не декодируют." },
@@ -182,12 +182,15 @@
       "id": "F4.3",
       "phase": 4,
       "title": "Документация (file-API, дескриптор, ws-daemon vs python-worker)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["F3.3"],
-      "artifacts": ["EchoRecorder/docs/ARCHITECTURE.md", "services/whisperdaemon/README.md"],
+      "artifacts": ["services/whisperdaemon/README.md"],
       "verify": "doc описывает describe/health/transcribe_file, daemon.json, конвертацию в оркестраторе, различие путей.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T12:24:20Z", "finishedAt": "2026-07-01T12:24:20Z", "blockedReason": null,
+      "evidence": [
+        "services/whisperdaemon/README.md: два интерфейса (streaming WS + file-API), daemon.json дескриптор, протокол describe/health/transcribe_file, таблица ws-daemon vs python-worker, маршрутизация config.ws_daemons, ffmpeg-путь, HTTP-примеры, тесты.",
+        "EchoRecorder/docs/ARCHITECTURE.md не трогаем в этой ветке (отдельный вложенный git-репозиторий); README рядом с демоном — основной источник."
+      ]
     }
   ],
   "log": [
@@ -201,6 +204,8 @@
     { "ts": "2026-07-01T10:34:27Z", "step": "F3.2", "event": "done", "note": "daemon-driver (describe/transcribeFileViaDaemon) + config.wsDaemons. bun test 4 pass, tsc 0. Живой прогон против whisperdaemon: ru, 17 сегментов, 98 слов." },
     { "ts": "2026-07-01T10:42:55Z", "step": "F3.3", "event": "done", "note": "ws-daemon-runner (convert->driver->артефакты) + JobManager.claimExternalJob + Scheduler.dispatchWsDaemonJob. bun test 6 pass, tsc 0. Конец фазы 3." },
     { "ts": "2026-07-01T12:09:09Z", "step": "F4.1", "event": "done", "note": "E2E ps1 PASS на реальном файле: add_file->run_job->ready, 17 сегментов ru, plain+timestamp через get_job_result, все артефакты. Вся связка scheduler<->whisperdaemon проверена." },
-    { "ts": "2026-07-01T12:21:58Z", "step": "F4.2", "event": "done", "note": "scripts/start_ws_daemon_stack.ps1: поднимает whisperdaemon + оркестратор, ждёт готовности, печатает endpoints/примеры. Проверено вручную (7801 open, health=ok)." }
+    { "ts": "2026-07-01T12:21:58Z", "step": "F4.2", "event": "done", "note": "scripts/start_ws_daemon_stack.ps1: поднимает whisperdaemon + оркестратор, ждёт готовности, печатает endpoints/примеры. Проверено вручную (7801 open, health=ok)." },
+    { "ts": "2026-07-01T12:24:20Z", "step": "F4.3", "event": "done", "note": "services/whisperdaemon/README.md: file-API, дескриптор, ws-daemon vs python-worker." },
+    { "ts": "2026-07-01T12:24:20Z", "step": "-", "event": "complete", "note": "Инициатива завершена: все 11 шагов done. Демон получил тонкий file-API; оркестратор стал file-daemon (convert+driver+артефакты); E2E зелёный." }
   ]
 }
