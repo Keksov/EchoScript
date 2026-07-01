@@ -82,7 +82,7 @@ Authoritative progress ledger: [whisperdaemon-jobs-progress.json](whisperdaemon-
 - [x] **F3.2 — TS: daemon-driver (WS-клиент) + конфиг** ws-daemon моделей (host/port); `describe` → `transcribe_file` → сбор сегментов в normalized-результат. *(config.wsDaemons; проверено mock-юнитами + живьём против whisperdaemon)*
 - [x] **F3.3 — TS: интеграция driver в Scheduler** для моделей `ws-daemon`: вместо python-воркера — конвертация+driver, запись `result.json`/`result_plain.txt`/`result_timestamp.txt` (секунды)/переходов `status.json`/output-маркера. *(ws-daemon-runner.ts + JobManager.claimExternalJob + Scheduler.dispatchWsDaemonJob; unit-тесты контракта артефактов)*
 - [x] **F4.1 — Интеграционный E2E-тест** (`/add_file` → convert → daemon → артефакты + `/get_job_status`). *(tests/whisperdaemon-file-api.ps1; PASS на реальном файле)*
-- [ ] **F4.2 — Ops: конфиг/скрипты** запуска оркестратора с whisperdaemon как `ws-daemon` (порядок старта) *(manual/non-blocking)*.
+- [x] **F4.2 — Ops: конфиг/скрипты** запуска оркестратора с whisperdaemon как `ws-daemon` (порядок старта) *(manual/non-blocking)*. *(scripts/start_ws_daemon_stack.ps1)*
 - [ ] **F4.3 — Документация** (file-API демона, дескриптор, отличие ws-daemon от python-worker; обновить обзор).
 
 ## Contract (F1.1): дескриптор демона + протокол file-API
