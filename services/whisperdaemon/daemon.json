@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "daemon": {
+    "name": "whisperdaemon",
+    "kind": "asr",
+    "engine": "whisper.cpp",
+    "model_name": "whisper_podlodka"
+  },
+  "transport": {
+    "protocol": "ws",
+    "host": "127.0.0.1",
+    "port": 7801,
+    "resource": "/",
+    "note": "Значения host/port по умолчанию; фактические возвращает describe (задаются --host/--port при запуске)."
+  },
+  "input": {
+    "container": "raw",
+    "codec": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "byte_order": "little",
+    "note": "Согласованный формат, который file-daemon обязан подготовить (ffmpeg) перед transcribe_file."
+  },
+  "api": {
+    "events": ["describe", "health", "transcribe_file"],
+    "describe": {
+      "request": { "event": "describe" },
+      "response_event": "describe_ack",
+      "response_note": "Возвращает этот дескриптор с фактическими transport.host/port."
+    },
+    "health": {
+      "request": { "event": "health" },
+      "response_event": "health_ack",
+      "response_fields": { "state": "loading|ready|failed", "model_name": "string", "error": "string?" }
+    },
+    "transcribe_file": {
+      "request": {
+        "event": "transcribe_file",
+        "request_id": "string (opaque, echoed back)",
+        "path": "string (абсолютный путь к raw pcm16le файлу в формате input)",
+        "language": "ru|en|auto",
+        "params": { "word_timestamps": "bool (default false)", "mode": "dictation|command (default dictation)" }
+      },
+      "responses": {
+        "word_committed": { "text": "string", "index_in_segment": "int", "segment_id": "int", "start_ms": "int", "end_ms": "int", "confidence": "float", "note": "опционально, если word_timestamps=true" },
+        "segment_final": { "segment_id": "int", "text": "string", "start_ms": "int", "end_ms": "int" },
+        "session_final": { "text": "string", "duration_ms": "int", "segment_count": "int", "language": "string", "detected_language": "string?", "request_id": "string" },
+        "error": { "message": "string", "request_id": "string?" }
+      },
+      "timing_note": "Все *_ms — миллисекунды; file-daemon конвертирует в секунды при записи result.json."
+    }
+  },
+  "capabilities": {
+    "languages": ["ru", "en", "auto"],
+    "modes": ["dictation", "command"],
+    "word_timestamps": true,
+    "diarization": false,
+    "streaming_ws": true,
+    "file_api": true
+  }
+}

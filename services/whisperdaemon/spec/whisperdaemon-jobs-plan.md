@@ -74,7 +74,7 @@ Authoritative progress ledger: [whisperdaemon-jobs-progress.json](whisperdaemon-
 
 ## Steps (mirror the ledger)
 - [x] **F0.1 — Пересмотр плана + леджера.** JSON валиден, DAG ацикличен.
-- [ ] **F1.1 — Контракт дескриптора + `services/whisperdaemon/daemon.json`** (accepted input pcm16le/16k/mono, transport ws host/port, capabilities). Документируем схему.
+- [x] **F1.1 — Контракт дескриптора + `services/whisperdaemon/daemon.json`** (accepted input pcm16le/16k/mono, transport ws host/port, capabilities). Документируем схему.
 - [ ] **F2.1 — FPC: вынести ядро инференса** в переиспользуемую функцию (pcm16le+lang → segments/words/text/lang); WS-путь делегирует. Поведение WS без изменений.
 - [ ] **F2.2 — FPC: события `describe` + `health`** (отдают дескриптор из `daemon.json` / состояние прогрева).
 - [ ] **F2.3 — FPC: событие `transcribe_file`** (читает pcm16le-файл по пути, инференс под `gInferenceLock`, отдаёт segment_final/word_committed/session_final).
@@ -84,6 +84,22 @@ Authoritative progress ledger: [whisperdaemon-jobs-progress.json](whisperdaemon-
 - [ ] **F4.1 — Интеграционный E2E-тест** (`/add_file` → convert → daemon → артефакты + `/get_job_status`).
 - [ ] **F4.2 — Ops: конфиг/скрипты** запуска оркестратора с whisperdaemon как `ws-daemon` (порядок старта) *(manual/non-blocking)*.
 - [ ] **F4.3 — Документация** (file-API демона, дескриптор, отличие ws-daemon от python-worker; обновить обзор).
+
+## Contract (F1.1): дескриптор демона + протокол file-API
+Источник истины — `services/whisperdaemon/daemon.json` (демон отдаёт его же по `describe`).
+
+- **`transport`** — `ws://host:port/`; в файле дефолт (127.0.0.1:7801), фактические host/port возвращает
+  `describe` (задаются `--host/--port`). Оркестратор берёт endpoint из своего `config.json` (F3.2).
+- **`input`** — согласованный формат, который file-daemon обязан подготовить ffmpeg перед заданием:
+  `raw` / `pcm_s16le` / `16000 Hz` / `mono` / little-endian.
+- **События (client → daemon → client):**
+  - `{event:describe}` → `describe_ack` (этот дескриптор с фактическим transport).
+  - `{event:health}` → `health_ack {state: loading|ready|failed, model_name, error?}`.
+  - `{event:transcribe_file, request_id, path, language, params:{word_timestamps?, mode?}}` →
+    поток `word_committed`* / `segment_final` → терминальный `session_final {text, duration_ms,
+    segment_count, language, detected_language?, request_id}`; при ошибке — `error {message, request_id?}`.
+- **Тайминги**: все `*_ms` — миллисекунды; в секунды переводит оркестратор при записи `result.json` (R4).
+- **Разделение**: демон только распознаёт присланный файл; очередь/артефакты/статусы — оркестратор (D6).
 
 ## References
 - File-daemon: `orchestrator/src/{index,job-manager,scheduler,process-manager}.ts`, `config.json`
