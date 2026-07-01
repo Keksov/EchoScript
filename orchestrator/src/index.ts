@@ -180,12 +180,17 @@ const app = new Hono();
 app.get("/", async (c) => {
   const runningModels = await processManager.listRunningModels();
   const schedulerState = scheduler.getState();
+  const activeProgress =
+    schedulerState.activeJobId !== null
+      ? await jobManager.getJobProgress(schedulerState.activeJobId).catch(() => null)
+      : null;
   return c.json({
     service: "echoscript-orchestrator",
     status: "ok",
     jobs_root: config.jobsRoot,
     active_job_id: schedulerState.activeJobId,
     active_model: schedulerState.activeModel,
+    active_progress: activeProgress,
     running_models: runningModels,
   });
 });
@@ -349,6 +354,25 @@ app.get("/get_job_status", async (c) => {
     assertValidJobId(jobId);
     const statusPayload = await jobManager.getJobStatus(jobId);
     return c.json(statusPayload);
+  } catch (error) {
+    if (error instanceof JobNotFoundError || error instanceof InvalidJobError) {
+      const status = error instanceof JobNotFoundError ? 404 : 400;
+      return c.json({ error: messageOf(error) }, status);
+    }
+    return c.json({ error: messageOf(error) }, 500);
+  }
+});
+
+app.get("/get_job_progress", async (c) => {
+  const jobId = c.req.query("job_id");
+  if (jobId === undefined || jobId.length === 0) {
+    return c.json({ error: "job_id query parameter is required" }, 400);
+  }
+
+  try {
+    assertValidJobId(jobId);
+    const progress = await jobManager.getJobProgress(jobId);
+    return c.json({ job_id: jobId, progress });
   } catch (error) {
     if (error instanceof JobNotFoundError || error instanceof InvalidJobError) {
       const status = error instanceof JobNotFoundError ? 404 : 400;

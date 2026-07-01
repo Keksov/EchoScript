@@ -60,9 +60,11 @@ Authoritative progress ledger: [file-streaming-bridge-progress.json](file-stream
 - **SB-D5 — Таймаут per-окно/heartbeat**, без глобального 10-мин потолка: ждём завершения каждого
   окна коротким таймаутом, который **сбрасывается** на каждом входящем событии демона.
 - **SB-D6 — Прогресс — отдельный overwrite-файл** `data/<id>/progress.json`
-  `{progress_pct, windows_done, windows_total, updated_at}`. `status.json` остаётся append-лентой
-  lifecycle как в старом Python. Оркестратор отдаёт `progress_pct` в `/get_job_status` и в сводке
-  `/list_jobs`.
+  `{progress_pct, windows_done, windows_total, processed_ms, total_ms, updated_at}`. `status.json`
+  остаётся append-лентой lifecycle как в старом Python. Прогресс отдаётся **аддитивно**, не ломая
+  массив `status.json`: поле `progress` в каждом элементе `/list_jobs`, новый роут
+  `/get_job_progress`, и `active_progress` в `GET /`. *(уточнено на SB2.2: `/get_job_status`
+  сохраняет прежний контракт-массив.)*
 - **SB-D7 — Rollover против 30-мин лимита демона.** Если без коммита накопилось ~20 мин аудио,
   оркестратор делает `session_final`→новый `session_start` со сдвигом таймстампов. На практике
   границы предложений коммитят раньше; это страховка.
@@ -92,8 +94,9 @@ Authoritative progress ledger: [file-streaming-bridge-progress.json](file-stream
 - [x] **SB2.1 — Конфиг + progress.json в раннере + переключение на мост.** `config.ts` читает
   `stream_window_ms`/`stream_rollover_ms`; раннер пишет `progress.json` через `onProgress`,
   `runWsDaemonJob` вызывает `transcribeFileStreaming` с параметрами из конфига.
-- [ ] **SB2.2 — Статус-API отдаёт прогресс.** `getJobStatus` читает `progress.json`;
-  `/get_job_status` и `/list_jobs` возвращают `progress_pct` (+ сводка активной задачи).
+- [x] **SB2.2 — Статус-API отдаёт прогресс.** `getJobProgress` читает `progress.json`; `/list_jobs`
+  (поле `progress`), новый `/get_job_progress`, `active_progress` в `GET /`. `/get_job_status` без
+  изменений (контракт-массив).
 - [ ] **SB3.1 — Cutover + rollover-гвард (SB-D7).** Убрать one-shot из джоб-пути; страховка от cap.
 - [ ] **SB3.2 — E2E на длинном файле** против реального whisperdaemon (гейт приёмки).
 - [ ] **SB3.3 — Docs.** Обновить `docs/ARCHITECTURE.md` и кросс-ссылку из whisperdaemon-jobs-plan.
