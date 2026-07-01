@@ -54,12 +54,12 @@
       "id": "SB2.1",
       "phase": 2,
       "title": "progress.json в раннере + переключение на мост",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["SB1.2"],
-      "artifacts": ["orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/ws-daemon-runner.test.ts", "orchestrator/src/config.ts", "config.json"],
+      "artifacts": ["orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/ws-daemon-runner.test.ts", "orchestrator/src/config.ts", "orchestrator/src/scheduler.ts", "config.json"],
       "verify": "bun test: config.ts читает stream_window_ms (дефолт 30000) и stream_rollover_ms (дефолт 1200000); runWsDaemonJob вызывает transcribeFileStreaming с этими значениями; onProgress пишет data/<id>/progress.json (атомарно, overwrite); status.json сохраняет processing/ready/failed.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T20:05:00Z", "finishedAt": "2026-07-01T20:16:00Z", "blockedReason": null,
+      "evidence": ["config.ts: streamWindowMs/streamRolloverMs (min-клампы); loadConfig -> 30000/1200000 подтверждено рантаймом", "config.json: добавлены stream_window_ms/stream_rollover_ms", "ws-daemon-runner: transcribe по умолчанию = transcribeFileStreaming; createProgressWriter пишет data/<id>/progress.json {progress_pct,windows_done,windows_total,processed_ms,total_ms,updated_at} с троттлингом и финальным 100%", "scheduler.dispatchWsDaemonJob пробрасывает windowBytes/rolloverBytes = bytesForMs(config)", "bun test -> 15 pass / 0 fail (новый тест progress.json -> pct 100, windows 4/4); tsc --noEmit exit 0"]
     },
     {
       "id": "SB2.2",
@@ -121,6 +121,7 @@
     { "ts": "2026-07-01T19:31:00Z", "step": "SB0.1", "event": "done", "note": "План+леджер созданы; JSON парсится, 9 шагов, DAG ацикличен; commit ce79dff. Пауза на границе фазы 0 для ревью решений SB-D1..SB-D7." },
     { "ts": "2026-07-01T19:33:00Z", "step": "SB0.1", "event": "decisions-refined", "note": "Ревью владельца: SB-D3 — размер окна из config.json (stream_window_ms, дефолт 30000); SB-D4 подтверждён (все файлы через мост); добавлен SB-D8 (stream_rollover_ms, дефолт 1200000)." },
     { "ts": "2026-07-01T19:48:00Z", "step": "SB1.1", "event": "done", "note": "daemon-stream-driver.ts: transcribeFileStreaming с DI (StreamSocket/PcmSource), окна pcm16le, backpressure, heartbeat, инкрементальная агрегация segment_final/word_committed, progress по processedMs. tsc --noEmit exit 0." },
-    { "ts": "2026-07-01T19:58:00Z", "step": "SB1.2", "event": "done", "note": "daemon-stream-driver.test.ts: 8 тестов (DI + интеграция с реальным сокетом). bun test полный сьют 14 pass / 0 fail. Конец фазы 1 — пауза на ревью." }
+    { "ts": "2026-07-01T19:58:00Z", "step": "SB1.2", "event": "done", "note": "daemon-stream-driver.test.ts: 8 тестов (DI + интеграция с реальным сокетом). bun test полный сьют 14 pass / 0 fail. Конец фазы 1 — пауза на ревью." },
+    { "ts": "2026-07-01T20:16:00Z", "step": "SB2.1", "event": "done", "note": "Конфиг stream_window_ms/stream_rollover_ms (дефолт 30000/1200000); раннер переключён на transcribeFileStreaming; progress.json пишется через createProgressWriter; scheduler пробрасывает окно/rollover из конфига. bun test 15 pass / 0 fail; tsc 0." }
   ]
 }

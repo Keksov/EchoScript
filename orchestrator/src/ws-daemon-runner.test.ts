@@ -76,6 +76,32 @@ test("runWsDaemonJob writes result artifacts, status transitions and ready marke
   }
 });
 
+test("runWsDaemonJob writes progress.json from streaming progress and finalizes at 100%", async () => {
+  const { base, jobId, dataDir, outputDir } = await setupJob({ language: "ru" });
+  try {
+    const status = await runWsDaemonJob(jobId, dataDir, outputDir, {
+      ffmpegPath: "unused",
+      endpoint,
+      convert: fakeConvert,
+      transcribe: async (_ep, _pcm, _opts, onProgress) => {
+        onProgress?.({ windowsSent: 1, windowsTotal: 4, bytesSent: 1000, bytesTotal: 4000, processedMs: 500, totalMs: 2000, progressPct: 25 });
+        onProgress?.({ windowsSent: 4, windowsTotal: 4, bytesSent: 4000, bytesTotal: 4000, processedMs: 1500, totalMs: 2000, progressPct: 75 });
+        return cannedTranscription;
+      },
+    });
+    expect(status).toBe("ready");
+
+    const progress = JSON.parse(await readFile(path.join(dataDir, "progress.json"), "utf-8"));
+    expect(progress.progress_pct).toBe(100);
+    expect(progress.windows_done).toBe(4);
+    expect(progress.windows_total).toBe(4);
+    expect(progress.total_ms).toBe(2000);
+    expect(typeof progress.updated_at).toBe("string");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("runWsDaemonJob records failure and failed marker when the daemon errors", async () => {
   const { base, jobId, dataDir, outputDir } = await setupJob({ language: "ru" });
   try {

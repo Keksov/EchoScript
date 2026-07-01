@@ -89,7 +89,7 @@ Authoritative progress ledger: [file-streaming-bridge-progress.json](file-stream
   `transcribeFileStreaming(endpoint, pcmPath, options, onProgress)`.
 - [x] **SB1.2 — Юнит-тесты драйвера.** Оконная математика, порядок кадров, инкрементальная агрегация,
   прогресс-колбэк, сброс таймаута, ошибки, бинарность кадров.
-- [ ] **SB2.1 — Конфиг + progress.json в раннере + переключение на мост.** `config.ts` читает
+- [x] **SB2.1 — Конфиг + progress.json в раннере + переключение на мост.** `config.ts` читает
   `stream_window_ms`/`stream_rollover_ms`; раннер пишет `progress.json` через `onProgress`,
   `runWsDaemonJob` вызывает `transcribeFileStreaming` с параметрами из конфига.
 - [ ] **SB2.2 — Статус-API отдаёт прогресс.** `getJobStatus` читает `progress.json`;
