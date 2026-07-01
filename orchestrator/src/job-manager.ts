@@ -644,12 +644,17 @@ export class JobManager {
         };
       }
 
-      const firstStatus = isRecord(statuses[0]) ? statuses[0] : null;
-      const lastStatus = isRecord(statuses[statuses.length - 1]) ? statuses[statuses.length - 1] : null;
+      const firstRaw = statuses[0];
+      const lastRaw = statuses[statuses.length - 1];
+      const firstStatus: Record<string, unknown> | null = isRecord(firstRaw) ? firstRaw : null;
+      const lastStatus: Record<string, unknown> | null = isRecord(lastRaw) ? lastRaw : null;
+      const currentStatusValue = lastStatus?.["status"];
+      const firstUpdatedValue = firstStatus?.["updated_at"];
+      const lastUpdatedValue = lastStatus?.["updated_at"];
       return {
-        currentStatus: typeof lastStatus?.status === "string" ? lastStatus.status : null,
-        createdAt: typeof firstStatus?.updated_at === "string" ? firstStatus.updated_at : null,
-        updatedAt: typeof lastStatus?.updated_at === "string" ? lastStatus.updated_at : null,
+        currentStatus: typeof currentStatusValue === "string" ? currentStatusValue : null,
+        createdAt: typeof firstUpdatedValue === "string" ? firstUpdatedValue : null,
+        updatedAt: typeof lastUpdatedValue === "string" ? lastUpdatedValue : null,
       };
     } catch (error) {
       if (error instanceof InvalidJobError) {
