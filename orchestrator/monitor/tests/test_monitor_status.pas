@@ -40,6 +40,7 @@ begin
   st := queryDaemonStatus(item, 3000);
   WriteLn('LIVE ', aHost, ':', aPort,
     ' port_open=', st.PortOpen,
+    ' pid=', st.Pid,
     ' reachable=', st.Reachable,
     ' state=', st.HealthState,
     ' model=', st.ModelName);
@@ -86,6 +87,7 @@ begin
   st := queryDaemonStatus(item, 500);
   Ok('closed daemon status down',
     (not st.PortOpen) and (not st.Reachable) and (st.HealthState = 'down'));
+  Ok('closed daemon pid 0', st.Pid = 0);
 
   WriteLn('summary: pass=', gPass, ' fail=', gFail);
   if gFail > 0 then

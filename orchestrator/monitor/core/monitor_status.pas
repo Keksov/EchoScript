@@ -17,6 +17,7 @@ type
     Host        : string;
     Port        : Integer;
     PortOpen    : Boolean;   { что-то слушает порт (proxy живости процесса-сервера) }
+    Pid         : Integer;   { PID процесса-слушателя порта (0 = не найден) }
     Reachable   : Boolean;   { WS подключился и пришёл health_ack }
     HealthState : string;    { down | unknown | up | loading | ready | failed }
     ModelName   : string;
@@ -91,6 +92,74 @@ begin
     data.Free;
   end;
 end;
+
+{$ifdef MSWINDOWS}
+{ PID процесса, слушающего TCP-порт aPort (через iphlpapi GetExtendedTcpTable).
+  Каждый инстанс демона биндит свой порт => это точный PID инстанса. }
+function listeningPidOnPort(aPort: Integer): Integer;
+type
+  TMibTcpRowOwnerPid = record
+    dwState      : DWORD;
+    dwLocalAddr  : DWORD;
+    dwLocalPort  : DWORD;
+    dwRemoteAddr : DWORD;
+    dwRemotePort : DWORD;
+    dwOwningPid  : DWORD;
+  end;
+  PMibTcpRowOwnerPid = ^TMibTcpRowOwnerPid;
+  TGetExtendedTcpTable = function(pTcpTable: Pointer; pdwSize: PDWORD;
+    bOrder: LongBool; ulAf: DWORD; TableClass: DWORD; Reserved: DWORD): DWORD; stdcall;
+const
+  AF_INET_MON = 2;
+  TCP_TABLE_OWNER_PID_LISTENER = 3;
+var
+  hLib: HMODULE;
+  getTable: TGetExtendedTcpTable;
+  size: DWORD;
+  buf: array of Byte;
+  numEntries: DWORD;
+  idx: DWORD;
+  row: PMibTcpRowOwnerPid;
+  localPort: Integer;
+  rawPort: DWORD;
+begin
+  Result := 0;
+  hLib := LoadLibrary(PChar('iphlpapi.dll'));
+  if hLib = 0 then
+    Exit;
+  try
+    Pointer(getTable) := GetProcAddress(hLib, PChar('GetExtendedTcpTable'));
+    if not Assigned(getTable) then
+      Exit;
+
+    size := 0;
+    getTable(nil, @size, False, AF_INET_MON, TCP_TABLE_OWNER_PID_LISTENER, 0);
+    if size = 0 then
+      Exit;
+
+    SetLength(buf, size);
+    if getTable(@buf[0], @size, False, AF_INET_MON, TCP_TABLE_OWNER_PID_LISTENER, 0) <> 0 then
+      Exit;
+
+    numEntries := PDWORD(@buf[0])^;
+    for idx := 0 to numEntries - 1 do
+    begin
+      row := PMibTcpRowOwnerPid(@buf[SizeOf(DWORD) + idx * SizeOf(TMibTcpRowOwnerPid)]);
+      rawPort := row^.dwLocalPort;
+      localPort := ((rawPort and $FF) shl 8) or ((rawPort shr 8) and $FF);
+      if localPort = aPort then
+        Exit(Integer(row^.dwOwningPid));
+    end;
+  finally
+    FreeLibrary(hLib);
+  end;
+end;
+{$else}
+function listeningPidOnPort({%H-}aPort: Integer): Integer;
+begin
+  Result := 0;
+end;
+{$endif}
 
 function isPortOpen(const aHost: string; aPort: Integer): Boolean;
 var
@@ -217,6 +286,7 @@ begin
   Result.Host := aItem.Host;
   Result.Port := aItem.Port;
   Result.PortOpen := isPortOpen(aItem.Host, aItem.Port);
+  Result.Pid := listeningPidOnPort(aItem.Port);
   Result.Reachable := False;
   Result.HealthState := 'down';
   Result.ModelName := '';

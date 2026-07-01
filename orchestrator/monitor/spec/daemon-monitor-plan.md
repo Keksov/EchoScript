@@ -87,6 +87,7 @@ CLI на FPC (`orchestrator/monitor/cli`) — запрос статуса/health
 - [x] **M4.1 — GUI** (`orchestrator/monitor/app`, Lazarus+Pixie): таблица статусов через CLI `status --json`. `lazbuild` exit 0 + runtime-smoke. *(скриншот — ручной)*
 - [x] **M4.2 — GUI: действия** start/stop/restart (кнопки → CLI). `lazbuild` exit 0 + runtime-smoke.
 - [x] **M5.1 — Документация и ops** (README, build/run-скрипты, описание `daemons.json`).
+- [x] **M6.1 — Реальная PID-детекция инстансов** (Windows TCP-таблица `GetExtendedTcpTable`: порт → PID слушателя) в ядре + CLI + GUI. Unit (закрытый порт→0) + живой (PID совпал с реальным).
 
 ## References
 - Демоны: `services/{voskdaemon,whisperdaemon,vibevoicedaemon,diarizationdaemon}`

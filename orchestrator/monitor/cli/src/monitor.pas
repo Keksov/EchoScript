@@ -101,6 +101,7 @@ begin
       obj.Add('host', aStatuses[idx].Host);
       obj.Add('port', aStatuses[idx].Port);
       obj.Add('port_open', aStatuses[idx].PortOpen);
+      obj.Add('pid', aStatuses[idx].Pid);
       obj.Add('reachable', aStatuses[idx].Reachable);
       obj.Add('state', aStatuses[idx].HealthState);
       obj.Add('model', aStatuses[idx].ModelName);
@@ -119,12 +120,12 @@ var
   idx: Integer;
   s: TDaemonStatus;
 begin
-  WriteLn(Format('%-18s %-9s %-10s %-10s %s', ['NAME', 'STATE', 'PORT', 'REACHABLE', 'MODEL']));
+  WriteLn(Format('%-18s %-9s %-7s %-8s %-10s %s', ['NAME', 'STATE', 'PORT', 'PID', 'REACHABLE', 'MODEL']));
   for idx := 0 to High(aStatuses) do
   begin
     s := aStatuses[idx];
-    WriteLn(Format('%-18s %-9s %-10s %-10s %s',
-      [s.Name, s.HealthState, IntToStr(s.Port), BoolToStr(s.Reachable, 'yes', 'no'), s.ModelName]));
+    WriteLn(Format('%-18s %-9s %-7s %-8s %-10s %s',
+      [s.Name, s.HealthState, IntToStr(s.Port), IntToStr(s.Pid), BoolToStr(s.Reachable, 'yes', 'no'), s.ModelName]));
   end;
 end;
 

@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "complete",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T14:42:32Z",
+  "updatedAt": "2026-07-01T14:53:50Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -189,6 +189,22 @@
         "scripts/build_all.bat: тесты + CLI + GUI одной командой -> exit 0 (core 10/10, status 6/6, control 10/10; monitor.exe + MonitorApp.exe собраны).",
         "Финальная верификация инициативы: build_all.bat зелёный."
       ]
+    },
+    {
+      "id": "M6.1",
+      "phase": 6,
+      "title": "Реальная PID-детекция инстансов (Windows TCP-таблица)",
+      "status": "done",
+      "dependsOn": ["M2.2", "M3.1", "M4.2"],
+      "artifacts": ["orchestrator/monitor/core/monitor_status.pas", "orchestrator/monitor/cli/src/monitor.pas", "orchestrator/monitor/app/src/main_form.pas", "orchestrator/monitor/tests/test_monitor_status.pas", "orchestrator/monitor/README.md"],
+      "verify": "build_all exit 0; unit: закрытый порт -> pid 0; живой опрос реального демона -> pid > 0; CLI status показывает PID; --json содержит pid.",
+      "startedAt": "2026-07-01T14:53:50Z", "finishedAt": "2026-07-01T14:53:50Z", "blockedReason": null,
+      "evidence": [
+        "monitor_status.pas: listeningPidOnPort (iphlpapi GetExtendedTcpTable, TCP_TABLE_OWNER_PID_LISTENER; порт->PID слушателя, ntohs) + поле TDaemonStatus.Pid; ленивая загрузка DLL (PASCAL_RULES §3).",
+        "build_all exit 0: core 10/10, status 7/7 (добавлен pid=0 на закрытом порту), control 10/10; CLI+GUI собраны.",
+        "Живая сверка: демон real PID=16760 -> CLI status таблица (diarization PID=16760, выключенные 0), --json pid=16760, test --live pid=16760. Точное совпадение.",
+        "CLI: колонка PID + поле pid в JSON; GUI: колонка PID (из CLI JSON). README обновлён."
+      ]
     }
   ],
   "log": [
@@ -203,6 +219,8 @@
     { "ts": "2026-07-01T14:31:47Z", "step": "M4.1", "event": "done", "note": "GUI (Lazarus+Pixie) MonitorApp: lazbuild exit 0 + runtime-smoke (spawn CLI status --json, Pixie render, без краха). Отступление D5a: GUI поверх CLI (fpwebsocket нет в FPC Lazarus)." },
     { "ts": "2026-07-01T14:36:55Z", "step": "M4.2", "event": "done", "note": "GUI: комбобокс + Старт/Стоп/Рестарт через CLI (monitor <action> <name>). lazbuild exit 0 + smoke. Конец фазы 4 (GUI готов)." },
     { "ts": "2026-07-01T14:42:32Z", "step": "M5.1", "event": "done", "note": "README + scripts/build_all.bat (тесты+CLI+GUI, exit 0)." },
-    { "ts": "2026-07-01T14:42:32Z", "step": "-", "event": "complete", "note": "Инициатива завершена: 11/11 шагов. 4 демона -> единый WS describe/health; ядро (инвентарь/статус/управление) юнит-тестировано; CLI (E2E) + GUI (lazbuild) работают. build_all зелёный." }
+    { "ts": "2026-07-01T14:42:32Z", "step": "-", "event": "complete", "note": "Инициатива завершена: 11/11 шагов. 4 демона -> единый WS describe/health; ядро (инвентарь/статус/управление) юнит-тестировано; CLI (E2E) + GUI (lazbuild) работают. build_all зелёный." },
+    { "ts": "2026-07-01T14:53:50Z", "step": "M6.1", "event": "done", "note": "Реальная PID-детекция (GetExtendedTcpTable) в ядре/CLI/GUI. build_all exit 0; живая сверка: CLI показал реальный PID демона 16760, закрытые -> 0." },
+    { "ts": "2026-07-01T14:53:50Z", "step": "-", "event": "complete", "note": "Доработка 3.а завершена: 12/12 шагов." }
   ]
 }

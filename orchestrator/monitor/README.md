@@ -26,8 +26,9 @@ orchestrator/monitor/
 | `{event:describe}` | `describe_ack` — дескриптор `services/<daemon>/daemon.json` с фактическими `transport.host/port` |
 | `{event:health}` | `health_ack {state: loading\|ready\|failed, model_name, error?}` |
 
-Статус демона в мониторе = **порт открыт** (что-то слушает → процесс-сервер жив) + при
-`health=ws` ещё и **WS health** (state/model). Закрытый порт → `down`.
+Статус демона в мониторе = **порт открыт** (что-то слушает → процесс-сервер жив) +
+**PID слушателя** (через Windows TCP-таблицу `GetExtendedTcpTable` — точный процесс инстанса) +
+при `health=ws` ещё и **WS health** (state/model). Закрытый порт → `down`, PID `0`.
 
 ## Инвентарь `daemons.json`
 
@@ -60,12 +61,12 @@ monitor -h | --help                 справка
 Примеры:
 ```
 monitor status
-NAME               STATE     PORT       REACHABLE  MODEL
-whisper_podlodka   ready     7801       yes        whisper_podlodka
-vosk_ru            down      7701       no
+NAME               STATE     PORT    PID      REACHABLE  MODEL
+whisper_podlodka   ready     7801    12345    yes        whisper_podlodka
+vosk_ru            down      7701    0        no
 
 monitor status diarization --json
-[ { "name":"diarization","port":7900,"port_open":true,"reachable":true,"state":"ready", ... } ]
+[ { "name":"diarization","port":7900,"port_open":true,"pid":16760,"reachable":true,"state":"ready", ... } ]
 ```
 
 ## Сборка

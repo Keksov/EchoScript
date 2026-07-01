@@ -27,6 +27,7 @@ type
     Name        : string;
     Endpoint    : string;
     State       : string;
+    Pid         : Integer;
     Reachable   : Boolean;
     Model       : string;
   end;
@@ -165,6 +166,7 @@ begin
       aStatuses[idx].Name := obj.Get('name', '');
       aStatuses[idx].Endpoint := obj.Get('host', '') + ':' + IntToStr(obj.Get('port', 0));
       aStatuses[idx].State := obj.Get('state', '');
+      aStatuses[idx].Pid := obj.Get('pid', 0);
       aStatuses[idx].Reachable := obj.Get('reachable', False);
       aStatuses[idx].Model := obj.Get('model', '');
     end;
@@ -311,7 +313,7 @@ begin
     html.Add('.muted{color:#6b7280;}');
     html.Add('</style></head><body>');
     html.Add('<h1>Демоны распознавания</h1>');
-    html.Add('<table><tr><th>Демон</th><th>Статус</th><th>Endpoint</th><th>Reachable</th><th>Модель</th></tr>');
+    html.Add('<table><tr><th>Демон</th><th>Статус</th><th>Endpoint</th><th>PID</th><th>Reachable</th><th>Модель</th></tr>');
     for idx := 0 to High(aStatuses) do
     begin
       s := aStatuses[idx];
@@ -320,6 +322,7 @@ begin
         '<td><span class="dot" style="background:' + stateColor(s.State) + '"></span>' +
           '<strong style="color:' + stateColor(s.State) + '">' + htmlEscape(s.State) + '</strong></td>' +
         '<td class="muted">' + htmlEscape(s.Endpoint) + '</td>' +
+        '<td class="muted">' + BoolToStr(s.Pid > 0, IntToStr(s.Pid), '—') + '</td>' +
         '<td>' + BoolToStr(s.Reachable, 'да', 'нет') + '</td>' +
         '<td>' + htmlEscape(s.Model) + '</td></tr>'
       );
