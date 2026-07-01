@@ -3,9 +3,9 @@
   "plan": "daemon-monitor",
   "planDoc": "spec/daemon-monitor-plan.md",
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T14:36:55Z",
+  "updatedAt": "2026-07-01T14:42:32Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -179,12 +179,16 @@
       "id": "M5.1",
       "phase": 5,
       "title": "Документация и ops (README, build/run, daemons.json)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M3.1", "M4.2"],
-      "artifacts": ["orchestrator/monitor/README.md", "orchestrator/monitor/*/scripts/"],
+      "artifacts": ["orchestrator/monitor/README.md", "orchestrator/monitor/scripts/build_all.bat"],
       "verify": "README описывает CLI-команды, инвентарь daemons.json, сборку CLI/GUI, протокол health.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T14:42:32Z", "finishedAt": "2026-07-01T14:42:32Z", "blockedReason": null,
+      "evidence": [
+        "README.md: обзор, единый WS describe/health, схема daemons.json, CLI-команды с примерами, порядок сборки (CLI до GUI), заметка D5a, тесты.",
+        "scripts/build_all.bat: тесты + CLI + GUI одной командой -> exit 0 (core 10/10, status 6/6, control 10/10; monitor.exe + MonitorApp.exe собраны).",
+        "Финальная верификация инициативы: build_all.bat зелёный."
+      ]
     }
   ],
   "log": [
@@ -197,6 +201,8 @@
     { "ts": "2026-07-01T14:10:33Z", "step": "M2.3", "event": "done", "note": "monitor_control.pas: start/stop/restart через скрипты (TScriptRunner инъектируемый; TRealScriptRunner=TProcess). Тест 10/10; fcl-process в -Fu. Конец фазы 2 (ядро готово)." },
     { "ts": "2026-07-01T14:19:52Z", "step": "M3.1", "event": "done", "note": "CLI monitor.pas (list/status[--json]/start|stop|restart) поверх ядра; сборка exit 0; E2E против живого diarizationdaemon:7900 (list, status table, status --json корректны)." },
     { "ts": "2026-07-01T14:31:47Z", "step": "M4.1", "event": "done", "note": "GUI (Lazarus+Pixie) MonitorApp: lazbuild exit 0 + runtime-smoke (spawn CLI status --json, Pixie render, без краха). Отступление D5a: GUI поверх CLI (fpwebsocket нет в FPC Lazarus)." },
-    { "ts": "2026-07-01T14:36:55Z", "step": "M4.2", "event": "done", "note": "GUI: комбобокс + Старт/Стоп/Рестарт через CLI (monitor <action> <name>). lazbuild exit 0 + smoke. Конец фазы 4 (GUI готов)." }
+    { "ts": "2026-07-01T14:36:55Z", "step": "M4.2", "event": "done", "note": "GUI: комбобокс + Старт/Стоп/Рестарт через CLI (monitor <action> <name>). lazbuild exit 0 + smoke. Конец фазы 4 (GUI готов)." },
+    { "ts": "2026-07-01T14:42:32Z", "step": "M5.1", "event": "done", "note": "README + scripts/build_all.bat (тесты+CLI+GUI, exit 0)." },
+    { "ts": "2026-07-01T14:42:32Z", "step": "-", "event": "complete", "note": "Инициатива завершена: 11/11 шагов. 4 демона -> единый WS describe/health; ядро (инвентарь/статус/управление) юнит-тестировано; CLI (E2E) + GUI (lazbuild) работают. build_all зелёный." }
   ]
 }

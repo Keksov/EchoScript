@@ -1,6 +1,6 @@
 # Daemon Monitor & Control — план
 
-Status: **active**
+Status: **complete**
 Created: 2026-07-01
 Authoritative progress ledger: [daemon-monitor-progress.json](daemon-monitor-progress.json)
 
@@ -86,7 +86,7 @@ CLI на FPC (`orchestrator/monitor/cli`) — запрос статуса/health
 - [x] **M3.1 — CLI** (`orchestrator/monitor/cli`): `list`, `status [--json]`, `start/stop/restart <name>`. Сборка + E2E (live diarization). 
 - [x] **M4.1 — GUI** (`orchestrator/monitor/app`, Lazarus+Pixie): таблица статусов через CLI `status --json`. `lazbuild` exit 0 + runtime-smoke. *(скриншот — ручной)*
 - [x] **M4.2 — GUI: действия** start/stop/restart (кнопки → CLI). `lazbuild` exit 0 + runtime-smoke.
-- [ ] **M5.1 — Документация и ops** (README, build/run-скрипты, описание `daemons.json`).
+- [x] **M5.1 — Документация и ops** (README, build/run-скрипты, описание `daemons.json`).
 
 ## References
 - Демоны: `services/{voskdaemon,whisperdaemon,vibevoicedaemon,diarizationdaemon}`
