@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "complete",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T15:59:40Z",
+  "updatedAt": "2026-07-01T16:44:27Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -225,6 +225,7 @@
     { "ts": "2026-07-01T15:24:23Z", "step": "fix", "event": "done", "note": "GUI UX-фикс: окно показывается сразу (скелет из daemons.json), опрос отложен через Application.QueueAsyncCall и идёт по одному демону с ProcessMessages; runMonitor читает неблокирующе. Устранены медленный старт и зависание окна. Проверено: process.Responding=True во время опроса." },
     { "ts": "2026-07-01T15:37:33Z", "step": "feat", "event": "done", "note": "GUI режимы обновления: Manual по умолчанию (кнопка Refresh, таймер off) + галочка Auto-refresh + Timeout (сек, 5). Старт -> полный опрос (прогрессивный), далее по настройкам. Последующие обновления — тихий полный опрос без 'проверка…' в строках; футер 'Последнее обновление: чч:мм:сс · режим'. lazbuild exit 0, smoke Responding=True." },
     { "ts": "2026-07-01T15:51:28Z", "step": "feat", "event": "done", "note": "Аккордеон: клик по имени демона (Pixie OnAnchorClick, href toggle:<name>) раскрывает карточку, повторный клик закрывает (одиночное раскрытие). Карточка: состояние/reachable/PID, ws-endpoint, тип+движок, модель, формат входа (codec/rate/ch), возможности (языки/режимы/диаризация/word_ts/streaming/file_api), start/stop-скрипты. Данные из describe: добавлена CLI-команда 'describe <name>' (queryDaemonDescribe в ядре, WS describe->describe_ack). build_all exit 0; CLI describe проверен живьём." },
-    { "ts": "2026-07-01T15:59:40Z", "step": "feat", "event": "done", "note": "Кнопки управления перенесены с верхней панели в грид: per-row ссылки Старт/Стоп/Рестарт (Pixie OnAnchorClick, href start|stop|restart:<name> -> controlByName -> CLI). Убраны выпадающий список демона и кнопки Старт/Стоп/Рестарт сверху; наверху остались Refresh/Auto-refresh/Timeout. lazbuild exit 0, smoke Responding=True." }
+    { "ts": "2026-07-01T15:59:40Z", "step": "feat", "event": "done", "note": "Кнопки управления перенесены с верхней панели в грид: per-row ссылки Старт/Стоп/Рестарт (Pixie OnAnchorClick, href start|stop|restart:<name> -> controlByName -> CLI). Убраны выпадающий список демона и кнопки Старт/Стоп/Рестарт сверху; наверху остались Refresh/Auto-refresh/Timeout. lazbuild exit 0, smoke Responding=True." },
+    { "ts": "2026-07-01T16:44:27Z", "step": "feat", "event": "done", "note": "Инвентарь: whisper_podlodka переименован в whisperdaemon (модель в model_name); добавлен orchestrator (file-daemon, :3000) с health=http. Ядро: queryHttpHealth (fphttpclient GET / -> status:ok, active_model) + ветка http в queryDaemonStatus. Скрипты orchestrator start/stop. test_monitor_core 11/11. Живьём: list=6, status orchestrator -> reachable ready pid совпал, model idle." }
   ]
 }

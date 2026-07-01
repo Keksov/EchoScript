@@ -40,6 +40,7 @@ uses
   ssockets,
   fpwebsocket,
   fpwebsocketclient,
+  fphttpclient,
   fpjson,
   jsonparser,
   {$ifdef MSWINDOWS}
@@ -373,6 +374,60 @@ begin
   end;
 end;
 
+{ HTTP-health (для не-WS демонов, напр. оркестратора): GET / -> {status:"ok", active_model}. }
+function queryHttpHealth(const aHost: string; aPort: Integer; aTimeoutMs: Integer; out aState, aModel: string): Boolean;
+var
+  client: TFPHTTPClient;
+  body: string;
+  data: TJSONData;
+  root: TJSONObject;
+  st, am: string;
+begin
+  Result := False;
+  aState := '';
+  aModel := '';
+  client := TFPHTTPClient.Create(nil);
+  try
+    client.ConnectTimeout := aTimeoutMs;
+    client.IOTimeout := aTimeoutMs;
+    try
+      body := client.Get('http://' + aHost + ':' + IntToStr(aPort) + '/');
+    except
+      on E: Exception do
+        Exit(False);
+    end;
+
+    data := nil;
+    try
+      data := GetJSON(body);
+    except
+      on E: Exception do
+        data := nil;
+    end;
+    if (data <> nil) and (data.JSONType = jtObject) then
+    begin
+      root := TJSONObject(data);
+      st := LowerCase(Trim(jsonStr(root, 'status')));
+      am := Trim(jsonStr(root, 'active_model'));
+      if st = 'ok' then
+        aState := 'ready'
+      else if st <> '' then
+        aState := st
+      else
+        aState := 'unknown';
+      if am <> '' then
+        aModel := am
+      else
+        aModel := 'idle';
+      Result := True;
+    end;
+    if data <> nil then
+      data.Free;
+  finally
+    client.Free;
+  end;
+end;
+
 function queryDaemonStatus(const aItem: TDaemonInventoryItem; aWsTimeoutMs: Integer = 2000): TDaemonStatus;
 var
   state, model, err: string;
@@ -409,6 +464,20 @@ begin
       Result.HealthState := 'unknown';
       Result.ErrorText := err;
     end;
+  end
+  else if SameText(aItem.HealthKind, 'http') then
+  begin
+    if queryHttpHealth(aItem.Host, aItem.Port, aWsTimeoutMs, state, model) then
+    begin
+      Result.Reachable := True;
+      if state <> '' then
+        Result.HealthState := state
+      else
+        Result.HealthState := 'ready';
+      Result.ModelName := model;
+    end
+    else
+      Result.HealthState := 'unknown';
   end
   else
   begin

@@ -41,11 +41,12 @@ orchestrator/monitor/
 | `host`, `port` | WS-endpoint |
 | `ws_resource` | ресурс (обычно `/`) |
 | `model_name` | модель (информативно) |
-| `health` | метод статуса (`ws`) |
+| `health` | метод статуса (`ws` — WS describe/health; `http` — GET / -> {status:"ok"}) |
 | `start_script`, `stop_script` | пути (относительно корня проекта) для управления |
 
-Текущие 5 инстансов: `vosk_ru` (7701), `vosk_ru_cmd` (7702), `whisper_podlodka` (7801),
-`vibevoice` (7802), `diarization` (7900).
+Текущие 6 инстансов: `vosk_ru` (7701), `vosk_ru_cmd` (7702), `whisperdaemon` (7801, модель
+whisper_podlodka), `vibevoice` (7802), `diarization` (7900) — WS-демоны; и `orchestrator`
+(3000, file-daemon) — HTTP-health (`GET /`). PID слушателя определяется для всех (в т.ч. HTTP).
 
 ## CLI
 

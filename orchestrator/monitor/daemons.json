@@ -25,7 +25,7 @@
       "stop_script": "services/voskdaemon/scripts/stop_voskdaemon_ru_cmd.bat"
     },
     {
-      "name": "whisper_podlodka",
+      "name": "whisperdaemon",
       "kind": "fpc",
       "host": "127.0.0.1",
       "port": 7801,
@@ -56,6 +56,17 @@
       "health": "ws",
       "start_script": "services/diarizationdaemon/sherpa/scripts/start_diarizationdaemon_sherpa.bat",
       "stop_script": "services/diarizationdaemon/sherpa/scripts/stop_diarizationdaemon_sherpa.bat"
+    },
+    {
+      "name": "orchestrator",
+      "kind": "node",
+      "host": "127.0.0.1",
+      "port": 3000,
+      "ws_resource": "/",
+      "model_name": "file-daemon",
+      "health": "http",
+      "start_script": "orchestrator/scripts/start_orchestrator.bat",
+      "stop_script": "orchestrator/scripts/stop_orchestrator.bat"
     }
   ]
 }
