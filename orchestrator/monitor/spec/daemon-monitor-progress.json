@@ -5,7 +5,7 @@
   "title": "Daemon Monitor & Control (CLI на FPC + GUI на Lazarus/Pixie, общее ядро)",
   "status": "active",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T13:53:36Z",
+  "updatedAt": "2026-07-01T14:03:01Z",
   "decisions": [
     { "id": "D1", "text": "Общее UI-независимое ядро monitor-core (Pascal); CLI (FPC) и GUI (Lazarus+Pixie) линкуют его; CLI умеет human + --json." },
     { "id": "D2", "text": "Объём: мониторинг + управление (status/health/list + start/stop/restart через существующие скрипты демонов)." },
@@ -100,12 +100,17 @@
       "id": "M2.2",
       "phase": 2,
       "title": "monitor-core: статус (порт + процесс + WS describe/health)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["M2.1", "M1.1"],
-      "artifacts": ["orchestrator/monitor/core/monitor_status.pas", "orchestrator/monitor/tests/"],
+      "artifacts": ["orchestrator/monitor/core/monitor_status.pas", "orchestrator/monitor/tests/test_monitor_status.pas", "orchestrator/monitor/tests/build_x64.bat"],
       "verify": "unit-тест на mock-WS (describe/health парсятся); живой опрос реального демона даёт up + health.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-01T14:03:01Z", "finishedAt": "2026-07-01T14:03:01Z", "blockedReason": null,
+      "evidence": [
+        "monitor_status.pas: isPortOpen (ssockets/TInetSocket) + WS health-клиент (fpwebsocketclient, drain-цикл CheckIncoming) + queryDaemonStatus/queryInventoryStatuses; parseHealthAck вынесен как чистая функция (guard на битый JSON).",
+        "build_x64.bat: собирает+гоняет оба теста. test_monitor_status 6/6 PASS (parse ready/failed/non-ack/bad-json; closed port down); test_monitor_core 10/10. exit 0.",
+        "Живой опрос: vs реальный voskdaemon :7799 -> port_open=TRUE reachable=TRUE state=loading model=vosk_ru; vs закрытый :7788 -> port_open=FALSE state=down.",
+        "Замечание: живость процесса для server-демона представлена признаком port_open (связанный порт => живой процесс); отдельная PID-детекция отложена."
+      ]
     },
     {
       "id": "M2.3",
@@ -168,6 +173,7 @@
     { "ts": "2026-07-01T13:13:17Z", "step": "M1.1", "event": "done", "note": "voskdaemon получил WS describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (порт 7799, model vosk_ru), health_ack state=loading." },
     { "ts": "2026-07-01T13:24:35Z", "step": "M1.2", "event": "done", "note": "vibevoicedaemon (Python) получил describe/health в Session + daemon.json; ленивый импорт модели; handler-тест под venv PASS (describe_ack/health_ack). Полный WS-сервер блокирован битым torch в env." },
     { "ts": "2026-07-01T13:46:24Z", "step": "M1.3", "event": "done", "note": "diarizationdaemon (FPC WS) получил describe/health + daemon.json; сборка exit 0; живой опрос: describe_ack (7898), health_ack state=ready. Конец фазы 1 — единый health у всех 4 демонов." },
-    { "ts": "2026-07-01T13:53:36Z", "step": "M2.1", "event": "done", "note": "monitor-core: daemons.json (5 инстансов) + monitor_core.pas (типы + loadDaemonInventory/findDaemon) + unit-тест 10/10 (build exit 0). Начало ядра." }
+    { "ts": "2026-07-01T13:53:36Z", "step": "M2.1", "event": "done", "note": "monitor-core: daemons.json (5 инстансов) + monitor_core.pas (типы + loadDaemonInventory/findDaemon) + unit-тест 10/10 (build exit 0). Начало ядра." },
+    { "ts": "2026-07-01T14:03:01Z", "step": "M2.2", "event": "done", "note": "monitor_status.pas: порт (ssockets) + WS health-клиент (fpwebsocketclient); parseHealthAck. Тест 6/6; живой опрос voskdaemon:7799 -> reachable state=loading model=vosk_ru; закрытый порт -> down." }
   ]
 }
