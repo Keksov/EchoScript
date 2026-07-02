@@ -92,7 +92,7 @@
       "id": "DR3.1",
       "phase": 3,
       "title": "Drop-ядро (claim/job_id/bootstrap) + юниты",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR0.1"],
       "artifacts": ["orchestrator/src/file-drop.ts", "orchestrator/src/file-drop.test.ts", "orchestrator/src/job-manager.ts", "orchestrator/src/job-manager.test.ts"],
       "verify": "bun test: claimMediaFile (stability-debounce ДО claim -> atomic rename .processing); buildMediaJobId (транслит кириллицы, валидный id); bootstrap перемещает файл в data/<id>/input и создаёт задание через JobManager/enqueue (DR-D13), а не дублирует запись файлов.",
