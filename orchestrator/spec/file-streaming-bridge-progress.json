@@ -3,9 +3,9 @@
   "plan": "file-streaming-bridge",
   "planDoc": "spec/file-streaming-bridge-plan.md",
   "title": "Файловый ввод через стриминговый мост оркестратора + прогресс",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-07-01",
-  "updatedAt": "2026-07-01T19:29:55Z",
+  "updatedAt": "2026-07-02T10:34:00Z",
   "decisions": [
     { "id": "SB-D1", "text": "Большие файлы идут через существующий стриминговый протокол демона (session_start -> бинарные окна pcm16le -> flush -> session_final), а не одним transcribe_file; демон не меняем." },
     { "id": "SB-D2", "text": "Мост — чистый TS-модуль orchestrator/src/daemon-stream-driver.ts; WS-фабрика и чтение файла инъектируются (DI) для тестов." },
@@ -121,12 +121,12 @@
       "id": "SB4.1",
       "phase": 4,
       "title": "(non-blocking) Прогресс в мониторе",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["SB2.2"],
       "artifacts": ["orchestrator/monitor/app/src/main_form.pas"],
       "verify": "Карточка оркестратора в мониторе показывает progress_pct активной задачи (manual/non-blocking, визуальная проверка).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T10:20:00Z", "finishedAt": "2026-07-02T10:34:00Z", "blockedReason": null,
+      "evidence": ["detailCardHtml (ветка оркестратора): строки 'Активная задача' (active_job_id) и 'Прогресс' — HTML-полоса + 'NN% (wd/wt окон)' из active_progress (GET /)", "Попутно починена сломавшаяся сборка GUI: Pixie обновил TPixieAnchorClickEvent до 3 арг (Sender, El, Url) — onAnchorClick приведён к новой сигнатуре", "lazbuild -> 'Build successful: MonitorApp.exe' exit 0", "визуальная проверка карточки — manual/non-blocking (нужен живой оркестратор с активной задачей)"]
     }
   ],
   "log": [
@@ -140,6 +140,8 @@
     { "ts": "2026-07-02T09:20:00Z", "step": "SB3.2", "event": "finding", "note": "E2E против реального демона: стриминг работает, текст корректный, но абсолютные таймстампы сломаны (все сегменты в 0-6.5s при 65s), progress упирается в ~18%. Причина: демон в стриминге эмитит время относительно коммита. Эскалация владельцу -> выбран фикс демона (SB-D9)." },
     { "ts": "2026-07-02T09:52:00Z", "step": "SB3.4", "event": "done", "note": "Мини-правка whisperdaemon (SB-D9): накопительная база FcommittedMs. Пересобран, build успешен." },
     { "ts": "2026-07-02T09:58:00Z", "step": "SB3.2", "event": "done", "note": "Повторный E2E после SB3.4: сегменты на всю длину [1000..63460], progress 0->100, текст полный, без таймаута. Manual/non-blocking (нужен живой демон); скрипт e2e_stream_manual.ts закоммичен." },
-    { "ts": "2026-07-02T10:08:00Z", "step": "SB3.3", "event": "done", "note": "Docs: ARCHITECTURE.md §6 (стрим-мост, progress.json, config, rollover, правка демона); кросс-ссылка из whisperdaemon-jobs-plan. Конец фазы 3 — пауза на ревью. Остался только SB4.1 (non-blocking, монитор)." }
+    { "ts": "2026-07-02T10:08:00Z", "step": "SB3.3", "event": "done", "note": "Docs: ARCHITECTURE.md §6 (стрим-мост, progress.json, config, rollover, правка демона); кросс-ссылка из whisperdaemon-jobs-plan. Конец фазы 3 — пауза на ревью. Остался только SB4.1 (non-blocking, монитор)." },
+    { "ts": "2026-07-02T10:34:00Z", "step": "SB4.1", "event": "done", "note": "Монитор: карточка оркестратора показывает активную задачу + полосу прогресса (active_progress). Попутно починена сборка GUI (Pixie -> 3-арг OnAnchorClick). lazbuild успешен." },
+    { "ts": "2026-07-02T10:34:00Z", "step": "SB4.1", "event": "complete", "note": "Все шаги SB0.1..SB4.1 выполнены. Инициатива complete: файлы (в т.ч. многочасовые) распознаются через стрим-мост с прогрессом; таймстампы абсолютные; демон-правка минимальна. Готово к мерджу." }
   ]
 }

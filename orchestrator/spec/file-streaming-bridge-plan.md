@@ -1,6 +1,6 @@
 # Файловый ввод через стриминговый мост оркестратора + прогресс
 
-Status: **active**
+Status: **complete**
 Created: 2026-07-01
 Authoritative progress ledger: [file-streaming-bridge-progress.json](file-streaming-bridge-progress.json)
 
@@ -108,8 +108,9 @@ Authoritative progress ledger: [file-streaming-bridge-progress.json](file-stream
 - [x] **SB3.2 — E2E против реального whisperdaemon** (`scripts/e2e_stream_manual.ts`). Вскрыл дефект
   таймстампов → правка демона SB-D9 → повторный прогон зелёный (сегменты на всю длину, progress→100).
 - [x] **SB3.3 — Docs.** Обновить `docs/ARCHITECTURE.md` и кросс-ссылку из whisperdaemon-jobs-plan.
-- [ ] **SB4.1 — (non-blocking) Прогресс в мониторе.** Карточка оркестратора показывает `progress_pct`
-  активной задачи.
+- [x] **SB4.1 — (non-blocking) Прогресс в мониторе.** Карточка оркестратора показывает активную
+  задачу + полосу `progress_pct` (из `active_progress`). Попутно починена сборка GUI под новую
+  сигнатуру Pixie `OnAnchorClick`.
 
 ## References
 - Предыдущая инициатива (завершена): [../../services/whisperdaemon/spec/whisperdaemon-jobs-plan.md](../../services/whisperdaemon/spec/whisperdaemon-jobs-plan.md)
