@@ -98,7 +98,7 @@ ws-daemon-задания только на свежезарегистриров�
 
 ## Steps (mirror the ledger)
 - [x] **DR0.1 — Plan & ledger.**
-- [ ] **DR1.1 — Реестр (чистое ядро) + юниты.** Парсер/валидатор `registry/<name>.json`, TTL-свежесть,
+- [x] **DR1.1 — Реестр (чистое ядро) + юниты.** Парсер/валидатор `registry/<name>.json`, TTL-свежесть,
   live-map; DI clock.
 - [ ] **DR1.2 — Watcher реестра + startup-scan, подключить к старту оркестратора.** Оркестратор
   создаёт `jobs/registry/` на старте.

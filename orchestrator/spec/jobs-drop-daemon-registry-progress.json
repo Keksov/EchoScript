@@ -37,12 +37,12 @@
       "id": "DR1.1",
       "phase": 1,
       "title": "Реестр демонов (чистое ядро) + юниты",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR0.1"],
       "artifacts": ["orchestrator/src/daemon-registry.ts", "orchestrator/src/daemon-registry.test.ts"],
       "verify": "bun test: парс/валидация registry/<name>.json; freshness по TTL (свежая ready / устаревшая / невалидная); live-map по нескольким демонам; DI clock.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T13:00:00Z", "finishedAt": "2026-07-02T13:10:00Z", "blockedReason": null,
+      "evidence": ["daemon-registry.ts: parseRegistration (валидация + updatedAtMs), isRegistrationFresh/Ready, DaemonRegistry (upsert/remove/get/isReady/readyForModel/readyNames) с DI Clock; DEFAULT_REGISTRY_TTL_MS=15000", "daemon-registry.test.ts -> 8 pass (парс валид/невалид, optional pid/input, freshness по TTL + skew, ready=state+freshness, readyForModel пропускает stale/loading, remove)", "полный сьют bun test 26 pass / 0 fail (6 файлов); tsc --noEmit exit 0"]
     },
     {
       "id": "DR1.2",
@@ -135,6 +135,7 @@
   ],
   "log": [
     { "ts": "2026-07-02T12:16:00Z", "step": "DR0.1", "event": "done", "note": "План+леджер созданы; JSON ok, 9 шагов, DAG ацикличен; commit e52eaa9. Решения DR-D1..DR-D9 зафиксированы (реестр в jobs/registry, whisperdaemon-регистрация в scope). Пауза на границе фазы 0." },
-    { "ts": "2026-07-02T12:40:00Z", "step": "DR0.1", "event": "amended", "note": "Ревью плана: добавлены DR-D10 (peek-dispatchable, без HOL), DR-D11 (классы ошибок transport/terminal), DR-D12 (инвалидация регистрации + backoff), DR-D13 (drop переиспользует JobManager/enqueue, move в data/). Правки DR-D2/D3/D5/D6, новый шаг DR1.4, recovery .processing + mkdir jobs/registry, конфиг-ключи drop_stable_ms/daemon_registry_ttl_ms." }
+    { "ts": "2026-07-02T12:40:00Z", "step": "DR0.1", "event": "amended", "note": "Ревью плана: добавлены DR-D10 (peek-dispatchable, без HOL), DR-D11 (классы ошибок transport/terminal), DR-D12 (инвалидация регистрации + backoff), DR-D13 (drop переиспользует JobManager/enqueue, move в data/). Правки DR-D2/D3/D5/D6, новый шаг DR1.4, recovery .processing + mkdir jobs/registry, конфиг-ключи drop_stable_ms/daemon_registry_ttl_ms." },
+    { "ts": "2026-07-02T13:10:00Z", "step": "DR1.1", "event": "done", "note": "daemon-registry.ts (чистое ядро): parseRegistration + freshness/readiness по TTL + DaemonRegistry с DI clock. 8 тестов; полный сьют 26 pass / 0 fail; tsc 0." }
   ]
 }
