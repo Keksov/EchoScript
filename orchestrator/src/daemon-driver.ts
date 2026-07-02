@@ -36,6 +36,13 @@ export interface TranscribeFileOptions {
 
 export class DaemonDriverError extends Error {}
 
+/**
+ * Transport-level failure: the daemon could not be reached / dropped the connection /
+ * went silent (connect refused, close-before-completion, heartbeat stall). Retryable —
+ * the job should be requeued rather than failed terminally (DR-D11).
+ */
+export class DaemonUnreachableError extends DaemonDriverError {}
+
 const DEFAULT_DESCRIBE_TIMEOUT_MS = 5000;
 const DEFAULT_TRANSCRIBE_TIMEOUT_MS = 600000;
 

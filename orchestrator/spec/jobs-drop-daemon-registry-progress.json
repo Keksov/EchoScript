@@ -70,12 +70,12 @@
       "id": "DR1.4",
       "phase": 1,
       "title": "Requeue-on-transport + классы ошибок + инвалидация/backoff",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR1.3"],
-      "artifacts": ["orchestrator/src/daemon-stream-driver.ts", "orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/scheduler.ts", "orchestrator/src/ws-daemon-runner.test.ts"],
+      "artifacts": ["orchestrator/src/daemon-driver.ts", "orchestrator/src/daemon-stream-driver.ts", "orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/scheduler.ts", "orchestrator/src/job-manager.ts", "orchestrator/src/daemon-registry.ts", "orchestrator/src/daemon-registry.test.ts", "orchestrator/src/ws-daemon-runner.test.ts"],
       "verify": "bun test: драйвер помечает connect/close/stall как DaemonUnreachableError (DR-D11); runWsDaemonJob делает requeue только для transport, реальная ошибка/ffmpeg -> failed; транспортный сбой инвалидирует registry-запись демона + per-job backoff (DR-D12), без шторма повторов.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T13:52:00Z", "finishedAt": "2026-07-02T14:12:00Z", "blockedReason": null,
+      "evidence": ["daemon-driver.ts: DaemonUnreachableError extends DaemonDriverError; стрим-драйвер помечает connect/close/stall как unreachable, daemon error-событие остаётся terminal", "ws-daemon-runner: outcome 'requeue' на DaemonUnreachableError — без failed-статуса и БЕЗ output-маркера (задание вернётся в очередь)", "scheduler.onWsDaemonJobOutcome: requeue -> invalidateModel (DR-D12) + clear active + jobManager.requeueJob; job-manager.requeueJob пишет статус waiting + queue-маркер", "daemon-registry: invalidate/invalidateModel — suspect до строго более свежего heartbeat (пейсит повторы к heartbeat-каденсу, гасит шторм); backoff обеспечивается инвалидацией", "тесты: registry invalidate/invalidateModel; runner requeue (нет failed, нет маркера). Полный сьют 40 pass / 0 fail; tsc 0"]
     },
     {
       "id": "DR2.1",
@@ -138,6 +138,7 @@
     { "ts": "2026-07-02T12:40:00Z", "step": "DR0.1", "event": "amended", "note": "Ревью плана: добавлены DR-D10 (peek-dispatchable, без HOL), DR-D11 (классы ошибок transport/terminal), DR-D12 (инвалидация регистрации + backoff), DR-D13 (drop переиспользует JobManager/enqueue, move в data/). Правки DR-D2/D3/D5/D6, новый шаг DR1.4, recovery .processing + mkdir jobs/registry, конфиг-ключи drop_stable_ms/daemon_registry_ttl_ms." },
     { "ts": "2026-07-02T13:10:00Z", "step": "DR1.1", "event": "done", "note": "daemon-registry.ts (чистое ядро): parseRegistration + freshness/readiness по TTL + DaemonRegistry с DI clock. 8 тестов; полный сьют 26 pass / 0 fail; tsc 0." },
     { "ts": "2026-07-02T13:30:00Z", "step": "DR1.2", "event": "done", "note": "daemon-registry-watcher.ts (scan/load/watch, DI reader) + config daemon_registry_ttl_ms; подключено к старту оркестратора (mkdir jobs/registry, scan, watch), Scheduler получил реестр. 5 тестов; полный сьют 31 pass / 0 fail; tsc 0." },
-    { "ts": "2026-07-02T13:48:00Z", "step": "DR1.3", "event": "done", "note": "Readiness-gate: selectDispatchable (peek-dispatchable, без HOL) + listQueuedJobs + readyEndpointForModel (announced host/port). 6 тестов; полный сьют 37 pass / 0 fail; tsc 0." }
+    { "ts": "2026-07-02T13:48:00Z", "step": "DR1.3", "event": "done", "note": "Readiness-gate: selectDispatchable (peek-dispatchable, без HOL) + listQueuedJobs + readyEndpointForModel (announced host/port). 6 тестов; полный сьют 37 pass / 0 fail; tsc 0." },
+    { "ts": "2026-07-02T14:12:00Z", "step": "DR1.4", "event": "done", "note": "DaemonUnreachableError (transport) -> requeue без failed/маркера; scheduler invalidateModel + requeueJob; registry invalidate/invalidateModel (suspect до свежего heartbeat). Полный сьют 40 pass / 0 fail; tsc 0. Конец фазы 1 — пауза." }
   ]
 }

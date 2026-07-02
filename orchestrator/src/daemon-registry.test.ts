@@ -103,6 +103,38 @@ test("DaemonRegistry.readyForModel skips stale/non-ready and finds the ready one
   expect(registry.readyNames()).toEqual(["voskru"]);
 });
 
+test("invalidate marks a daemon not-ready until a strictly newer heartbeat arrives", () => {
+  const clock = mutableClock(AT + 1000);
+  const registry = new DaemonRegistry(15000, clock);
+  registry.upsert(parseRegistration(baseRaw())!); // updated_at = AT
+  expect(registry.isReady("whisperdaemon")).toBe(true);
+
+  clock.set(AT + 2000);
+  registry.invalidate("whisperdaemon");
+  expect(registry.isReady("whisperdaemon")).toBe(false);
+
+  // same/older heartbeat does NOT clear suspicion
+  registry.upsert(parseRegistration(baseRaw())!);
+  expect(registry.isReady("whisperdaemon")).toBe(false);
+
+  // a newer heartbeat clears it
+  registry.upsert(parseRegistration(baseRaw({ updated_at: "2026-07-02T12:00:03.000Z" }))!);
+  clock.set(AT + 3500);
+  expect(registry.isReady("whisperdaemon")).toBe(true);
+});
+
+test("invalidateModel invalidates every daemon serving a model", () => {
+  const clock = mutableClock(AT + 1000);
+  const registry = new DaemonRegistry(15000, clock);
+  registry.upsert(parseRegistration(baseRaw({ name: "w1", model_name: "m", port: 1 }))!);
+  registry.upsert(parseRegistration(baseRaw({ name: "w2", model_name: "m", port: 2 }))!);
+  expect(registry.readyForModel("m")).not.toBeNull();
+
+  clock.set(AT + 2000);
+  registry.invalidateModel("m");
+  expect(registry.readyForModel("m")).toBeNull();
+});
+
 test("DaemonRegistry.remove drops the entry", () => {
   const registry = new DaemonRegistry(15000, mutableClock(AT));
   registry.upsert(parseRegistration(baseRaw())!);

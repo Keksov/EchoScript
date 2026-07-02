@@ -268,12 +268,34 @@ export class Scheduler {
       windowBytes: bytesForMs(this.config.streamWindowMs),
       rolloverBytes: bytesForMs(this.config.streamRolloverMs),
     })
+      .then((outcome) => this.onWsDaemonJobOutcome(jobId, targetModel, outcome))
       .catch((error) => {
         console.error(`ws-daemon job ${jobId} failed unexpectedly`, error);
       })
       .finally(() => {
         this.triggerDispatch();
       });
+  }
+
+  /**
+   * On a transport failure the runner returns "requeue" (no output marker written):
+   * mark the daemon not-ready (DR-D12) so we don't immediately retry, clear the active
+   * slot, and put the job back on the queue for when a ready daemon appears (DR-D11).
+   * ready/failed already dropped an output marker; onOutputMarkerDetected clears active.
+   */
+  private async onWsDaemonJobOutcome(
+    jobId: string,
+    modelName: string,
+    outcome: "ready" | "failed" | "requeue",
+  ): Promise<void> {
+    if (outcome !== "requeue") {
+      return;
+    }
+    this.daemonRegistry.invalidateModel(modelName);
+    if (this.activeJobId === jobId) {
+      this.activeJobId = null;
+    }
+    await this.jobManager.requeueJob(jobId);
   }
 
   private async switchToModel(modelName: string): Promise<void> {

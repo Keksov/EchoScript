@@ -323,6 +323,23 @@ export class JobManager {
     };
   }
 
+  /** Put an already-claimed job back on the queue (e.g. daemon was unreachable, DR-D11). */
+  public async requeueJob(jobId: string): Promise<void> {
+    assertValidJobId(jobId);
+    await this.ensureJobDataDir(jobId);
+    let modelName: string | null;
+    try {
+      modelName = this.resolveModelFromJobId(jobId);
+    } catch {
+      modelName = null;
+    }
+    await this.appendStatus(this.getDataDir(jobId), "waiting");
+    await writeJson(path.join(this.getQueueDir(), `${jobId}.json`), {
+      created_at: nowIso(),
+      model: modelName,
+    });
+  }
+
   /** All queued jobs in dispatch order (queue markers sorted by name). */
   public async listQueuedJobs(): Promise<QueuedJob[]> {
     const markerNames = (await readdir(this.getQueueDir()))

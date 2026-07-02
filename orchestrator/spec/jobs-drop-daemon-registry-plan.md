@@ -104,7 +104,7 @@ ws-daemon-задания только на свежезарегистриров�
   создаёт `jobs/registry/` на старте.
 - [x] **DR1.3 — Readiness-gate (peek-dispatchable) в `dispatchNext`.** Пропуск ws-daemon-заданий без
   свежей `ready`-записи (DR-D10), диспетч на announced host/port; тесты.
-- [ ] **DR1.4 — Requeue-on-transport + классы ошибок + инвалидация/backoff.** Драйвер: класс
+- [x] **DR1.4 — Requeue-on-transport + классы ошибок + инвалидация/backoff.** Драйвер: класс
   `DaemonUnreachableError` (DR-D11); раннер: requeue только transport; инвалидация registry-записи и
   backoff (DR-D12); тесты.
 - [ ] **DR2.1 — whisperdaemon пишет регистрацию** (атомарно, на ready + heartbeat + remove на shutdown).

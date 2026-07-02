@@ -113,6 +113,9 @@ export const isRegistrationReady = (reg: DaemonRegistration, nowMs: number, ttlM
  */
 export class DaemonRegistry {
   private readonly entries = new Map<string, DaemonRegistration>();
+  /** name -> clock time at which the daemon was invalidated (DR-D12). Cleared when a
+   * strictly newer heartbeat (updatedAtMs > invalidatedAt) arrives. */
+  private readonly invalidatedAt = new Map<string, number>();
 
   public constructor(
     private readonly ttlMs: number = DEFAULT_REGISTRY_TTL_MS,
@@ -120,15 +123,39 @@ export class DaemonRegistry {
   ) {}
 
   public upsert(registration: DaemonRegistration): void {
+    const invalidated = this.invalidatedAt.get(registration.name);
+    if (invalidated !== undefined && registration.updatedAtMs > invalidated) {
+      this.invalidatedAt.delete(registration.name); // fresh heartbeat clears suspicion
+    }
     this.entries.set(registration.name, registration);
   }
 
   public remove(name: string): void {
     this.entries.delete(name);
+    this.invalidatedAt.delete(name);
   }
 
   public clear(): void {
     this.entries.clear();
+    this.invalidatedAt.clear();
+  }
+
+  /**
+   * Mark a daemon not-ready after a transport failure (DR-D12): it stays not-ready
+   * until a heartbeat newer than this moment arrives, pacing retries to the daemon's
+   * heartbeat cadence instead of the reconcile tick.
+   */
+  public invalidate(name: string): void {
+    this.invalidatedAt.set(name, this.clock.now());
+  }
+
+  /** Invalidate every registered daemon serving `modelName`. */
+  public invalidateModel(modelName: string): void {
+    for (const reg of this.entries.values()) {
+      if (reg.modelName === modelName) {
+        this.invalidate(reg.name);
+      }
+    }
   }
 
   /** Raw entry regardless of freshness (or null). */
@@ -136,16 +163,23 @@ export class DaemonRegistry {
     return this.entries.get(name) ?? null;
   }
 
+  private isEntryReady(reg: DaemonRegistration): boolean {
+    if (!isRegistrationReady(reg, this.clock.now(), this.ttlMs)) {
+      return false;
+    }
+    const invalidated = this.invalidatedAt.get(reg.name);
+    return invalidated === undefined || reg.updatedAtMs > invalidated;
+  }
+
   public isReady(name: string): boolean {
     const reg = this.entries.get(name);
-    return reg !== undefined && isRegistrationReady(reg, this.clock.now(), this.ttlMs);
+    return reg !== undefined && this.isEntryReady(reg);
   }
 
   /** First ready registration serving `modelName`, else null. */
   public readyForModel(modelName: string): DaemonRegistration | null {
-    const now = this.clock.now();
     for (const reg of this.entries.values()) {
-      if (reg.modelName === modelName && isRegistrationReady(reg, now, this.ttlMs)) {
+      if (reg.modelName === modelName && this.isEntryReady(reg)) {
         return reg;
       }
     }
@@ -154,10 +188,9 @@ export class DaemonRegistry {
 
   /** Names of all currently ready daemons. */
   public readyNames(): string[] {
-    const now = this.clock.now();
     const names: string[] = [];
     for (const reg of this.entries.values()) {
-      if (isRegistrationReady(reg, now, this.ttlMs)) {
+      if (this.isEntryReady(reg)) {
         names.push(reg.name);
       }
     }
