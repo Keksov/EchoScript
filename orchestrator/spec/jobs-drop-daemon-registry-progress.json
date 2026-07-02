@@ -114,12 +114,12 @@
       "id": "DR5.1",
       "phase": 5,
       "title": "E2E: drop-до-демона -> waiting -> старт -> распознано",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR2.1", "DR4.1", "DR1.4"],
-      "artifacts": ["orchestrator/scripts/e2e_drop_manual.ts"],
-      "verify": "Реальный прогон: файл в input/whisper_podlodka/ при выключенном демоне -> задание waiting (не failed); старт whisperdaemon (пишет ready) -> распознаётся. + бросок при живом демоне.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "artifacts": ["orchestrator/scripts/e2e_drop_manual.sh"],
+      "verify": "Реальный прогон: файл в input/whisper_podlodka/ при выключенном демоне -> задание держится в очереди (не failed); старт whisperdaemon (пишет ready) -> распознаётся. Изолированный jobs-root.",
+      "startedAt": "2026-07-02T16:00:00Z", "finishedAt": "2026-07-02T16:20:00Z", "blockedReason": null,
+      "evidence": ["e2e_drop_manual.sh: изолированный jobs-root (mktemp) + 10s-клип, оркестратор :3100, демон :7801 --registry-dir <e2e>/registry", "Прогон exit 0: drop при выключенном демоне -> статус [dispatching,queued], НЕ failed (readiness-gate держит в очереди); старт демона (саморегистрация ready) -> pending->processing->ready за ~34s; result_plain корректный русский текст", "Уточнение: 'ожидание' = статус queued (gate пропускает), а не 'waiting' (waiting пишется только при requeue на обрыве). Реальный jobs/ не тронут (118МБ flac на месте)"]
     },
     {
       "id": "DR5.2",
@@ -142,6 +142,7 @@
     { "ts": "2026-07-02T14:12:00Z", "step": "DR1.4", "event": "done", "note": "DaemonUnreachableError (transport) -> requeue без failed/маркера; scheduler invalidateModel + requeueJob; registry invalidate/invalidateModel (suspect до свежего heartbeat). Полный сьют 40 pass / 0 fail; tsc 0. Конец фазы 1 — пауза." },
     { "ts": "2026-07-02T14:45:00Z", "step": "DR2.1", "event": "done", "note": "whisperdaemon самрегистрируется: --registry-dir (дефолт <root>/jobs/registry), атомарная запись jobs/registry/whisper_podlodka.json на ready + heartbeat 5s + remove в finally. Build ок; проверено на живом демоне (файл, heartbeat, парсинг оркестратором). Конец фазы 2 — пауза." },
     { "ts": "2026-07-02T15:20:00Z", "step": "DR3.1", "event": "done", "note": "Drop-ядро: file-drop.ts (translit/sanitize/buildMediaJobId/claimMediaFile со stability-debounce+atomic rename) + JobManager.createDroppedJob (move в data/<id>/input, reuse enqueue). 49 pass / 0 fail; tsc 0. Конец фазы 3 — пауза." },
-    { "ts": "2026-07-02T15:52:00Z", "step": "DR4.1", "event": "done", "note": "Интеграция drop: input-drop.scanInputDrops + config drop_stable_ms; scheduler startup-scan + fs.watch(input/<model>/) + reconcile-sweep + recovery .processing. 52 pass / 0 fail; tsc 0. Конец фазы 4 — пауза." }
+    { "ts": "2026-07-02T15:52:00Z", "step": "DR4.1", "event": "done", "note": "Интеграция drop: input-drop.scanInputDrops + config drop_stable_ms; scheduler startup-scan + fs.watch(input/<model>/) + reconcile-sweep + recovery .processing. 52 pass / 0 fail; tsc 0. Конец фазы 4 — пауза." },
+    { "ts": "2026-07-02T16:20:00Z", "step": "DR5.1", "event": "done", "note": "E2E на реальном стеке (изолированный jobs-root): drop при выключенном демоне -> queued (не failed) -> старт демона (ready) -> распознано. exit 0; jobs/ не тронут." }
   ]
 }

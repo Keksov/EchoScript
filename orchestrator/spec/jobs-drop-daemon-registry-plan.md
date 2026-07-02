@@ -113,7 +113,7 @@ ws-daemon-задания только на свежезарегистриров�
   (DR-D13).
 - [x] **DR4.1 — Интеграция drop:** watcher `input/<model>/` + startup-scan (+ recovery `.processing`)
   + reconcile-sweep → Scheduler.
-- [ ] **DR5.1 — E2E** (сценарий владельца: drop-до-демона → waiting → старт → распознано; + live).
+- [x] **DR5.1 — E2E** (сценарий владельца: drop-до-демона → waiting → старт → распознано; + live).
 - [ ] **DR5.2 — Docs** (ARCHITECTURE.md: drop + реестр/registration-контракт).
 
 ## References
