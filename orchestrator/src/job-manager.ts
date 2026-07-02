@@ -5,6 +5,7 @@ import process from "node:process";
 
 import type { AppConfig } from "./config";
 import { getNodeErrorCode } from "./node-error";
+import { buildMediaJobId } from "./file-drop";
 
 export class InvalidJobError extends Error {}
 export class UnknownModelError extends Error {}
@@ -279,6 +280,35 @@ export class JobManager {
       model: modelName,
       dataDir,
     };
+  }
+
+  /**
+   * Create a job from a claimed dropped file (DR-D13): move the `.processing` file into
+   * the job's data dir (self-contained, so the input watcher never re-sees it) and write
+   * the same artifacts as the API path. The caller enqueues the returned jobId.
+   */
+  public async createDroppedJob(
+    processingPath: string,
+    originalFilename: string,
+    modelName: string,
+  ): Promise<CreatedJob> {
+    if (!(modelName in this.config.models)) {
+      throw new UnknownModelError(`Unknown model: ${modelName}`);
+    }
+    const jobId = buildMediaJobId(modelName, originalFilename);
+    assertValidJobId(jobId);
+    const dataDir = this.getDataDir(jobId);
+    await mkdir(dataDir, { recursive: false });
+    await rename(processingPath, path.join(dataDir, "input"));
+    await this.writeInitialStatus(dataDir);
+    await writeJson(path.join(dataDir, "input.json"), {
+      job_id: jobId,
+      source: "input",
+      original_filename: originalFilename,
+      created_from: "file_drop",
+    });
+
+    return { jobId, model: modelName, dataDir };
   }
 
   public async enqueueJob(

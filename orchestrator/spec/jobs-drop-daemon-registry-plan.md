@@ -108,7 +108,7 @@ ws-daemon-задания только на свежезарегистриров�
   `DaemonUnreachableError` (DR-D11); раннер: requeue только transport; инвалидация registry-записи и
   backoff (DR-D12); тесты.
 - [x] **DR2.1 — whisperdaemon пишет регистрацию** (атомарно, на ready + heartbeat + remove на shutdown).
-- [ ] **DR3.1 — Drop-ядро + юниты.** `claimMediaFile` (stability → atomic rename `.processing`),
+- [x] **DR3.1 — Drop-ядро + юниты.** `claimMediaFile` (stability → atomic rename `.processing`),
   `buildMediaJobId` (транслит), **move в `data/<id>/input` + переиспользование `JobManager`/`enqueue`**
   (DR-D13).
 - [ ] **DR4.1 — Интеграция drop:** watcher `input/<model>/` + startup-scan (+ recovery `.processing`)

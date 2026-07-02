@@ -94,10 +94,10 @@
       "title": "Drop-ядро (claim/job_id/bootstrap) + юниты",
       "status": "not-started",
       "dependsOn": ["DR0.1"],
-      "artifacts": ["orchestrator/src/file-drop.ts", "orchestrator/src/file-drop.test.ts", "orchestrator/src/job-manager.ts"],
+      "artifacts": ["orchestrator/src/file-drop.ts", "orchestrator/src/file-drop.test.ts", "orchestrator/src/job-manager.ts", "orchestrator/src/job-manager.test.ts"],
       "verify": "bun test: claimMediaFile (stability-debounce ДО claim -> atomic rename .processing); buildMediaJobId (транслит кириллицы, валидный id); bootstrap перемещает файл в data/<id>/input и создаёт задание через JobManager/enqueue (DR-D13), а не дублирует запись файлов.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T15:00:00Z", "finishedAt": "2026-07-02T15:20:00Z", "blockedReason": null,
+      "evidence": ["file-drop.ts (чистое ядро): transliterate (кириллица), sanitizeStem (схлопывание в '-', hash при пустом, кламп длины), buildMediaJobId (ts_uuid_model_stem, uuid без '_', резолвится getModelFromJobId), isProcessableMediaFile, claimMediaFile (stability по mtime ДО claim + atomic rename .processing; DI stat/rename/now)", "job-manager.createDroppedJob: move .processing -> data/<id>/input + input.json{source:input, original_filename, created_from:file_drop} + initial status; reuse enqueueJob (DR-D13)", "file-drop.test.ts (9) + job-manager createDroppedJob-тест (move+артефакты+резолв модели+queue-маркер); полный сьют 49 pass / 0 fail; tsc 0"]
     },
     {
       "id": "DR4.1",
@@ -140,6 +140,7 @@
     { "ts": "2026-07-02T13:30:00Z", "step": "DR1.2", "event": "done", "note": "daemon-registry-watcher.ts (scan/load/watch, DI reader) + config daemon_registry_ttl_ms; подключено к старту оркестратора (mkdir jobs/registry, scan, watch), Scheduler получил реестр. 5 тестов; полный сьют 31 pass / 0 fail; tsc 0." },
     { "ts": "2026-07-02T13:48:00Z", "step": "DR1.3", "event": "done", "note": "Readiness-gate: selectDispatchable (peek-dispatchable, без HOL) + listQueuedJobs + readyEndpointForModel (announced host/port). 6 тестов; полный сьют 37 pass / 0 fail; tsc 0." },
     { "ts": "2026-07-02T14:12:00Z", "step": "DR1.4", "event": "done", "note": "DaemonUnreachableError (transport) -> requeue без failed/маркера; scheduler invalidateModel + requeueJob; registry invalidate/invalidateModel (suspect до свежего heartbeat). Полный сьют 40 pass / 0 fail; tsc 0. Конец фазы 1 — пауза." },
-    { "ts": "2026-07-02T14:45:00Z", "step": "DR2.1", "event": "done", "note": "whisperdaemon самрегистрируется: --registry-dir (дефолт <root>/jobs/registry), атомарная запись jobs/registry/whisper_podlodka.json на ready + heartbeat 5s + remove в finally. Build ок; проверено на живом демоне (файл, heartbeat, парсинг оркестратором). Конец фазы 2 — пауза." }
+    { "ts": "2026-07-02T14:45:00Z", "step": "DR2.1", "event": "done", "note": "whisperdaemon самрегистрируется: --registry-dir (дефолт <root>/jobs/registry), атомарная запись jobs/registry/whisper_podlodka.json на ready + heartbeat 5s + remove в finally. Build ок; проверено на живом демоне (файл, heartbeat, парсинг оркестратором). Конец фазы 2 — пауза." },
+    { "ts": "2026-07-02T15:20:00Z", "step": "DR3.1", "event": "done", "note": "Drop-ядро: file-drop.ts (translit/sanitize/buildMediaJobId/claimMediaFile со stability-debounce+atomic rename) + JobManager.createDroppedJob (move в data/<id>/input, reuse enqueue). 49 pass / 0 fail; tsc 0. Конец фазы 3 — пауза." }
   ]
 }
