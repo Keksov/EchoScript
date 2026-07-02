@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "plan": "jobs-drop-daemon-registry",
+  "planDoc": "spec/jobs-drop-daemon-registry-plan.md",
+  "title": "Восстановление file-drop + файловая саморегистрация демонов",
+  "status": "active",
+  "createdAt": "2026-07-02",
+  "updatedAt": "2026-07-02T12:13:20Z",
+  "decisions": [
+    { "id": "DR-D1", "text": "Оркестратор снова подбирает сырые файлы из input/<model>/ (порт _claim_media_file): fs.watch + startup-scan + reconcile-sweep." },
+    { "id": "DR-D2", "text": "Claim атомарным rename -> .processing; bootstrap data/<id>/ (input, input.json{created_from:file_drop}, params.json, status.json) + queue/<id>.json; дальше обычный Scheduler." },
+    { "id": "DR-D3", "text": "Debounce незавершённой записи: файл берём только когда размер стабилен >= N мс (из конфига)." },
+    { "id": "DR-D4", "text": "job_id из имени файла (транслит кириллицы, ts_uuid_model_stem), как _build_media_job_id." },
+    { "id": "DR-D5", "text": "Файловая саморегистрация демонов в jobs/registry/<name>.json: {name,host,port,model_name,state,pid,input:{codec,sample_rate_hz,channels},updated_at}; write на ready + heartbeat + remove на shutdown." },
+    { "id": "DR-D6", "text": "Liveness через свежесть (TTL из конфига) + readiness-gate в dispatchNext (диспетч ws-daemon только при свежей ready-записи, иначе задание ждёт; reconcile повторяет) + requeue при транспортной ошибке вместо terminal fail. Ответ на timing-вопрос." },
+    { "id": "DR-D7", "text": "Реестр дополняет config: config = маршрутизация model->daemon, реестр = живые host/port/готовность/форматы (announced port авторитетен)." },
+    { "id": "DR-D8", "text": "В демоны инкрементально: сперва whisperdaemon (FPC); остальные позже. Ядро реестра тестируется на оркестраторе независимо (синтетические файлы, DI)." },
+    { "id": "DR-D9", "text": "Чистое ядро + тонкая обёртка + DI (fs/clock)." }
+  ],
+  "steps": [
+    {
+      "id": "DR0.1",
+      "phase": 0,
+      "title": "Plan & ledger",
+      "status": "not-started",
+      "dependsOn": [],
+      "artifacts": ["orchestrator/spec/jobs-drop-daemon-registry-plan.md", "orchestrator/spec/jobs-drop-daemon-registry-progress.json"],
+      "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR1.1",
+      "phase": 1,
+      "title": "Реестр демонов (чистое ядро) + юниты",
+      "status": "not-started",
+      "dependsOn": ["DR0.1"],
+      "artifacts": ["orchestrator/src/daemon-registry.ts", "orchestrator/src/daemon-registry.test.ts"],
+      "verify": "bun test: парс/валидация registry/<name>.json; freshness по TTL (свежая ready / устаревшая / невалидная); live-map по нескольким демонам; DI clock.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR1.2",
+      "phase": 1,
+      "title": "Watcher реестра + startup-scan, подключить к старту оркестратора",
+      "status": "not-started",
+      "dependsOn": ["DR1.1"],
+      "artifacts": ["orchestrator/src/daemon-registry.ts", "orchestrator/src/index.ts"],
+      "verify": "bun test/старт: fs.watch(jobs/registry) + первичный скан наполняют live-map; путь реестра из config (jobsRoot/registry).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR1.3",
+      "phase": 1,
+      "title": "Readiness-gate в dispatchNext + requeue-on-transport-error",
+      "status": "not-started",
+      "dependsOn": ["DR1.2"],
+      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/scheduler.test.ts", "orchestrator/src/ws-daemon-runner.ts"],
+      "verify": "bun test: ws-daemon-задание не диспетчится без свежей ready-записи (остаётся в очереди); при коннект-ошибке задание requeue, не terminal failed.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR2.1",
+      "phase": 2,
+      "title": "whisperdaemon пишет регистрацию (write/heartbeat/remove)",
+      "status": "not-started",
+      "dependsOn": ["DR1.1"],
+      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
+      "verify": "Демон пересобран; на ready пишет jobs/registry/whisperdaemon.json, обновляет updated_at (heartbeat), удаляет на shutdown; схема совпадает с DR-D5.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR3.1",
+      "phase": 3,
+      "title": "Drop-ядро (claim/job_id/bootstrap) + юниты",
+      "status": "not-started",
+      "dependsOn": ["DR0.1"],
+      "artifacts": ["orchestrator/src/file-drop.ts", "orchestrator/src/file-drop.test.ts"],
+      "verify": "bun test: claimMediaFile (atomic rename -> .processing + stability-debounce); buildMediaJobId (транслит кириллицы, валидный id); bootstrapDropJob (data/<id>/ + input.json + params.json + status.json + queue-маркер).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR4.1",
+      "phase": 4,
+      "title": "Интеграция drop: watcher input/<model>/ + scan + sweep -> Scheduler",
+      "status": "not-started",
+      "dependsOn": ["DR3.1", "DR1.3"],
+      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/index.ts"],
+      "verify": "bun test/старт: сырой файл в input/<model>/ бутстрапится в задание (watch + startup-scan + reconcile-sweep) и диспетчится обычным путём.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR5.1",
+      "phase": 5,
+      "title": "E2E: drop-до-демона -> waiting -> старт -> распознано",
+      "status": "not-started",
+      "dependsOn": ["DR2.1", "DR4.1"],
+      "artifacts": ["orchestrator/scripts/e2e_drop_manual.ts"],
+      "verify": "Реальный прогон: файл в input/whisper_podlodka/ при выключенном демоне -> задание waiting (не failed); старт whisperdaemon (пишет ready) -> распознаётся. + бросок при живом демоне.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR5.2",
+      "phase": 5,
+      "title": "Docs (ARCHITECTURE.md: drop + registration-контракт)",
+      "status": "not-started",
+      "dependsOn": ["DR5.1"],
+      "artifacts": ["EchoRecorder/docs/ARCHITECTURE.md"],
+      "verify": "ARCHITECTURE.md описывает восстановленный file-drop и файловую саморегистрацию демонов (jobs/registry, heartbeat/TTL, readiness-gate).",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    }
+  ],
+  "log": []
+}
