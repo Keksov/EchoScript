@@ -5,17 +5,21 @@
   "title": "Восстановление file-drop + файловая саморегистрация демонов",
   "status": "active",
   "createdAt": "2026-07-02",
-  "updatedAt": "2026-07-02T12:13:20Z",
+  "updatedAt": "2026-07-02T12:40:00Z",
   "decisions": [
     { "id": "DR-D1", "text": "Оркестратор снова подбирает сырые файлы из input/<model>/ (порт _claim_media_file): fs.watch + startup-scan + reconcile-sweep." },
-    { "id": "DR-D2", "text": "Claim атомарным rename -> .processing; bootstrap data/<id>/ (input, input.json{created_from:file_drop}, params.json, status.json) + queue/<id>.json; дальше обычный Scheduler." },
-    { "id": "DR-D3", "text": "Debounce незавершённой записи: файл берём только когда размер стабилен >= N мс (из конфига)." },
+    { "id": "DR-D2", "text": "Claim атомарным rename -> .processing, затем файл ПЕРЕМЕЩАЕТСЯ в data/<id>/input (не reference, иначе watcher повторно подхватит). Задание создаётся через существующий JobManager + enqueueJob; input.json{source:input, original_filename, created_from:file_drop}. См. DR-D13." },
+    { "id": "DR-D3", "text": "Debounce незавершённой записи: файл берём только когда размер стабилен >= drop_stable_ms (config.json); проверка ДО claim." },
     { "id": "DR-D4", "text": "job_id из имени файла (транслит кириллицы, ts_uuid_model_stem), как _build_media_job_id." },
-    { "id": "DR-D5", "text": "Файловая саморегистрация демонов в jobs/registry/<name>.json: {name,host,port,model_name,state,pid,input:{codec,sample_rate_hz,channels},updated_at}; write на ready + heartbeat + remove на shutdown." },
-    { "id": "DR-D6", "text": "Liveness через свежесть (TTL из конфига) + readiness-gate в dispatchNext (диспетч ws-daemon только при свежей ready-записи, иначе задание ждёт; reconcile повторяет) + requeue при транспортной ошибке вместо terminal fail. Ответ на timing-вопрос." },
+    { "id": "DR-D5", "text": "Файловая саморегистрация демонов в jobs/registry/<name>.json: {name,host,port,model_name,state,pid,input:{codec,sample_rate_hz,channels},updated_at}; атомарно (temp+rename), write на ready + heartbeat (настройка демона) + remove на shutdown. jobs/registry/ создаёт оркестратор на старте." },
+    { "id": "DR-D6", "text": "Liveness через свежесть daemon_registry_ttl_ms (config.json; инвариант TTL >= ~3x heartbeat) + readiness-gate в dispatchNext (диспетч ws-daemon только при свежей ready-записи, announced host/port; иначе задание ждёт, reconcile повторяет) + requeue при транспортном сбое вместо terminal fail (см. DR-D10/D11/D12). Ответ на timing-вопрос." },
     { "id": "DR-D7", "text": "Реестр дополняет config: config = маршрутизация model->daemon, реестр = живые host/port/готовность/форматы (announced port авторитетен)." },
     { "id": "DR-D8", "text": "В демоны инкрементально: сперва whisperdaemon (FPC); остальные позже. Ядро реестра тестируется на оркестраторе независимо (синтетические файлы, DI)." },
-    { "id": "DR-D9", "text": "Чистое ядро + тонкая обёртка + DI (fs/clock)." }
+    { "id": "DR-D9", "text": "Чистое ядро + тонкая обёртка + DI (fs/clock)." },
+    { "id": "DR-D10", "text": "Peek-dispatchable (без head-of-line блокировки): readiness-gate пропускает ws-daemon-задания без свежей ready-записи и берёт следующее выполнимое; python-задания не гейтятся." },
+    { "id": "DR-D11", "text": "Классы ошибок transport vs terminal: драйвер различает недоступность демона (connect/close/stall -> DaemonUnreachableError) и реальную ошибку (daemon error / сбой ffmpeg -> терминально); runWsDaemonJob делает requeue только для transport." },
+    { "id": "DR-D12", "text": "Инвалидация регистрации на транспортном сбое + backoff: недоступный демон считается не-готовым до следующего свежего heartbeat, плюс короткий per-job backoff — чтобы не устроить шторм повторов внутри TTL-окна." },
+    { "id": "DR-D13", "text": "Drop переиспользует JobManager/enqueue, а не дублирует bootstrap: файл перемещается в data/<id>/input, задание создаётся и ставится в очередь существующими методами — один источник правды для контракта jobs/." }
   ],
   "steps": [
     {
@@ -47,18 +51,29 @@
       "status": "not-started",
       "dependsOn": ["DR1.1"],
       "artifacts": ["orchestrator/src/daemon-registry.ts", "orchestrator/src/index.ts"],
-      "verify": "bun test/старт: fs.watch(jobs/registry) + первичный скан наполняют live-map; путь реестра из config (jobsRoot/registry).",
+      "verify": "bun test/старт: оркестратор создаёт jobs/registry на старте; fs.watch(jobs/registry) + первичный скан наполняют live-map; путь реестра из config (jobsRoot/registry).",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
       "evidence": []
     },
     {
       "id": "DR1.3",
       "phase": 1,
-      "title": "Readiness-gate в dispatchNext + requeue-on-transport-error",
+      "title": "Readiness-gate (peek-dispatchable) в dispatchNext",
       "status": "not-started",
       "dependsOn": ["DR1.2"],
-      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/scheduler.test.ts", "orchestrator/src/ws-daemon-runner.ts"],
-      "verify": "bun test: ws-daemon-задание не диспетчится без свежей ready-записи (остаётся в очереди); при коннект-ошибке задание requeue, не terminal failed.",
+      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/scheduler.test.ts", "orchestrator/src/job-manager.ts"],
+      "verify": "bun test: ws-daemon-задание без свежей ready-записи пропускается, берётся следующее выполнимое (без HOL-блокировки, DR-D10); диспетч на announced host/port из реестра; python-задания не гейтятся.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DR1.4",
+      "phase": 1,
+      "title": "Requeue-on-transport + классы ошибок + инвалидация/backoff",
+      "status": "not-started",
+      "dependsOn": ["DR1.3"],
+      "artifacts": ["orchestrator/src/daemon-stream-driver.ts", "orchestrator/src/ws-daemon-runner.ts", "orchestrator/src/scheduler.ts", "orchestrator/src/ws-daemon-runner.test.ts"],
+      "verify": "bun test: драйвер помечает connect/close/stall как DaemonUnreachableError (DR-D11); runWsDaemonJob делает requeue только для transport, реальная ошибка/ffmpeg -> failed; транспортный сбой инвалидирует registry-запись демона + per-job backoff (DR-D12), без шторма повторов.",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
       "evidence": []
     },
@@ -69,7 +84,7 @@
       "status": "not-started",
       "dependsOn": ["DR1.1"],
       "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
-      "verify": "Демон пересобран; на ready пишет jobs/registry/whisperdaemon.json, обновляет updated_at (heartbeat), удаляет на shutdown; схема совпадает с DR-D5.",
+      "verify": "Демон пересобран; на ready АТОМАРНО (temp+rename) пишет jobs/registry/whisperdaemon.json, обновляет updated_at (heartbeat), удаляет на shutdown; схема совпадает с DR-D5.",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
       "evidence": []
     },
@@ -79,8 +94,8 @@
       "title": "Drop-ядро (claim/job_id/bootstrap) + юниты",
       "status": "not-started",
       "dependsOn": ["DR0.1"],
-      "artifacts": ["orchestrator/src/file-drop.ts", "orchestrator/src/file-drop.test.ts"],
-      "verify": "bun test: claimMediaFile (atomic rename -> .processing + stability-debounce); buildMediaJobId (транслит кириллицы, валидный id); bootstrapDropJob (data/<id>/ + input.json + params.json + status.json + queue-маркер).",
+      "artifacts": ["orchestrator/src/file-drop.ts", "orchestrator/src/file-drop.test.ts", "orchestrator/src/job-manager.ts"],
+      "verify": "bun test: claimMediaFile (stability-debounce ДО claim -> atomic rename .processing); buildMediaJobId (транслит кириллицы, валидный id); bootstrap перемещает файл в data/<id>/input и создаёт задание через JobManager/enqueue (DR-D13), а не дублирует запись файлов.",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
       "evidence": []
     },
@@ -91,7 +106,7 @@
       "status": "not-started",
       "dependsOn": ["DR3.1", "DR1.3"],
       "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/index.ts"],
-      "verify": "bun test/старт: сырой файл в input/<model>/ бутстрапится в задание (watch + startup-scan + reconcile-sweep) и диспетчится обычным путём.",
+      "verify": "bun test/старт: сырой файл в input/<model>/ бутстрапится в задание (watch + startup-scan + reconcile-sweep) и диспетчится обычным путём; startup-scan восстанавливает осиротевшие .processing.",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
       "evidence": []
     },
@@ -100,7 +115,7 @@
       "phase": 5,
       "title": "E2E: drop-до-демона -> waiting -> старт -> распознано",
       "status": "not-started",
-      "dependsOn": ["DR2.1", "DR4.1"],
+      "dependsOn": ["DR2.1", "DR4.1", "DR1.4"],
       "artifacts": ["orchestrator/scripts/e2e_drop_manual.ts"],
       "verify": "Реальный прогон: файл в input/whisper_podlodka/ при выключенном демоне -> задание waiting (не failed); старт whisperdaemon (пишет ready) -> распознаётся. + бросок при живом демоне.",
       "startedAt": null, "finishedAt": null, "blockedReason": null,
@@ -119,6 +134,7 @@
     }
   ],
   "log": [
-    { "ts": "2026-07-02T12:16:00Z", "step": "DR0.1", "event": "done", "note": "План+леджер созданы; JSON ok, 9 шагов, DAG ацикличен; commit e52eaa9. Решения DR-D1..DR-D9 зафиксированы (реестр в jobs/registry, whisperdaemon-регистрация в scope). Пауза на границе фазы 0." }
+    { "ts": "2026-07-02T12:16:00Z", "step": "DR0.1", "event": "done", "note": "План+леджер созданы; JSON ok, 9 шагов, DAG ацикличен; commit e52eaa9. Решения DR-D1..DR-D9 зафиксированы (реестр в jobs/registry, whisperdaemon-регистрация в scope). Пауза на границе фазы 0." },
+    { "ts": "2026-07-02T12:40:00Z", "step": "DR0.1", "event": "amended", "note": "Ревью плана: добавлены DR-D10 (peek-dispatchable, без HOL), DR-D11 (классы ошибок transport/terminal), DR-D12 (инвалидация регистрации + backoff), DR-D13 (drop переиспользует JobManager/enqueue, move в data/). Правки DR-D2/D3/D5/D6, новый шаг DR1.4, recovery .processing + mkdir jobs/registry, конфиг-ключи drop_stable_ms/daemon_registry_ttl_ms." }
   ]
 }
