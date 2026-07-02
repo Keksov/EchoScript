@@ -22,12 +22,12 @@
       "id": "DR0.1",
       "phase": 0,
       "title": "Plan & ledger",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [],
       "artifacts": ["orchestrator/spec/jobs-drop-daemon-registry-plan.md", "orchestrator/spec/jobs-drop-daemon-registry-progress.json"],
       "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T12:13:20Z", "finishedAt": "2026-07-02T12:16:00Z", "blockedReason": null,
+      "evidence": ["JSON.load ok; 9 шагов; DAG ацикличен; все dependsOn резолвятся; commit e52eaa9"]
     },
     {
       "id": "DR1.1",
@@ -118,5 +118,7 @@
       "evidence": []
     }
   ],
-  "log": []
+  "log": [
+    { "ts": "2026-07-02T12:16:00Z", "step": "DR0.1", "event": "done", "note": "План+леджер созданы; JSON ok, 9 шагов, DAG ацикличен; commit e52eaa9. Решения DR-D1..DR-D9 зафиксированы (реестр в jobs/registry, whisperdaemon-регистрация в scope). Пауза на границе фазы 0." }
+  ]
 }

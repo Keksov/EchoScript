@@ -74,7 +74,7 @@ ws-daemon-задания только на свежезарегистриров�
 - **Гетерогенные демоны** (FPC/python/sherpa) → инкрементальный роллаут (DR-D8).
 
 ## Steps (mirror the ledger)
-- [ ] **DR0.1 — Plan & ledger.**
+- [x] **DR0.1 — Plan & ledger.**
 - [ ] **DR1.1 — Реестр (чистое ядро) + юниты.** Парсер/валидатор `registry/<name>.json`, TTL-свежесть,
   live-map; DI clock.
 - [ ] **DR1.2 — Watcher реестра + startup-scan, подключить к старту оркестратора.**
