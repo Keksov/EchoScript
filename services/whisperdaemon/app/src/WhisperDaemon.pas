@@ -161,6 +161,7 @@ type
     GpuDevice: LongInt;
     WhisperDllPath: string;
     ReleaseTag: string;
+    RegistryDir: string;
   end;
 
   TWhisperWarmupThread = class(TThread)
@@ -408,7 +409,8 @@ begin
   WriteLn('  --gpu-device <value>    GPU device index, default 0');
   WriteLn('  --whisper-dll <path>    explicit whisper.dll path override');
   WriteLn('  --release-tag <value>   whisper.dll release tag under services\whisperdaemon\releases');
-  WriteLn('  env: WHISPER_USE_GPU, WHISPER_GPU_DEVICE, WHISPER_DLL_PATH, WHISPER_RELEASE_TAG');
+  WriteLn('  --registry-dir <path>   jobs/registry dir for self-registration (default <root>\jobs\registry)');
+  WriteLn('  env: WHISPER_USE_GPU, WHISPER_GPU_DEVICE, WHISPER_DLL_PATH, WHISPER_RELEASE_TAG, ECHOSCRIPT_REGISTRY_DIR');
 end;
 
 function parseCommandLine: TWhisperDaemonOptions;
@@ -426,6 +428,7 @@ begin
   Result.ReleaseTag := Trim(SysUtils.GetEnvironmentVariable('WHISPER_RELEASE_TAG'));
   if Result.ReleaseTag = '' then
     Result.ReleaseTag := '1.8.4';
+  Result.RegistryDir := Trim(SysUtils.GetEnvironmentVariable('ECHOSCRIPT_REGISTRY_DIR'));
 
   idx := 1;
   while idx <= ParamCount do
@@ -476,6 +479,12 @@ begin
       Inc(idx);
       requireArgValue(idx, '--release-tag', val);
       Result.ReleaseTag := Trim(val);
+    end
+    else if arg = '--registry-dir' then
+    begin
+      Inc(idx);
+      requireArgValue(idx, '--registry-dir', val);
+      Result.RegistryDir := Trim(val);
     end
     else
       raise Exception.CreateFmt('Unknown argument: %s', [arg]);
@@ -2026,21 +2035,108 @@ begin
   end;
 end;
 
+const
+  REGISTRY_HEARTBEAT_MS = 5000;
+
+{ UTC ISO-8601 timestamp (Windows GetSystemTime returns UTC). }
+function utcNowIso: string;
+var
+  st: TSystemTime;
+begin
+  GetSystemTime(st);
+  Result := Format('%.4d-%.2d-%.2dT%.2d:%.2d:%.2d.%.3dZ',
+    [st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds]);
+end;
+
+function registryFilePath(const aOptions: TWhisperDaemonOptions): string;
+begin
+  Result := IncludeTrailingPathDelimiter(aOptions.RegistryDir) + aOptions.ModelName + '.json';
+end;
+
+{ Self-registration for the orchestrator (jobs-drop-daemon-registry, DR-D5): write
+  jobs/registry/<model>.json atomically (temp + MoveFileEx) so the watcher never reads
+  a half-written file. Keyed by model name (== registry lookup key). }
+procedure writeRegistration(const aOptions: TWhisperDaemonOptions; const aState: string);
+var
+  root, input: TJSONObject;
+  json, finalPath, tempPath: string;
+  stream: TStringStream;
+begin
+  root := TJSONObject.Create;
+  try
+    root.Add('name', aOptions.ModelName);
+    root.Add('host', aOptions.Host);
+    root.Add('port', Integer(aOptions.Port));
+    root.Add('model_name', aOptions.ModelName);
+    root.Add('state', aState);
+    root.Add('pid', Int64(GetCurrentProcessId));
+    input := TJSONObject.Create;
+    input.Add('codec', 'pcm16le');
+    input.Add('sample_rate_hz', 16000);
+    input.Add('channels', 1);
+    root.Add('input', input);
+    root.Add('updated_at', utcNowIso);
+    json := root.FormatJSON;
+  finally
+    root.Free;
+  end;
+
+  ForceDirectories(aOptions.RegistryDir);
+  finalPath := registryFilePath(aOptions);
+  tempPath := finalPath + '.' + IntToStr(GetCurrentProcessId) + '.tmp';
+  stream := TStringStream.Create(json);
+  try
+    stream.SaveToFile(tempPath);
+  finally
+    stream.Free;
+  end;
+  if not MoveFileEx(PChar(tempPath), PChar(finalPath), MOVEFILE_REPLACE_EXISTING) then
+    SysUtils.DeleteFile(tempPath);
+end;
+
+procedure removeRegistration(const aOptions: TWhisperDaemonOptions);
+begin
+  SysUtils.DeleteFile(registryFilePath(aOptions));
+end;
+
 var
   host: TWhisperDaemonHost;
   options: TWhisperDaemonOptions;
+  lastHeartbeat: QWord;
+  heartbeatTick: QWord;
 
 begin
   host := nil;
   try
     InitCriticalSection(gInferenceLock);
     options := parseCommandLine;
+    if Trim(options.RegistryDir) = '' then
+      options.RegistryDir := IncludeTrailingPathDelimiter(getWorkspaceRootDir) + 'jobs' + PathDelim + 'registry';
     gDaemonOptions := options;
     host := TWhisperDaemonHost.Create(options);
     WriteLn('WhisperDaemon listening on ws://', options.Host, ':', options.Port, '/ model=', options.ModelName);
     WriteLn('[whisperdaemon] gpu=', Ord(options.UseGpu), ' device=', options.GpuDevice, ' release=', options.ReleaseTag);
-    while True do
-      Sleep(250);
+    WriteLn('[whisperdaemon] registry=', options.RegistryDir);
+    lastHeartbeat := 0;
+    try
+      while True do
+      begin
+        heartbeatTick := GetTickCount64;
+        if (lastHeartbeat = 0) or (heartbeatTick - lastHeartbeat >= REGISTRY_HEARTBEAT_MS) then
+        begin
+          try
+            writeRegistration(options, 'ready');
+          except
+            on E: Exception do
+              WriteLn(StdErr, '[whisperdaemon] registry write failed: ', E.Message);
+          end;
+          lastHeartbeat := heartbeatTick;
+        end;
+        Sleep(250);
+      end;
+    finally
+      removeRegistration(options);
+    end;
   except
     on E: Exception do
     begin

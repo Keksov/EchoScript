@@ -4,7 +4,7 @@ import path from "node:path";
 import { mkdtemp, mkdir, rm, writeFile, readFile } from "node:fs/promises";
 
 import { runWsDaemonJob } from "./ws-daemon-runner";
-import type { DaemonTranscription } from "./daemon-driver";
+import { DaemonUnreachableError, type DaemonTranscription } from "./daemon-driver";
 import type { WsDaemonConfig } from "./config";
 
 const endpoint: WsDaemonConfig = { host: "127.0.0.1", port: 9, modelName: "whisperdaemon" };
@@ -97,6 +97,30 @@ test("runWsDaemonJob writes progress.json from streaming progress and finalizes 
     expect(progress.windows_total).toBe(4);
     expect(progress.total_ms).toBe(2000);
     expect(typeof progress.updated_at).toBe("string");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("runWsDaemonJob returns 'requeue' on transport failure — no failed status, no output marker", async () => {
+  const { base, jobId, dataDir, outputDir } = await setupJob({ language: "ru" });
+  try {
+    const status = await runWsDaemonJob(jobId, dataDir, outputDir, {
+      ffmpegPath: "unused",
+      endpoint,
+      convert: fakeConvert,
+      transcribe: async () => {
+        throw new DaemonUnreachableError("connection refused");
+      },
+    });
+    expect(status).toBe("requeue");
+
+    // No output marker was written (the job goes back to the queue).
+    await expect(readFile(path.join(outputDir, `${jobId}.json`), "utf-8")).rejects.toBeDefined();
+
+    // status.json never records a failure for a transport error.
+    const statuses = JSON.parse(await readFile(path.join(dataDir, "status.json"), "utf-8"));
+    expect(statuses.some((s: { status: string }) => s.status === "failed")).toBe(false);
   } finally {
     await rm(base, { recursive: true, force: true });
   }

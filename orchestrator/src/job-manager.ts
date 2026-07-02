@@ -5,6 +5,7 @@ import process from "node:process";
 
 import type { AppConfig } from "./config";
 import { getNodeErrorCode } from "./node-error";
+import { buildMediaJobId } from "./file-drop";
 
 export class InvalidJobError extends Error {}
 export class UnknownModelError extends Error {}
@@ -281,6 +282,35 @@ export class JobManager {
     };
   }
 
+  /**
+   * Create a job from a claimed dropped file (DR-D13): move the `.processing` file into
+   * the job's data dir (self-contained, so the input watcher never re-sees it) and write
+   * the same artifacts as the API path. The caller enqueues the returned jobId.
+   */
+  public async createDroppedJob(
+    processingPath: string,
+    originalFilename: string,
+    modelName: string,
+  ): Promise<CreatedJob> {
+    if (!(modelName in this.config.models)) {
+      throw new UnknownModelError(`Unknown model: ${modelName}`);
+    }
+    const jobId = buildMediaJobId(modelName, originalFilename);
+    assertValidJobId(jobId);
+    const dataDir = this.getDataDir(jobId);
+    await mkdir(dataDir, { recursive: false });
+    await rename(processingPath, path.join(dataDir, "input"));
+    await this.writeInitialStatus(dataDir);
+    await writeJson(path.join(dataDir, "input.json"), {
+      job_id: jobId,
+      source: "input",
+      original_filename: originalFilename,
+      created_from: "file_drop",
+    });
+
+    return { jobId, model: modelName, dataDir };
+  }
+
   public async enqueueJob(
     jobId: string,
     params: Record<string, unknown>,
@@ -321,6 +351,41 @@ export class JobManager {
       jobId,
       targetModel: model ?? this.config.defaultModel,
     };
+  }
+
+  /** Put an already-claimed job back on the queue (e.g. daemon was unreachable, DR-D11). */
+  public async requeueJob(jobId: string): Promise<void> {
+    assertValidJobId(jobId);
+    await this.ensureJobDataDir(jobId);
+    let modelName: string | null;
+    try {
+      modelName = this.resolveModelFromJobId(jobId);
+    } catch {
+      modelName = null;
+    }
+    await this.appendStatus(this.getDataDir(jobId), "waiting");
+    await writeJson(path.join(this.getQueueDir(), `${jobId}.json`), {
+      created_at: nowIso(),
+      model: modelName,
+    });
+  }
+
+  /** All queued jobs in dispatch order (queue markers sorted by name). */
+  public async listQueuedJobs(): Promise<QueuedJob[]> {
+    const markerNames = (await readdir(this.getQueueDir()))
+      .filter((entry) => entry.endsWith(".json"))
+      .sort((left, right) => left.localeCompare(right));
+
+    return markerNames.map((markerName) => {
+      const jobId = markerName.slice(0, -".json".length);
+      let model: string | null;
+      try {
+        model = this.resolveModelFromJobId(jobId);
+      } catch {
+        model = null;
+      }
+      return { jobId, targetModel: model ?? this.config.defaultModel };
+    });
   }
 
   public async listJobs(): Promise<readonly ListedJob[]> {

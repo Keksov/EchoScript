@@ -3,7 +3,7 @@ import path from "node:path";
 
 import type { WsDaemonConfig } from "./config";
 import { convertToPcm16leMono16k } from "./audio-convert";
-import type { DaemonTranscription } from "./daemon-driver";
+import { DaemonUnreachableError, type DaemonTranscription } from "./daemon-driver";
 import {
   transcribeFileStreaming,
   type ProgressListener,
@@ -255,11 +255,11 @@ export const runWsDaemonJob = async (
   dataDir: string,
   outputDir: string,
   deps: WsDaemonJobDeps,
-): Promise<"ready" | "failed"> => {
+): Promise<"ready" | "failed" | "requeue"> => {
   const convert = deps.convert ?? convertToPcm16leMono16k;
   const transcribe = deps.transcribe ?? transcribeFileStreaming;
   const progress = createProgressWriter(path.join(dataDir, "progress.json"));
-  let finalStatus: "ready" | "failed" = "ready";
+  let outcome: "ready" | "failed" | "requeue" = "ready";
 
   try {
     await appendStatus(dataDir, "processing");
@@ -292,14 +292,22 @@ export const runWsDaemonJob = async (
     await writeTextAtomic(path.join(dataDir, "result_timestamp.txt"), buildTimestampText(result));
     await appendStatus(dataDir, "ready");
   } catch (error) {
-    finalStatus = "failed";
-    await appendStatus(dataDir, "failed", messageOf(error)).catch(() => undefined);
+    if (error instanceof DaemonUnreachableError) {
+      // Transport failure — the caller requeues the job; do NOT write a failed status
+      // or an output marker (the job goes back to the queue).
+      outcome = "requeue";
+    } else {
+      outcome = "failed";
+      await appendStatus(dataDir, "failed", messageOf(error)).catch(() => undefined);
+    }
   } finally {
-    await writeJsonAtomic(path.join(outputDir, `${jobId}.json`), {
-      created_at: nowIso(),
-      status: finalStatus,
-    }).catch(() => undefined);
+    if (outcome !== "requeue") {
+      await writeJsonAtomic(path.join(outputDir, `${jobId}.json`), {
+        created_at: nowIso(),
+        status: outcome,
+      }).catch(() => undefined);
+    }
   }
 
-  return finalStatus;
+  return outcome;
 };

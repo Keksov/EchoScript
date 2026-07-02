@@ -1,10 +1,10 @@
 import { test, expect } from "bun:test";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile, readFile, stat } from "node:fs/promises";
 
 import { loadConfig } from "./config";
-import { JobManager } from "./job-manager";
+import { JobManager, getModelFromJobId } from "./job-manager";
 
 const JOBS_ROOT_ENV = "ECHOSCRIPT_JOBS_ROOT";
 
@@ -61,6 +61,39 @@ test("listJobs surfaces per-job progress from progress.json", async () => {
     expect(listed?.progress?.windows_done).toBe(5);
     expect(listed?.progress?.windows_total).toBe(12);
     expect(listed?.progress?.total_ms).toBe(300000);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("createDroppedJob moves the file into data/<id>/input and writes drop artifacts", async () => {
+  const base = await mkdtemp(path.join(tmpdir(), "jm-drop-"));
+  try {
+    const config = await configWithJobsRoot(base);
+    const jm = new JobManager(config);
+    await jm.initialize();
+
+    // a claimed drop file sitting as <name>.processing
+    const processingPath = path.join(base, "Два человека.wav.processing");
+    await writeFile(processingPath, Buffer.alloc(16, 7));
+
+    const created = await jm.createDroppedJob(processingPath, "Два человека.wav", "whisper_podlodka");
+    expect(getModelFromJobId(created.jobId, Object.keys(config.models))).toBe("whisper_podlodka");
+
+    // file moved into the job's data dir; original .processing is gone
+    const moved = await readFile(path.join(created.dataDir, "input"));
+    expect(moved.length).toBe(16);
+    await expect(stat(processingPath)).rejects.toBeDefined();
+
+    const inputJson = JSON.parse(await readFile(path.join(created.dataDir, "input.json"), "utf-8"));
+    expect(inputJson.source).toBe("input");
+    expect(inputJson.original_filename).toBe("Два человека.wav");
+    expect(inputJson.created_from).toBe("file_drop");
+
+    // status.json exists (initial lifecycle) and enqueue then drops a queue marker
+    expect(JSON.parse(await readFile(path.join(created.dataDir, "status.json"), "utf-8")).length).toBeGreaterThan(0);
+    await jm.enqueueJob(created.jobId, {});
+    await stat(path.join(base, "queue", `${created.jobId}.json`)); // throws if missing
   } finally {
     await rm(base, { recursive: true, force: true });
   }

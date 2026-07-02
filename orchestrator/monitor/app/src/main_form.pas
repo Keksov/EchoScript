@@ -56,9 +56,12 @@ type
     Fbusy             : Boolean;
     FexpandedName     : string;
     FdetailJson       : string;
+    FpendingAct       : string;
+    FpendingDaemon    : string;
     procedure   buildUi;
     procedure   buildSkeleton;
     procedure   asyncFirstRefresh({%H-}aData: PtrInt);
+    procedure   handlePendingAnchor({%H-}aData: PtrInt);
     procedure   onRefreshClick({%H-}Sender: TObject);
     procedure   onTimer({%H-}Sender: TObject);
     procedure   onAutoRefreshChanged({%H-}Sender: TObject);
@@ -567,15 +570,32 @@ end;
 procedure TMonitorForm.onAnchorClick(Sender: TObject; El: TObject; const aUrl: string);
 var
   colonPos: Integer;
-  act: string;
-  daemonName: string;
-  descJson: string;
 begin
   colonPos := Pos(':', aUrl);
   if colonPos <= 0 then
     Exit;
-  act := Copy(aUrl, 1, colonPos - 1);
-  daemonName := Copy(aUrl, colonPos + 1, MaxInt);
+  if Fbusy then
+    Exit;
+  { Defer everything out of this callback: re-rendering the HtmlView here frees the
+    anchor element that Pixie still dereferences after OnAnchorClick returns, which
+    causes an access violation. Stash the request and handle it on the next loop. }
+  FpendingAct := Copy(aUrl, 1, colonPos - 1);
+  FpendingDaemon := Copy(aUrl, colonPos + 1, MaxInt);
+  if FpendingDaemon = '' then
+    Exit;
+  Application.QueueAsyncCall(@handlePendingAnchor, 0);
+end;
+
+procedure TMonitorForm.handlePendingAnchor(aData: PtrInt);
+var
+  act: string;
+  daemonName: string;
+  descJson: string;
+begin
+  act := FpendingAct;
+  daemonName := FpendingDaemon;
+  FpendingAct := '';
+  FpendingDaemon := '';
   if daemonName = '' then
     Exit;
   if Fbusy then

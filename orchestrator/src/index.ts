@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import process from "node:process";
 
 import { loadConfig } from "./config";
+import { DaemonRegistry } from "./daemon-registry";
+import { startRegistryWatcher } from "./daemon-registry-watcher";
 import {
   assertValidJobResultType,
   assertValidJobId,
@@ -144,7 +146,9 @@ const config = await loadConfig();
 const jobManager = new JobManager(config);
 await jobManager.initialize();
 const processManager = new ProcessManager(config);
-const scheduler = new Scheduler(config, jobManager, processManager);
+const daemonRegistry = new DaemonRegistry(config.daemonRegistryTtlMs);
+await startRegistryWatcher(config.jobsRoot, daemonRegistry);
+const scheduler = new Scheduler(config, jobManager, processManager, daemonRegistry);
 await scheduler.start();
 const maxAddBodyBytes = resolveAddBodyLimitBytes();
 

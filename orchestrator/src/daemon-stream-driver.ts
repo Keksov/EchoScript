@@ -3,6 +3,7 @@ import { open } from "node:fs/promises";
 import type { WsDaemonConfig } from "./config";
 import {
   DaemonDriverError,
+  DaemonUnreachableError,
   type DaemonSegment,
   type DaemonTranscription,
   type DaemonWord,
@@ -233,7 +234,7 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
         clearTimeout(heartbeat);
       }
       heartbeat = setTimeout(
-        () => fail(new DaemonDriverError(`daemon ${ctx.url} stalled: no event for ${ctx.heartbeatTimeoutMs}ms`)),
+        () => fail(new DaemonUnreachableError(`daemon ${ctx.url} stalled: no event for ${ctx.heartbeatTimeoutMs}ms`)),
         ctx.heartbeatTimeoutMs,
       );
     };
@@ -288,8 +289,8 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
       }
     };
 
-    socket.onError((error) => fail(error));
-    socket.onClose(() => fail(new DaemonDriverError(`connection to ${ctx.url} closed before completion`)));
+    socket.onError(() => fail(new DaemonUnreachableError(`websocket error connecting to ${ctx.url}`)));
+    socket.onClose(() => fail(new DaemonUnreachableError(`connection to ${ctx.url} closed before completion`)));
 
     socket.onMessage((data) => {
       if (data.length === 0) {
