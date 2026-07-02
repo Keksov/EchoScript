@@ -100,7 +100,7 @@ ws-daemon-задания только на свежезарегистриров�
 - [x] **DR0.1 — Plan & ledger.**
 - [x] **DR1.1 — Реестр (чистое ядро) + юниты.** Парсер/валидатор `registry/<name>.json`, TTL-свежесть,
   live-map; DI clock.
-- [ ] **DR1.2 — Watcher реестра + startup-scan, подключить к старту оркестратора.** Оркестратор
+- [x] **DR1.2 — Watcher реестра + startup-scan, подключить к старту оркестратора.** Оркестратор
   создаёт `jobs/registry/` на старте.
 - [ ] **DR1.3 — Readiness-gate (peek-dispatchable) в `dispatchNext`.** Пропуск ws-daemon-заданий без
   свежей `ready`-записи (DR-D10), диспетч на announced host/port; тесты.

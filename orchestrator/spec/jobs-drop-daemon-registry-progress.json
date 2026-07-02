@@ -48,12 +48,12 @@
       "id": "DR1.2",
       "phase": 1,
       "title": "Watcher реестра + startup-scan, подключить к старту оркестратора",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR1.1"],
-      "artifacts": ["orchestrator/src/daemon-registry.ts", "orchestrator/src/index.ts"],
+      "artifacts": ["orchestrator/src/daemon-registry-watcher.ts", "orchestrator/src/daemon-registry-watcher.test.ts", "orchestrator/src/config.ts", "orchestrator/src/index.ts", "orchestrator/src/scheduler.ts", "config.json"],
       "verify": "bun test/старт: оркестратор создаёт jobs/registry на старте; fs.watch(jobs/registry) + первичный скан наполняют live-map; путь реестра из config (jobsRoot/registry).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T13:15:00Z", "finishedAt": "2026-07-02T13:30:00Z", "blockedReason": null,
+      "evidence": ["daemon-registry-watcher.ts: registryDir, loadRegistryFile (upsert/ignore half-written/remove на unlink/skip misfiled), scanRegistryDir, startRegistryWatcher (mkdir jobs/registry + scan + fs.watch); DI reader", "config: daemon_registry_ttl_ms (дефолт 15000, кламп>=1000) + config.json; loadConfig -> 15000 подтверждено", "index.ts: new DaemonRegistry(ttl) + startRegistryWatcher(jobsRoot) на старте; Scheduler получает daemonRegistry (использование в DR1.3)", "daemon-registry-watcher.test.ts -> 5 pass; полный сьют 31 pass / 0 fail (7 файлов); tsc 0"]
     },
     {
       "id": "DR1.3",
@@ -136,6 +136,7 @@
   "log": [
     { "ts": "2026-07-02T12:16:00Z", "step": "DR0.1", "event": "done", "note": "План+леджер созданы; JSON ok, 9 шагов, DAG ацикличен; commit e52eaa9. Решения DR-D1..DR-D9 зафиксированы (реестр в jobs/registry, whisperdaemon-регистрация в scope). Пауза на границе фазы 0." },
     { "ts": "2026-07-02T12:40:00Z", "step": "DR0.1", "event": "amended", "note": "Ревью плана: добавлены DR-D10 (peek-dispatchable, без HOL), DR-D11 (классы ошибок transport/terminal), DR-D12 (инвалидация регистрации + backoff), DR-D13 (drop переиспользует JobManager/enqueue, move в data/). Правки DR-D2/D3/D5/D6, новый шаг DR1.4, recovery .processing + mkdir jobs/registry, конфиг-ключи drop_stable_ms/daemon_registry_ttl_ms." },
-    { "ts": "2026-07-02T13:10:00Z", "step": "DR1.1", "event": "done", "note": "daemon-registry.ts (чистое ядро): parseRegistration + freshness/readiness по TTL + DaemonRegistry с DI clock. 8 тестов; полный сьют 26 pass / 0 fail; tsc 0." }
+    { "ts": "2026-07-02T13:10:00Z", "step": "DR1.1", "event": "done", "note": "daemon-registry.ts (чистое ядро): parseRegistration + freshness/readiness по TTL + DaemonRegistry с DI clock. 8 тестов; полный сьют 26 pass / 0 fail; tsc 0." },
+    { "ts": "2026-07-02T13:30:00Z", "step": "DR1.2", "event": "done", "note": "daemon-registry-watcher.ts (scan/load/watch, DI reader) + config daemon_registry_ttl_ms; подключено к старту оркестратора (mkdir jobs/registry, scan, watch), Scheduler получил реестр. 5 тестов; полный сьют 31 pass / 0 fail; tsc 0." }
   ]
 }

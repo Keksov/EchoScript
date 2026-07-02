@@ -8,6 +8,7 @@ import { getNodeErrorCode } from "./node-error";
 import { ProcessManager } from "./process-manager";
 import { runWsDaemonJob } from "./ws-daemon-runner";
 import { bytesForMs } from "./daemon-stream-driver";
+import { DaemonRegistry } from "./daemon-registry";
 
 interface SchedulerState {
   readonly activeJobId: string | null;
@@ -57,6 +58,7 @@ export class Scheduler {
     private readonly config: AppConfig,
     private readonly jobManager: JobManager,
     private readonly processManager: ProcessManager,
+    private readonly daemonRegistry: DaemonRegistry,
   ) {}
 
   public async start(): Promise<void> {

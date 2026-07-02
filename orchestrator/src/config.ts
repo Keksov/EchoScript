@@ -27,6 +27,7 @@ export interface AppConfig {
   readonly modelStopTimeoutMs: number;
   readonly streamWindowMs: number;
   readonly streamRolloverMs: number;
+  readonly daemonRegistryTtlMs: number;
   readonly defaultModel: string;
   readonly ffmpegPath: string;
   readonly speech: SpeechConfig;
@@ -52,6 +53,7 @@ interface RawConfig {
   readonly model_stop_timeout_ms?: unknown;
   readonly stream_window_ms?: unknown;
   readonly stream_rollover_ms?: unknown;
+  readonly daemon_registry_ttl_ms?: unknown;
   readonly default_model?: unknown;
   readonly ffmpeg_path?: unknown;
   readonly speech?: unknown;
@@ -84,6 +86,9 @@ const DEFAULT_MODEL_STOP_TIMEOUT_MS = 120000;
 // window of audio streamed per binary frame, and rollover cap before a fresh session.
 const DEFAULT_STREAM_WINDOW_MS = 30000;
 const DEFAULT_STREAM_ROLLOVER_MS = 1200000;
+// Daemon registry (jobs/registry/<name>.json): a registration is "ready" only if its
+// heartbeat is within this TTL (invariant: TTL >= ~3x the daemon heartbeat interval).
+const DEFAULT_DAEMON_REGISTRY_TTL_MS = 15000;
 const DEFAULT_MODEL = "whisper_podlodka";
 const DEFAULT_FFMPEG_PATH = "./tools/ffmpeg/ffmpeg.exe";
 const JOBS_ROOT_ENV = "ECHOSCRIPT_JOBS_ROOT";
@@ -242,6 +247,10 @@ export const loadConfig = async (): Promise<AppConfig> => {
     streamWindowMs,
     asNumber(rawConfig.stream_rollover_ms) ?? DEFAULT_STREAM_ROLLOVER_MS,
   );
+  const daemonRegistryTtlMs = Math.max(
+    1000,
+    asNumber(rawConfig.daemon_registry_ttl_ms) ?? DEFAULT_DAEMON_REGISTRY_TTL_MS,
+  );
   const jobsRootOverride = asString(process.env[JOBS_ROOT_ENV]);
   const configuredJobsRoot = jobsRootOverride ?? asString(rawConfig.jobs_root) ?? DEFAULT_JOBS_ROOT;
   const ffmpegOverride = asString(process.env[FFMPEG_PATH_ENV]);
@@ -260,6 +269,7 @@ export const loadConfig = async (): Promise<AppConfig> => {
     modelStopTimeoutMs,
     streamWindowMs,
     streamRolloverMs,
+    daemonRegistryTtlMs,
     defaultModel,
     ffmpegPath: path.resolve(PROJECT_ROOT, configuredFfmpegPath),
     speech: resolveSpeechConfig(isRecord(rawConfig.speech) ? (rawConfig.speech as RawSpeechConfig) : null),
