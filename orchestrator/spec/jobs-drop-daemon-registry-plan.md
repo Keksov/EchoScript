@@ -107,7 +107,7 @@ ws-daemon-задания только на свежезарегистриров�
 - [x] **DR1.4 — Requeue-on-transport + классы ошибок + инвалидация/backoff.** Драйвер: класс
   `DaemonUnreachableError` (DR-D11); раннер: requeue только transport; инвалидация registry-записи и
   backoff (DR-D12); тесты.
-- [ ] **DR2.1 — whisperdaemon пишет регистрацию** (атомарно, на ready + heartbeat + remove на shutdown).
+- [x] **DR2.1 — whisperdaemon пишет регистрацию** (атомарно, на ready + heartbeat + remove на shutdown).
 - [ ] **DR3.1 — Drop-ядро + юниты.** `claimMediaFile` (stability → atomic rename `.processing`),
   `buildMediaJobId` (транслит), **move в `data/<id>/input` + переиспользование `JobManager`/`enqueue`**
   (DR-D13).

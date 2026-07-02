@@ -81,12 +81,12 @@
       "id": "DR2.1",
       "phase": 2,
       "title": "whisperdaemon пишет регистрацию (write/heartbeat/remove)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR1.1"],
       "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
       "verify": "Демон пересобран; на ready АТОМАРНО (temp+rename) пишет jobs/registry/whisperdaemon.json, обновляет updated_at (heartbeat), удаляет на shutdown; схема совпадает с DR-D5.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T14:20:00Z", "finishedAt": "2026-07-02T14:45:00Z", "blockedReason": null,
+      "evidence": ["--registry-dir CLI + ECHOSCRIPT_REGISTRY_DIR env, дефолт <workspaceRoot>/jobs/registry (совпадает с дефолтным jobs_root); файл keyed по model_name (whisper_podlodka.json, name==model_name)", "writeRegistration: атомарно temp + MoveFileEx(REPLACE_EXISTING); UTC updated_at через Windows GetSystemTime; pid=GetCurrentProcessId; input pcm16le/16000/1", "heartbeat каждые 5000 мс (TTL 15000 >= 3x); removeRegistration в finally (best-effort — hard-kill не срабатывает, покрыто TTL)", "build успешен; функциональная проверка: файл появился (state ready, корректная схема), heartbeat обновляет updated_at (20:58:20->20:58:30), реальный parseRegistration оркестратора принял файл (name/model/port/state/input верны)"]
     },
     {
       "id": "DR3.1",
@@ -139,6 +139,7 @@
     { "ts": "2026-07-02T13:10:00Z", "step": "DR1.1", "event": "done", "note": "daemon-registry.ts (чистое ядро): parseRegistration + freshness/readiness по TTL + DaemonRegistry с DI clock. 8 тестов; полный сьют 26 pass / 0 fail; tsc 0." },
     { "ts": "2026-07-02T13:30:00Z", "step": "DR1.2", "event": "done", "note": "daemon-registry-watcher.ts (scan/load/watch, DI reader) + config daemon_registry_ttl_ms; подключено к старту оркестратора (mkdir jobs/registry, scan, watch), Scheduler получил реестр. 5 тестов; полный сьют 31 pass / 0 fail; tsc 0." },
     { "ts": "2026-07-02T13:48:00Z", "step": "DR1.3", "event": "done", "note": "Readiness-gate: selectDispatchable (peek-dispatchable, без HOL) + listQueuedJobs + readyEndpointForModel (announced host/port). 6 тестов; полный сьют 37 pass / 0 fail; tsc 0." },
-    { "ts": "2026-07-02T14:12:00Z", "step": "DR1.4", "event": "done", "note": "DaemonUnreachableError (transport) -> requeue без failed/маркера; scheduler invalidateModel + requeueJob; registry invalidate/invalidateModel (suspect до свежего heartbeat). Полный сьют 40 pass / 0 fail; tsc 0. Конец фазы 1 — пауза." }
+    { "ts": "2026-07-02T14:12:00Z", "step": "DR1.4", "event": "done", "note": "DaemonUnreachableError (transport) -> requeue без failed/маркера; scheduler invalidateModel + requeueJob; registry invalidate/invalidateModel (suspect до свежего heartbeat). Полный сьют 40 pass / 0 fail; tsc 0. Конец фазы 1 — пауза." },
+    { "ts": "2026-07-02T14:45:00Z", "step": "DR2.1", "event": "done", "note": "whisperdaemon самрегистрируется: --registry-dir (дефолт <root>/jobs/registry), атомарная запись jobs/registry/whisper_podlodka.json на ready + heartbeat 5s + remove в finally. Build ок; проверено на живом демоне (файл, heartbeat, парсинг оркестратором). Конец фазы 2 — пауза." }
   ]
 }
