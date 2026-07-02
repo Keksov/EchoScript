@@ -1,6 +1,6 @@
 # Восстановление file-drop + файловая саморегистрация демонов
 
-Status: **active**
+Status: **complete**
 Created: 2026-07-02
 Authoritative progress ledger: [jobs-drop-daemon-registry-progress.json](jobs-drop-daemon-registry-progress.json)
 
@@ -114,7 +114,7 @@ ws-daemon-задания только на свежезарегистриров�
 - [x] **DR4.1 — Интеграция drop:** watcher `input/<model>/` + startup-scan (+ recovery `.processing`)
   + reconcile-sweep → Scheduler.
 - [x] **DR5.1 — E2E** (сценарий владельца: drop-до-демона → waiting → старт → распознано; + live).
-- [ ] **DR5.2 — Docs** (ARCHITECTURE.md: drop + реестр/registration-контракт).
+- [x] **DR5.2 — Docs** (ARCHITECTURE.md: drop + реестр/registration-контракт).
 
 ## References
 - Стрим-мост (завершён): [file-streaming-bridge-plan.md](file-streaming-bridge-plan.md)

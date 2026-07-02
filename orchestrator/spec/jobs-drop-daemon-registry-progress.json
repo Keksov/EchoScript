@@ -3,9 +3,9 @@
   "plan": "jobs-drop-daemon-registry",
   "planDoc": "spec/jobs-drop-daemon-registry-plan.md",
   "title": "Восстановление file-drop + файловая саморегистрация демонов",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-07-02",
-  "updatedAt": "2026-07-02T12:40:00Z",
+  "updatedAt": "2026-07-02T16:35:00Z",
   "decisions": [
     { "id": "DR-D1", "text": "Оркестратор снова подбирает сырые файлы из input/<model>/ (порт _claim_media_file): fs.watch + startup-scan + reconcile-sweep." },
     { "id": "DR-D2", "text": "Claim атомарным rename -> .processing, затем файл ПЕРЕМЕЩАЕТСЯ в data/<id>/input (не reference, иначе watcher повторно подхватит). Задание создаётся через существующий JobManager + enqueueJob; input.json{source:input, original_filename, created_from:file_drop}. См. DR-D13." },
@@ -125,12 +125,12 @@
       "id": "DR5.2",
       "phase": 5,
       "title": "Docs (ARCHITECTURE.md: drop + registration-контракт)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR5.1"],
       "artifacts": ["EchoRecorder/docs/ARCHITECTURE.md"],
       "verify": "ARCHITECTURE.md описывает восстановленный file-drop и файловую саморегистрацию демонов (jobs/registry, heartbeat/TTL, readiness-gate).",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T16:25:00Z", "finishedAt": "2026-07-02T16:35:00Z", "blockedReason": null,
+      "evidence": ["ARCHITECTURE.md §6: новый подраздел 'Файловый drop + саморегистрация демонов (readiness)' (drop-механизм, registration-контракт jobs/registry + heartbeat/TTL, readiness-gate + requeue); компоненты + тесты + e2e_drop_manual.sh + ссылка на план"]
     }
   ],
   "log": [
@@ -143,6 +143,8 @@
     { "ts": "2026-07-02T14:45:00Z", "step": "DR2.1", "event": "done", "note": "whisperdaemon самрегистрируется: --registry-dir (дефолт <root>/jobs/registry), атомарная запись jobs/registry/whisper_podlodka.json на ready + heartbeat 5s + remove в finally. Build ок; проверено на живом демоне (файл, heartbeat, парсинг оркестратором). Конец фазы 2 — пауза." },
     { "ts": "2026-07-02T15:20:00Z", "step": "DR3.1", "event": "done", "note": "Drop-ядро: file-drop.ts (translit/sanitize/buildMediaJobId/claimMediaFile со stability-debounce+atomic rename) + JobManager.createDroppedJob (move в data/<id>/input, reuse enqueue). 49 pass / 0 fail; tsc 0. Конец фазы 3 — пауза." },
     { "ts": "2026-07-02T15:52:00Z", "step": "DR4.1", "event": "done", "note": "Интеграция drop: input-drop.scanInputDrops + config drop_stable_ms; scheduler startup-scan + fs.watch(input/<model>/) + reconcile-sweep + recovery .processing. 52 pass / 0 fail; tsc 0. Конец фазы 4 — пауза." },
-    { "ts": "2026-07-02T16:20:00Z", "step": "DR5.1", "event": "done", "note": "E2E на реальном стеке (изолированный jobs-root): drop при выключенном демоне -> queued (не failed) -> старт демона (ready) -> распознано. exit 0; jobs/ не тронут." }
+    { "ts": "2026-07-02T16:20:00Z", "step": "DR5.1", "event": "done", "note": "E2E на реальном стеке (изолированный jobs-root): drop при выключенном демоне -> queued (не failed) -> старт демона (ready) -> распознано. exit 0; jobs/ не тронут." },
+    { "ts": "2026-07-02T16:35:00Z", "step": "DR5.2", "event": "done", "note": "ARCHITECTURE.md §6 описывает drop + саморегистрацию + readiness-gate. Все шаги DR0.1..DR5.2 выполнены." },
+    { "ts": "2026-07-02T16:35:00Z", "step": "DR5.2", "event": "complete", "note": "Инициатива complete: file-drop восстановлен, демоны саморегистрируются, readiness-gate держит задания при выключенном демоне (E2E зелёный). Готово к мерджу." }
   ]
 }
