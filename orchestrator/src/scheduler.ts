@@ -3,7 +3,7 @@ import { readdir, rename, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import type { AppConfig, WsDaemonConfig } from "./config";
-import { JobManager } from "./job-manager";
+import { JobManager, type QueuedJob } from "./job-manager";
 import { getNodeErrorCode } from "./node-error";
 import { ProcessManager } from "./process-manager";
 import { runWsDaemonJob } from "./ws-daemon-runner";
@@ -43,6 +43,38 @@ const stripMarkerSuffix = (fileName: string): string | null => {
     return fileName.slice(0, -".json".length);
   }
 
+  return null;
+};
+
+export interface DispatchChoice {
+  readonly job: QueuedJob;
+  /** ws-daemon endpoint (announced host/port) to dispatch to, or null for the python path. */
+  readonly wsEndpoint: WsDaemonConfig | null;
+}
+
+/**
+ * Peek-dispatchable (DR-D10): walk the queue in order and pick the first job we can run
+ * now — python-model jobs always (the orchestrator starts the worker), ws-daemon jobs
+ * only when the registry reports a fresh ready daemon. Not-ready ws-daemon jobs are
+ * skipped (no head-of-line blocking); null means nothing is dispatchable right now and
+ * the reconcile tick will retry when a daemon registers.
+ */
+export const selectDispatchable = (
+  queued: readonly QueuedJob[],
+  findWsDaemon: (model: string) => WsDaemonConfig | null,
+  readyEndpoint: (model: string) => WsDaemonConfig | null,
+): DispatchChoice | null => {
+  for (const job of queued) {
+    const wsDaemon = findWsDaemon(job.targetModel);
+    if (wsDaemon === null) {
+      return { job, wsEndpoint: null }; // python path — always dispatchable
+    }
+    const endpoint = readyEndpoint(job.targetModel);
+    if (endpoint !== null) {
+      return { job, wsEndpoint: endpoint };
+    }
+    // ws-daemon not ready — skip this job, try the next one
+  }
   return null;
 };
 
@@ -168,21 +200,31 @@ export class Scheduler {
       }
     }
 
-    const queuedJob = await this.jobManager.peekQueue();
-    if (queuedJob === null) {
+    const queued = await this.jobManager.listQueuedJobs();
+    if (queued.length === 0) {
       return;
     }
 
-    const wsDaemon = this.findWsDaemonForModel(queuedJob.targetModel);
-    if (wsDaemon !== null) {
-      await this.dispatchWsDaemonJob(queuedJob.jobId, queuedJob.targetModel, wsDaemon);
+    const choice = selectDispatchable(
+      queued,
+      (model) => this.findWsDaemonForModel(model),
+      (model) => this.readyEndpointForModel(model),
+    );
+    if (choice === null) {
+      // Nothing dispatchable now (ws-daemon(s) not ready) — leave jobs queued; the
+      // reconcile tick retries once a daemon registers as ready (DR-D6/DR-D10).
       return;
     }
 
-    await this.switchToModel(queuedJob.targetModel);
-    await this.jobManager.dispatchJob(queuedJob.jobId, queuedJob.targetModel);
-    this.activeJobId = queuedJob.jobId;
-    this.activeModel = queuedJob.targetModel;
+    if (choice.wsEndpoint !== null) {
+      await this.dispatchWsDaemonJob(choice.job.jobId, choice.job.targetModel, choice.wsEndpoint);
+      return;
+    }
+
+    await this.switchToModel(choice.job.targetModel);
+    await this.jobManager.dispatchJob(choice.job.jobId, choice.job.targetModel);
+    this.activeJobId = choice.job.jobId;
+    this.activeModel = choice.job.targetModel;
   }
 
   private findWsDaemonForModel(modelName: string): WsDaemonConfig | null {
@@ -192,6 +234,15 @@ export class Scheduler {
       }
     }
     return null;
+  }
+
+  /** Fresh ready daemon for a model, as an endpoint using its announced host/port (DR-D7). */
+  private readyEndpointForModel(modelName: string): WsDaemonConfig | null {
+    const registration = this.daemonRegistry.readyForModel(modelName);
+    if (registration === null) {
+      return null;
+    }
+    return { host: registration.host, port: registration.port, modelName };
   }
 
   private async dispatchWsDaemonJob(

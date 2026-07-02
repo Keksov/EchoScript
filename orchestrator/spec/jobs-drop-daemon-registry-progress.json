@@ -59,12 +59,12 @@
       "id": "DR1.3",
       "phase": 1,
       "title": "Readiness-gate (peek-dispatchable) в dispatchNext",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": ["DR1.2"],
       "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/scheduler.test.ts", "orchestrator/src/job-manager.ts"],
       "verify": "bun test: ws-daemon-задание без свежей ready-записи пропускается, берётся следующее выполнимое (без HOL-блокировки, DR-D10); диспетч на announced host/port из реестра; python-задания не гейтятся.",
-      "startedAt": null, "finishedAt": null, "blockedReason": null,
-      "evidence": []
+      "startedAt": "2026-07-02T13:35:00Z", "finishedAt": "2026-07-02T13:48:00Z", "blockedReason": null,
+      "evidence": ["job-manager.listQueuedJobs(): очередь в порядке маркеров", "scheduler.selectDispatchable() — чистая функция: python всегда, ws-daemon только при readyEndpoint; пропуск неготовых (без HOL); dispatchNext использует её + readyEndpointForModel (announced host/port из реестра, DR-D7)", "scheduler.test.ts -> 6 pass (python; ready ws; head-not-ready не блокирует tail; выбор ready среди неготовых; всё неготово -> null; пустая очередь)", "полный сьют 37 pass / 0 fail (8 файлов); tsc 0"]
     },
     {
       "id": "DR1.4",
@@ -137,6 +137,7 @@
     { "ts": "2026-07-02T12:16:00Z", "step": "DR0.1", "event": "done", "note": "План+леджер созданы; JSON ok, 9 шагов, DAG ацикличен; commit e52eaa9. Решения DR-D1..DR-D9 зафиксированы (реестр в jobs/registry, whisperdaemon-регистрация в scope). Пауза на границе фазы 0." },
     { "ts": "2026-07-02T12:40:00Z", "step": "DR0.1", "event": "amended", "note": "Ревью плана: добавлены DR-D10 (peek-dispatchable, без HOL), DR-D11 (классы ошибок transport/terminal), DR-D12 (инвалидация регистрации + backoff), DR-D13 (drop переиспользует JobManager/enqueue, move в data/). Правки DR-D2/D3/D5/D6, новый шаг DR1.4, recovery .processing + mkdir jobs/registry, конфиг-ключи drop_stable_ms/daemon_registry_ttl_ms." },
     { "ts": "2026-07-02T13:10:00Z", "step": "DR1.1", "event": "done", "note": "daemon-registry.ts (чистое ядро): parseRegistration + freshness/readiness по TTL + DaemonRegistry с DI clock. 8 тестов; полный сьют 26 pass / 0 fail; tsc 0." },
-    { "ts": "2026-07-02T13:30:00Z", "step": "DR1.2", "event": "done", "note": "daemon-registry-watcher.ts (scan/load/watch, DI reader) + config daemon_registry_ttl_ms; подключено к старту оркестратора (mkdir jobs/registry, scan, watch), Scheduler получил реестр. 5 тестов; полный сьют 31 pass / 0 fail; tsc 0." }
+    { "ts": "2026-07-02T13:30:00Z", "step": "DR1.2", "event": "done", "note": "daemon-registry-watcher.ts (scan/load/watch, DI reader) + config daemon_registry_ttl_ms; подключено к старту оркестратора (mkdir jobs/registry, scan, watch), Scheduler получил реестр. 5 тестов; полный сьют 31 pass / 0 fail; tsc 0." },
+    { "ts": "2026-07-02T13:48:00Z", "step": "DR1.3", "event": "done", "note": "Readiness-gate: selectDispatchable (peek-dispatchable, без HOL) + listQueuedJobs + readyEndpointForModel (announced host/port). 6 тестов; полный сьют 37 pass / 0 fail; tsc 0." }
   ]
 }

@@ -323,6 +323,24 @@ export class JobManager {
     };
   }
 
+  /** All queued jobs in dispatch order (queue markers sorted by name). */
+  public async listQueuedJobs(): Promise<QueuedJob[]> {
+    const markerNames = (await readdir(this.getQueueDir()))
+      .filter((entry) => entry.endsWith(".json"))
+      .sort((left, right) => left.localeCompare(right));
+
+    return markerNames.map((markerName) => {
+      const jobId = markerName.slice(0, -".json".length);
+      let model: string | null;
+      try {
+        model = this.resolveModelFromJobId(jobId);
+      } catch {
+        model = null;
+      }
+      return { jobId, targetModel: model ?? this.config.defaultModel };
+    });
+  }
+
   public async listJobs(): Promise<readonly ListedJob[]> {
     const entries = await readdir(this.getDataRoot(), { withFileTypes: true });
     const listedJobs = await Promise.all(
