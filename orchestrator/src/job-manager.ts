@@ -22,6 +22,15 @@ export interface QueuedJob {
   readonly targetModel: string;
 }
 
+export interface JobProgress {
+  readonly progress_pct: number;
+  readonly windows_done: number;
+  readonly windows_total: number;
+  readonly processed_ms: number;
+  readonly total_ms: number;
+  readonly updated_at: string | null;
+}
+
 export interface ListedJob {
   readonly job_id: string;
   readonly model: string | null;
@@ -32,6 +41,7 @@ export interface ListedJob {
   readonly source: string | null;
   readonly original_filename: string | null;
   readonly created_from: JobCreatedFrom | null;
+  readonly progress: JobProgress | null;
 }
 
 export type JobResultType = "raw" | "normalized" | "plain" | "timestamp";
@@ -380,6 +390,38 @@ export class JobManager {
     return readJson(statusPath);
   }
 
+  /** Streaming-bridge liveness for a job (progress.json), or null if none yet. */
+  public async getJobProgress(jobId: string): Promise<JobProgress | null> {
+    assertValidJobId(jobId);
+    await this.ensureJobDataDir(jobId);
+    return this.readJobProgress(this.getDataDir(jobId));
+  }
+
+  private async readJobProgress(dataDir: string): Promise<JobProgress | null> {
+    try {
+      const payload = await readJson(path.join(dataDir, "progress.json"));
+      if (!isRecord(payload)) {
+        return null;
+      }
+      const num = (value: unknown): number =>
+        typeof value === "number" && Number.isFinite(value) ? value : 0;
+      return {
+        progress_pct: num(payload.progress_pct),
+        windows_done: num(payload.windows_done),
+        windows_total: num(payload.windows_total),
+        processed_ms: num(payload.processed_ms),
+        total_ms: num(payload.total_ms),
+        updated_at: typeof payload.updated_at === "string" ? payload.updated_at : null,
+      };
+    } catch (error) {
+      const code = getNodeErrorCode(error);
+      if (code === "ENOENT" || error instanceof SyntaxError) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   public async getJobResult(jobId: string, resultType?: JobResultType): Promise<unknown | string> {
     assertValidJobId(jobId);
     await this.ensureJobDataDir(jobId);
@@ -566,11 +608,12 @@ export class JobManager {
     }
 
     const dataDir = this.getDataDir(jobId);
-    const [inputMetadata, statusSummary, outputStatus, hasResult] = await Promise.all([
+    const [inputMetadata, statusSummary, outputStatus, hasResult, progress] = await Promise.all([
       this.readJobInputMetadata(dataDir),
       this.readJobStatusSummary(jobId, dataDir),
       this.readOutputStatus(jobId),
       this.hasResultArtifact(jobId),
+      this.readJobProgress(dataDir),
     ]);
 
     let model: string | null = null;
@@ -590,6 +633,7 @@ export class JobManager {
       source: inputMetadata.source,
       original_filename: inputMetadata.originalFilename,
       created_from: inputMetadata.createdFrom,
+      progress,
     };
   }
 

@@ -185,6 +185,7 @@ type
     Fconnection              : TWSConnection;
     FsegmentCount            : Integer;
     FlastAutoCheckBytes      : SizeInt;
+    FcommittedMs             : Int64;
     procedure   appendAudioBytes(const aBytes: TBytes);
     procedure   appendTextWithSpace(var aTarget: string; const aValue: string);
     procedure   appendWordEvent(
@@ -1056,6 +1057,7 @@ begin
     FresolvedLanguage := '';
     FfinalText := '';
     FsegmentCount := 0;
+    FcommittedMs := 0;
   end;
 
   FlastAutoCheckBytes := 0;
@@ -1473,7 +1475,7 @@ begin
   if Length(FaudioBytes) = 0 then
   begin
     if aFinalizeSession then
-      sendSessionFinal(audioMs);
+      sendSessionFinal(FcommittedMs);
     Exit;
   end;
 
@@ -1501,18 +1503,21 @@ begin
         startSegmentId + segmentIndex,
         wordEvents[nextWordEventIndex].IndexInSegment,
         wordEvents[nextWordEventIndex].Text,
-        wordEvents[nextWordEventIndex].StartMs,
-        wordEvents[nextWordEventIndex].EndMs,
+        wordEvents[nextWordEventIndex].StartMs + FcommittedMs,
+        wordEvents[nextWordEventIndex].EndMs + FcommittedMs,
         wordEvents[nextWordEventIndex].Confidence
       );
       Inc(nextWordEventIndex);
     end;
 
+    { Segment/word times from inferPcm16le are relative to the current buffer,
+      which is cleared on every commit. Add FcommittedMs so streamed timestamps
+      stay absolute across the whole session (file bridge relies on this). }
     sendSegmentFinal(
       startSegmentId + segmentIndex,
       segmentTexts[segmentIndex],
-      segmentT0s[segmentIndex],
-      segmentT1s[segmentIndex]
+      segmentT0s[segmentIndex] + FcommittedMs,
+      segmentT1s[segmentIndex] + FcommittedMs
     );
   end;
 
@@ -1520,6 +1525,7 @@ begin
   Inc(FsegmentCount, collectedCount);
 
   clearSessionData(False);
+  Inc(FcommittedMs, audioMs);
 
   if not aFinalizeSession then
   begin
@@ -1528,7 +1534,7 @@ begin
   end;
 
   WriteLn('[whisperdaemon] session_final text=', FfinalText);
-  sendSessionFinal(audioMs);
+  sendSessionFinal(FcommittedMs);
 end;
 
 function TWhisperDaemonSession.bytesToPcmFloat(const aBytes: TBytes): TFloatArray;

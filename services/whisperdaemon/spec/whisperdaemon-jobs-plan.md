@@ -102,6 +102,9 @@ Authoritative progress ledger: [whisperdaemon-jobs-progress.json](whisperdaemon-
 - **Разделение**: демон только распознаёт присланный файл; очередь/артефакты/статусы — оркестратор (D6).
 
 ## References
+- **Продолжение (стриминг файлов + прогресс):** `orchestrator/spec/file-streaming-bridge-plan.md`
+  — заменяет one-shot `transcribe_file` для файлов на живой протокол демона (окна + прогресс),
+  снимает 10-мин потолок и чинит абсолютные таймстампы в стриминге.
 - File-daemon: `orchestrator/src/{index,job-manager,scheduler,process-manager}.ts`, `config.json`
 - Контракт артефактов: `shared/echoscript_shared/service_runner.py`, `jobs/data/*_whisper_podlodka_*/`
 - Ядро демона: `services/whisperdaemon/app/src/WhisperDaemon.pas`

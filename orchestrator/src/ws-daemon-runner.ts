@@ -3,16 +3,23 @@ import path from "node:path";
 
 import type { WsDaemonConfig } from "./config";
 import { convertToPcm16leMono16k } from "./audio-convert";
-import { transcribeFileViaDaemon, type DaemonTranscription } from "./daemon-driver";
+import type { DaemonTranscription } from "./daemon-driver";
+import {
+  transcribeFileStreaming,
+  type ProgressListener,
+  type StreamProgress,
+} from "./daemon-stream-driver";
 
 const nowIso = (): string => new Date().toISOString();
 
 type ConvertFn = typeof convertToPcm16leMono16k;
-type TranscribeFn = typeof transcribeFileViaDaemon;
+type TranscribeFn = typeof transcribeFileStreaming;
 
 export interface WsDaemonJobDeps {
   readonly ffmpegPath: string;
   readonly endpoint: WsDaemonConfig;
+  readonly windowBytes?: number;
+  readonly rolloverBytes?: number;
   readonly convert?: ConvertFn;
   readonly transcribe?: TranscribeFn;
 }
@@ -178,6 +185,65 @@ const buildTimestampText = (result: JobResult): string => {
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+interface ProgressWriter {
+  readonly onProgress: ProgressListener;
+  writeInitial(): Promise<void>;
+  writeFinal(): Promise<void>;
+}
+
+/**
+ * Best-effort liveness writer for `data/<id>/progress.json` (overwritten, kept
+ * separate from the append-only status.json — see SB-D6). Throttles to whole-percent
+ * changes or ~1s so a multi-hour job doesn't thrash the fs, and forces a final 100%.
+ */
+const createProgressWriter = (progressPath: string): ProgressWriter => {
+  let last: StreamProgress | null = null;
+  let lastFloor = -1;
+  let lastWriteAt = 0;
+  let writing = false;
+  let finalized = false;
+  let lastWrite: Promise<void> = Promise.resolve();
+
+  const payload = (pr: StreamProgress | null, pctOverride?: number): Record<string, unknown> => ({
+    progress_pct: pctOverride ?? (pr !== null ? Math.round(pr.progressPct) : 0),
+    windows_done: pr?.windowsSent ?? 0,
+    windows_total: pr?.windowsTotal ?? 0,
+    processed_ms: pr?.processedMs ?? 0,
+    total_ms: pr?.totalMs ?? 0,
+    updated_at: nowIso(),
+  });
+
+  return {
+    onProgress(pr: StreamProgress): void {
+      last = pr;
+      if (finalized || writing) {
+        return;
+      }
+      const floor = Math.floor(pr.progressPct);
+      const now = Date.now();
+      if (floor === lastFloor && now - lastWriteAt < 1000) {
+        return;
+      }
+      lastFloor = floor;
+      lastWriteAt = now;
+      writing = true;
+      lastWrite = writeJsonAtomic(progressPath, payload(pr))
+        .catch(() => undefined)
+        .finally(() => {
+          writing = false;
+        });
+    },
+    async writeInitial(): Promise<void> {
+      await writeJsonAtomic(progressPath, payload(null, 0)).catch(() => undefined);
+    },
+    async writeFinal(): Promise<void> {
+      finalized = true;
+      await lastWrite.catch(() => undefined);
+      await writeJsonAtomic(progressPath, payload(last, 100)).catch(() => undefined);
+    },
+  };
+};
+
 /**
  * Run a ws-daemon job end to end (orchestrator owns the jobs/ lifecycle):
  * convert input -> pcm16le, transcribe via the daemon file-API, then write the
@@ -191,11 +257,13 @@ export const runWsDaemonJob = async (
   deps: WsDaemonJobDeps,
 ): Promise<"ready" | "failed"> => {
   const convert = deps.convert ?? convertToPcm16leMono16k;
-  const transcribe = deps.transcribe ?? transcribeFileViaDaemon;
+  const transcribe = deps.transcribe ?? transcribeFileStreaming;
+  const progress = createProgressWriter(path.join(dataDir, "progress.json"));
   let finalStatus: "ready" | "failed" = "ready";
 
   try {
     await appendStatus(dataDir, "processing");
+    await progress.writeInitial();
     const params = await loadParams(dataDir);
     const language = extractLanguage(params);
     const includeWords = params.word_timestamps === true;
@@ -204,11 +272,19 @@ export const runWsDaemonJob = async (
     const pcmPath = path.join(dataDir, "audio.pcm");
     await convert(deps.ffmpegPath, audioPath, pcmPath);
 
-    const transcription = await transcribe(deps.endpoint, pcmPath, {
-      requestId: jobId,
-      language: language ?? "auto",
-      wordTimestamps: includeWords,
-    });
+    const transcription = await transcribe(
+      deps.endpoint,
+      pcmPath,
+      {
+        requestId: jobId,
+        language: language ?? "auto",
+        wordTimestamps: includeWords,
+        windowBytes: deps.windowBytes,
+        rolloverBytes: deps.rolloverBytes,
+      },
+      progress.onProgress,
+    );
+    await progress.writeFinal();
 
     const result = buildResult(transcription, includeWords);
     await writeJsonAtomic(path.join(dataDir, "result.json"), result);

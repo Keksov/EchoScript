@@ -2,6 +2,8 @@
   "jobs_root": "./jobs",
   "max_workers": 1,
   "poll_interval_ms": 500,
+  "stream_window_ms": 30000,
+  "stream_rollover_ms": 1200000,
   "default_model": "whisper_podlodka",
   "ffmpeg_path": "./tools/ffmpeg/ffmpeg.exe",
   "ws_daemons": {

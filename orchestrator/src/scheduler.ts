@@ -7,6 +7,7 @@ import { JobManager } from "./job-manager";
 import { getNodeErrorCode } from "./node-error";
 import { ProcessManager } from "./process-manager";
 import { runWsDaemonJob } from "./ws-daemon-runner";
+import { bytesForMs } from "./daemon-stream-driver";
 
 interface SchedulerState {
   readonly activeJobId: string | null;
@@ -211,6 +212,8 @@ export class Scheduler {
     void runWsDaemonJob(jobId, this.jobManager.getDataDir(jobId), this.jobManager.getOutputDir(), {
       ffmpegPath: this.config.ffmpegPath,
       endpoint,
+      windowBytes: bytesForMs(this.config.streamWindowMs),
+      rolloverBytes: bytesForMs(this.config.streamRolloverMs),
     })
       .catch((error) => {
         console.error(`ws-daemon job ${jobId} failed unexpectedly`, error);

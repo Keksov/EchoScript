@@ -73,7 +73,7 @@ type
     function    inventoryPath: string;
     function    runMonitor(const aArgs: array of string; out aOutput: string): Boolean;
     function    parseStatuses(const aJson: string; out aStatuses: TGuiStatuses): Boolean;
-    procedure   onAnchorClick({%H-}Sender: TObject; const aUrl: string);
+    procedure   onAnchorClick({%H-}Sender: TObject; {%H-}El: TObject; const aUrl: string);
     function    detailCardHtml(const aStatus: TGuiStatus): string;
     procedure   renderStatuses(const aNote: string);
     procedure   renderError(const aMessage: string);
@@ -353,8 +353,9 @@ var
   hasInv: Boolean;
   data: TJSONData;
   root: TJSONObject;
-  daeObj, inpObj, capObj: TJSONObject;
-  engine, codec, langs, modes, fmt, html: string;
+  daeObj, inpObj, capObj, progObj: TJSONObject;
+  engine, codec, langs, modes, fmt, html, bar, actJob: string;
+  pct, wd, wt: Integer;
 
   function objOf(const aName: string): TJSONObject;
   var d: TJSONData;
@@ -466,6 +467,19 @@ begin
       { HTTP-демон (оркестратор / file-daemon) }
       html := html + row('Jobs-директория', htmlEscape(strOf(root, 'jobs_root')));
       html := html + row('Активная модель', htmlEscape(strOf(root, 'active_model')));
+      actJob := strOf(root, 'active_job_id');
+      html := html + row('Активная задача', BoolToStr(actJob <> '', htmlEscape(actJob), '—'));
+      progObj := objOf('active_progress');
+      if progObj <> nil then
+      begin
+        pct := intOf(progObj, 'progress_pct');
+        wd := intOf(progObj, 'windows_done');
+        wt := intOf(progObj, 'windows_total');
+        bar := '<div style="display:inline-block;background:#e5dccd;border-radius:4px;height:10px;width:220px;vertical-align:middle;overflow:hidden;">' +
+          '<div style="background:#4b8a5a;height:10px;width:' + IntToStr(pct) + '%;"></div></div>' +
+          '<span style="margin-left:8px;">' + IntToStr(pct) + '% (' + IntToStr(wd) + '/' + IntToStr(wt) + ' окон)</span>';
+        html := html + row('Прогресс', bar);
+      end;
       html := html + row('Запущенные модели', htmlEscape(arrStr(root, 'running_models')));
     end
     else
@@ -550,7 +564,7 @@ begin
   end;
 end;
 
-procedure TMonitorForm.onAnchorClick(Sender: TObject; const aUrl: string);
+procedure TMonitorForm.onAnchorClick(Sender: TObject; El: TObject; const aUrl: string);
 var
   colonPos: Integer;
   act: string;
