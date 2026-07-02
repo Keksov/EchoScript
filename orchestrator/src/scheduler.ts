@@ -9,6 +9,7 @@ import { ProcessManager } from "./process-manager";
 import { runWsDaemonJob } from "./ws-daemon-runner";
 import { bytesForMs } from "./daemon-stream-driver";
 import { DaemonRegistry } from "./daemon-registry";
+import { scanInputDrops } from "./input-drop";
 
 interface SchedulerState {
   readonly activeJobId: string | null;
@@ -80,11 +81,14 @@ export const selectDispatchable = (
 
 export class Scheduler {
   private outputWatcher: FSWatcher | null = null;
+  private inputWatchers: FSWatcher[] = [];
   private reconcileTimer: ReturnType<typeof setInterval> | null = null;
   private activeJobId: string | null = null;
   private activeModel: string | null = null;
   private isDispatching = false;
   private dispatchRequested = false;
+  private isSweeping = false;
+  private sweepRequested = false;
 
   public constructor(
     private readonly config: AppConfig,
@@ -103,6 +107,10 @@ export class Scheduler {
       this.activeModel = await this.processManager.getCurrentModel();
     }
 
+    // Pick up files dropped into jobs/input/<model>/ before startup (and recover any
+    // orphaned .processing claims) before we start watching.
+    await this.sweepInputDrops();
+
     this.outputWatcher = watch(this.outputDir(), (_eventType, filename) => {
       const resolvedName = normalizeFilename(filename);
       if (resolvedName === null || !resolvedName.endsWith(".json")) {
@@ -112,7 +120,10 @@ export class Scheduler {
       void this.onOutputMarkerDetected(resolvedName);
     });
 
+    this.startInputWatchers();
+
     this.reconcileTimer = setInterval(() => {
+      void this.triggerSweep();
       this.triggerDispatch();
     }, Math.max(this.config.pollIntervalMs, MIN_RECONCILE_INTERVAL_MS));
 
@@ -123,10 +134,53 @@ export class Scheduler {
     this.outputWatcher?.close();
     this.outputWatcher = null;
 
+    for (const watcher of this.inputWatchers) {
+      watcher.close();
+    }
+    this.inputWatchers = [];
+
     if (this.reconcileTimer !== null) {
       clearInterval(this.reconcileTimer);
       this.reconcileTimer = null;
     }
+  }
+
+  private startInputWatchers(): void {
+    for (const modelName of Object.keys(this.config.models)) {
+      const dir = path.join(this.config.jobsRoot, "input", modelName);
+      try {
+        this.inputWatchers.push(watch(dir, () => void this.triggerSweep()));
+      } catch {
+        // dir may not exist yet; JobManager.initialize creates model input dirs
+      }
+    }
+  }
+
+  /** Serialized input sweep (mirrors the dispatch loop): coalesces concurrent triggers. */
+  private async triggerSweep(): Promise<void> {
+    if (this.isSweeping) {
+      this.sweepRequested = true;
+      return;
+    }
+    this.isSweeping = true;
+    try {
+      do {
+        this.sweepRequested = false;
+        await this.sweepInputDrops();
+      } while (this.sweepRequested);
+    } finally {
+      this.isSweeping = false;
+    }
+    this.triggerDispatch();
+  }
+
+  private async sweepInputDrops(): Promise<void> {
+    await scanInputDrops(
+      this.config.jobsRoot,
+      Object.keys(this.config.models),
+      this.config.dropStableMs,
+      this.jobManager,
+    );
   }
 
   public getState(): SchedulerState {
