@@ -311,6 +311,10 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
       switch (message.event) {
         case "session_ack":
           break;
+        case "keepalive":
+          // Liveness ping during long inference — touchHeartbeat above already reset
+          // the stall timer, so a slow/sparse-speech daemon isn't seen as unreachable.
+          break;
         case "segment_final": {
           const startMs = toInt(message.start_ms) + ctx.offsetMs;
           const endMs = toInt(message.end_ms) + ctx.offsetMs;

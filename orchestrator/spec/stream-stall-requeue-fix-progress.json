@@ -77,7 +77,7 @@
       "id": "SR2.1",
       "phase": 2,
       "title": "Keepalive демона (progressCallback) + оркестратор case keepalive",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [
         "SR0.1"
       ],
@@ -87,10 +87,14 @@
         "orchestrator/src/daemon-stream-driver.test.ts"
       ],
       "verify": "Демон пересобран: во время whisper_full progressCallback шлёт {event:keepalive} (троттлинг ~3c). Оркестратор: touchHeartbeat на keepalive (уже на любом событии) + явный case; тест что keepalive сбрасывает heartbeat.",
-      "startedAt": null,
-      "finishedAt": null,
+      "startedAt": "2026-07-03T07:05:00Z",
+      "finishedAt": "2026-07-03T07:25:00Z",
       "blockedReason": null,
-      "evidence": []
+      "evidence": [
+        "WhisperDaemon.pas: whisperProgressCallback (cdecl) -> onInferenceProgress (троттлинг 3000мс) шлёт {event:keepalive,progress}; ctxParams.progressCallback/UserData=Self; FlastKeepaliveTick reset перед whisper_full. Build успешен.",
+        "daemon-stream-driver: case keepalive (touchHeartbeat уже на любом событии сбрасывает стойл-таймер)",
+        "тест: keepalive каждые 30мс при heartbeatTimeoutMs=60 -> сессия НЕ падает по стойлу, резолвится. Драйвер 10 pass; полный сьют 55 pass / 0 fail; tsc 0"
+      ]
     },
     {
       "id": "SR3.1",
@@ -124,6 +128,12 @@
       "step": "SR1.1",
       "event": "done",
       "note": "Лимит повторов: config max_requeue_attempts + countJobStatus/markFailed + scheduler cap. 54 pass / 0 fail; tsc 0. Бесконечный цикл невозможен."
+    },
+    {
+      "ts": "2026-07-03T07:25:00Z",
+      "step": "SR2.1",
+      "event": "done",
+      "note": "Демон шлёт keepalive во время инференса (progressCallback, троттл 3с); оркестратор сбрасывает heartbeat. Build ок; 55 pass / 0 fail."
     }
   ]
 }

@@ -62,7 +62,7 @@ Authoritative progress ledger: [stream-stall-requeue-fix-progress.json](stream-s
 - [x] **SR0.1 — Plan & ledger.**
 - [x] **SR1.1 — Лимит повторов** (`max_requeue_attempts`): scheduler считает прошлые `waiting`,
   после порога `failed` + маркер вместо requeue; config + тесты.
-- [ ] **SR2.1 — Keepalive демона** (`progressCallback` → `keepalive`) + оркестратор `case "keepalive"`;
+- [x] **SR2.1 — Keepalive демона** (`progressCallback` → `keepalive`) + оркестратор `case "keepalive"`;
   пересборка демона + тест.
 - [ ] **SR3.1 — E2E** на реальном файле (изолированно): нет цикла (ready|failed-after-cap), регресс
   на короткой речи; + docs (ARCHITECTURE.md, known-limitation про блокирующий WS-сервер).
