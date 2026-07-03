@@ -29,6 +29,7 @@ export interface AppConfig {
   readonly streamRolloverMs: number;
   readonly daemonRegistryTtlMs: number;
   readonly dropStableMs: number;
+  readonly maxRequeueAttempts: number;
   readonly defaultModel: string;
   readonly ffmpegPath: string;
   readonly speech: SpeechConfig;
@@ -56,6 +57,7 @@ interface RawConfig {
   readonly stream_rollover_ms?: unknown;
   readonly daemon_registry_ttl_ms?: unknown;
   readonly drop_stable_ms?: unknown;
+  readonly max_requeue_attempts?: unknown;
   readonly default_model?: unknown;
   readonly ffmpeg_path?: unknown;
   readonly speech?: unknown;
@@ -94,6 +96,9 @@ const DEFAULT_DAEMON_REGISTRY_TTL_MS = 15000;
 // A dropped file in jobs/input/<model>/ is claimed only after its mtime has been stable
 // for this long (guards against claiming a large file mid-copy — DR-D3).
 const DEFAULT_DROP_STABLE_MS = 2000;
+// Max times a ws-daemon job may be requeued after a transport failure before it is
+// failed terminally — guards against an infinite requeue loop (SR-D1).
+const DEFAULT_MAX_REQUEUE_ATTEMPTS = 5;
 const DEFAULT_MODEL = "whisper_podlodka";
 const DEFAULT_FFMPEG_PATH = "./tools/ffmpeg/ffmpeg.exe";
 const JOBS_ROOT_ENV = "ECHOSCRIPT_JOBS_ROOT";
@@ -257,6 +262,10 @@ export const loadConfig = async (): Promise<AppConfig> => {
     asNumber(rawConfig.daemon_registry_ttl_ms) ?? DEFAULT_DAEMON_REGISTRY_TTL_MS,
   );
   const dropStableMs = Math.max(0, asNumber(rawConfig.drop_stable_ms) ?? DEFAULT_DROP_STABLE_MS);
+  const maxRequeueAttempts = Math.max(
+    0,
+    Math.trunc(asNumber(rawConfig.max_requeue_attempts) ?? DEFAULT_MAX_REQUEUE_ATTEMPTS),
+  );
   const jobsRootOverride = asString(process.env[JOBS_ROOT_ENV]);
   const configuredJobsRoot = jobsRootOverride ?? asString(rawConfig.jobs_root) ?? DEFAULT_JOBS_ROOT;
   const ffmpegOverride = asString(process.env[FFMPEG_PATH_ENV]);
@@ -277,6 +286,7 @@ export const loadConfig = async (): Promise<AppConfig> => {
     streamRolloverMs,
     daemonRegistryTtlMs,
     dropStableMs,
+    maxRequeueAttempts,
     defaultModel,
     ffmpegPath: path.resolve(PROJECT_ROOT, configuredFfmpegPath),
     speech: resolveSpeechConfig(isRecord(rawConfig.speech) ? (rawConfig.speech as RawSpeechConfig) : null),

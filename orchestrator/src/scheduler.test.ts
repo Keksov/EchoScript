@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 
-import { selectDispatchable } from "./scheduler";
+import { selectDispatchable, exceededRequeueCap } from "./scheduler";
 import type { WsDaemonConfig } from "./config";
 import type { QueuedJob } from "./job-manager";
 
@@ -65,4 +65,12 @@ test("nothing dispatchable when all ws-daemons are not ready -> null", () => {
 test("empty queue -> null", () => {
   const deps = makeDeps(WS, new Set());
   expect(selectDispatchable([], deps.findWsDaemon, deps.readyEndpoint)).toBeNull();
+});
+
+test("exceededRequeueCap fires at/after the cap (0 = never requeue)", () => {
+  expect(exceededRequeueCap(0, 5)).toBe(false);
+  expect(exceededRequeueCap(4, 5)).toBe(false);
+  expect(exceededRequeueCap(5, 5)).toBe(true);
+  expect(exceededRequeueCap(6, 5)).toBe(true);
+  expect(exceededRequeueCap(0, 0)).toBe(true);
 });

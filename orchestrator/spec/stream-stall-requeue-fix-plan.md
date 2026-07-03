@@ -60,7 +60,7 @@ Authoritative progress ledger: [stream-stall-requeue-fix-progress.json](stream-s
 
 ## Steps (mirror the ledger)
 - [x] **SR0.1 — Plan & ledger.**
-- [ ] **SR1.1 — Лимит повторов** (`max_requeue_attempts`): scheduler считает прошлые `waiting`,
+- [x] **SR1.1 — Лимит повторов** (`max_requeue_attempts`): scheduler считает прошлые `waiting`,
   после порога `failed` + маркер вместо requeue; config + тесты.
 - [ ] **SR2.1 — Keepalive демона** (`progressCallback` → `keepalive`) + оркестратор `case "keepalive"`;
   пересборка демона + тест.

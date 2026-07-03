@@ -6,6 +6,7 @@
   "stream_rollover_ms": 1200000,
   "daemon_registry_ttl_ms": 15000,
   "drop_stable_ms": 2000,
+  "max_requeue_attempts": 5,
   "default_model": "whisper_podlodka",
   "ffmpeg_path": "./tools/ffmpeg/ffmpeg.exe",
   "ws_daemons": {

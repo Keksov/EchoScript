@@ -51,7 +51,7 @@
       "id": "SR1.1",
       "phase": 1,
       "title": "Лимит повторов requeue (max_requeue_attempts)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [
         "SR0.1"
       ],
@@ -63,10 +63,15 @@
         "orchestrator/src/scheduler.test.ts"
       ],
       "verify": "bun test: при requeue scheduler считает прошлые waiting; после max_requeue_attempts (дефолт 5) -> markFailed + output-маркер вместо requeue; иначе requeue как раньше.",
-      "startedAt": null,
-      "finishedAt": null,
+      "startedAt": "2026-07-03T06:45:00Z",
+      "finishedAt": "2026-07-03T07:00:00Z",
       "blockedReason": null,
-      "evidence": []
+      "evidence": [
+        "config max_requeue_attempts (дефолт 5) + config.json; loadConfig -> 5",
+        "job-manager: countJobStatus(jobId,status) персистентно по status.json + markFailed (failed-статус + output-маркер)",
+        "scheduler.onWsDaemonJobOutcome: при requeue считает прошлые waiting; exceededRequeueCap(prior>=cap) -> markFailed вместо requeue",
+        "тесты: exceededRequeueCap; countJobStatus/markFailed. Полный сьют 54 pass / 0 fail; tsc 0"
+      ]
     },
     {
       "id": "SR2.1",
@@ -113,6 +118,12 @@
       "step": "SR0.1",
       "event": "done",
       "note": "План+леджер фикса созданы; commit 8db4ed0. Пауза на границе фазы 0 (решения SR-D1..SR-D5)."
+    },
+    {
+      "ts": "2026-07-03T07:00:00Z",
+      "step": "SR1.1",
+      "event": "done",
+      "note": "Лимит повторов: config max_requeue_attempts + countJobStatus/markFailed + scheduler cap. 54 pass / 0 fail; tsc 0. Бесконечный цикл невозможен."
     }
   ]
 }

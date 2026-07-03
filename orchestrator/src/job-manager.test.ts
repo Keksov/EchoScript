@@ -66,6 +66,37 @@ test("listJobs surfaces per-job progress from progress.json", async () => {
   }
 });
 
+test("countJobStatus counts prior states and markFailed writes failed + output marker", async () => {
+  const base = await mkdtemp(path.join(tmpdir(), "jm-cap-"));
+  try {
+    const config = await configWithJobsRoot(base);
+    const jm = new JobManager(config);
+    await jm.initialize();
+
+    const jobId = "1700000000020_cccccc_whisper_podlodka";
+    await seedJob(jm, jobId, {
+      "status.json": [
+        { status: "waiting", updated_at: "t1" },
+        { status: "pending", updated_at: "t2" },
+        { status: "waiting", updated_at: "t3" },
+      ],
+    });
+
+    expect(await jm.countJobStatus(jobId, "waiting")).toBe(2);
+    expect(await jm.countJobStatus(jobId, "processing")).toBe(0);
+
+    await jm.markFailed(jobId, "boom after cap");
+    const statuses = JSON.parse(await readFile(path.join(base, "data", jobId, "status.json"), "utf-8"));
+    const last = statuses[statuses.length - 1];
+    expect(last.status).toBe("failed");
+    expect(last.error).toBe("boom after cap");
+    const marker = JSON.parse(await readFile(path.join(base, "output", `${jobId}.json`), "utf-8"));
+    expect(marker.status).toBe("failed");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("createDroppedJob moves the file into data/<id>/input and writes drop artifacts", async () => {
   const base = await mkdtemp(path.join(tmpdir(), "jm-drop-"));
   try {
