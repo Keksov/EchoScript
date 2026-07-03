@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "plan": "daemon-concurrency",
+  "planDoc": "spec/daemon-concurrency-plan.md",
+  "title": "whisperdaemon: неблокирующий WS-сервер + отмена инференса при обрыве",
+  "status": "active",
+  "createdAt": "2026-07-03",
+  "updatedAt": "2026-07-03T08:45:15Z",
+  "decisions": [
+    {
+      "id": "DC-D1",
+      "text": "Две цели: (a) инференс не блокирует WS-сервер (приём/обслуживание др. соединений + детект обрыва); (b) обрыв клиента отменяет текущий инференс."
+    },
+    {
+      "id": "DC-D2",
+      "text": "Сначала spike (P1), затем дизайн-гейт с владельцем ДО рефактора: FPC-threading в fpwebsocketserver неочевиден."
+    },
+    {
+      "id": "DC-D3",
+      "text": "Abort-on-disconnect: потокобезопасный per-session флаг (InterlockedExchange/крит.секция) -> whisper abortCallback; OnDisconnect/close ставит флаг. Требует детекта обрыва во время инференса (зависит от threading)."
+    },
+    {
+      "id": "DC-D4",
+      "text": "Инференс off IO-thread (если P1 покажет блокировку приёма): worker/очередь, неблокирующий handleMessage; gInferenceLock по-прежнему сериализует единственный прогон."
+    },
+    {
+      "id": "DC-D5",
+      "text": "Потокобезопасность sendEvent между IO- и worker-потоком (очередь исходящих или лок на соединение)."
+    },
+    {
+      "id": "DC-D6",
+      "text": "Аддитивно и обратимо: не ломать streaming/one-shot/registry/keepalive; правки минимальны, покрыты spike-прототипом + E2E."
+    }
+  ],
+  "steps": [
+    {
+      "id": "DC0.1",
+      "phase": 0,
+      "title": "Plan & ledger",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": [
+        "services/whisperdaemon/spec/daemon-concurrency-plan.md",
+        "services/whisperdaemon/spec/daemon-concurrency-progress.json"
+      ],
+      "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
+      "startedAt": "2026-07-03T08:45:15Z",
+      "finishedAt": "2026-07-03T08:50:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "План+леджер созданы; JSON ok; 5 шагов; DAG ацикличен"
+      ]
+    },
+    {
+      "id": "DC1.1",
+      "phase": 1,
+      "title": "Spike: аудит threading fpwebsocketserver + дизайн-гейт",
+      "status": "not-started",
+      "dependsOn": [
+        "DC0.1"
+      ],
+      "artifacts": [
+        "services/whisperdaemon/spikes/"
+      ],
+      "verify": "Определено: обслуживается ли каждое соединение в своём потоке; приходит ли OnDisconnect во время блокирующего handler. Прототип подтверждает выбранный подход; дизайн согласован с владельцем.",
+      "startedAt": null,
+      "finishedAt": null,
+      "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DC2.1",
+      "phase": 2,
+      "title": "Abort-on-disconnect (флаг -> whisper abortCallback)",
+      "status": "not-started",
+      "dependsOn": [
+        "DC1.1"
+      ],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas"
+      ],
+      "verify": "Демон пересобран: потокобезопасный per-session флаг, OnDisconnect ставит его, abortCallback возвращает 'прервать'; обрыв клиента прекращает инференс.",
+      "startedAt": null,
+      "finishedAt": null,
+      "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DC3.1",
+      "phase": 3,
+      "title": "Инференс off IO-thread (если нужно по DC1.1)",
+      "status": "not-started",
+      "dependsOn": [
+        "DC1.1"
+      ],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas"
+      ],
+      "verify": "handleMessage не блокирует; инференс в worker/очереди; gInferenceLock сериализует; sendEvent потокобезопасен; новое подключение открывается во время идущего инференса.",
+      "startedAt": null,
+      "finishedAt": null,
+      "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "DC4.1",
+      "phase": 4,
+      "title": "E2E + docs",
+      "status": "not-started",
+      "dependsOn": [
+        "DC2.1",
+        "DC3.1"
+      ],
+      "artifacts": [
+        "EchoRecorder/docs/ARCHITECTURE.md"
+      ],
+      "verify": "E2E: обрыв -> отмена/освобождение CPU; параллельное подключение во время инференса; регресс streaming/one-shot корректен. ARCHITECTURE.md: снять known-limitation.",
+      "startedAt": null,
+      "finishedAt": null,
+      "blockedReason": null,
+      "evidence": []
+    }
+  ],
+  "log": [
+    {
+      "ts": "2026-07-03T08:50:00Z",
+      "step": "DC0.1",
+      "event": "done",
+      "note": "Инициатива daemon-concurrency оформлена (неблокирующий WS-сервер + abort-on-disconnect); реализация не начата. Пауза на границе фазы 0."
+    }
+  ]
+}
