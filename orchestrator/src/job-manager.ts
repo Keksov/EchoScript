@@ -353,6 +353,32 @@ export class JobManager {
     };
   }
 
+  /** Count how many times `status` appears in the job's status.json (persistent, 0 if none). */
+  public async countJobStatus(jobId: string, status: string): Promise<number> {
+    assertValidJobId(jobId);
+    let payload: unknown;
+    try {
+      payload = await readJson(path.join(this.getDataDir(jobId), "status.json"));
+    } catch {
+      return 0;
+    }
+    if (!Array.isArray(payload)) {
+      return 0;
+    }
+    return payload.filter((entry) => isRecord(entry) && entry.status === status).length;
+  }
+
+  /** Terminally fail a job: append a failed status and drop the output marker (SR-D1). */
+  public async markFailed(jobId: string, error: string): Promise<void> {
+    assertValidJobId(jobId);
+    await this.ensureJobDataDir(jobId);
+    await this.appendStatus(this.getDataDir(jobId), "failed", error);
+    await writeJson(path.join(this.getOutputDir(), `${jobId}.json`), {
+      created_at: nowIso(),
+      status: "failed",
+    });
+  }
+
   /** Put an already-claimed job back on the queue (e.g. daemon was unreachable, DR-D11). */
   public async requeueJob(jobId: string): Promise<void> {
     assertValidJobId(jobId);

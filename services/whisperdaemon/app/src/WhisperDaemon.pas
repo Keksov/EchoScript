@@ -187,6 +187,8 @@ type
     FsegmentCount            : Integer;
     FlastAutoCheckBytes      : SizeInt;
     FcommittedMs             : Int64;
+    FlastKeepaliveTick       : QWord;
+    procedure   onInferenceProgress(aProgress: LongInt);
     procedure   appendAudioBytes(const aBytes: TBytes);
     procedure   appendTextWithSpace(var aTarget: string; const aValue: string);
     procedure   appendWordEvent(
@@ -1310,6 +1312,38 @@ begin
   flushWord;
 end;
 
+const
+  KEEPALIVE_MIN_INTERVAL_MS = 3000;
+
+{ whisper.cpp progress callback (cdecl): forwarded to the session so it emits `keepalive`
+  events during long inference. The orchestrator resets its stream heartbeat on any event,
+  so a live-but-silent daemon (sparse speech) is no longer seen as a stall (SR-D2). }
+procedure whisperProgressCallback({%H-}aContext: PWhisperContext; {%H-}aState: PWhisperState;
+  aProgress: LongInt; aUserData: Pointer); cdecl;
+begin
+  if aUserData <> nil then
+    TWhisperDaemonSession(aUserData).onInferenceProgress(aProgress);
+end;
+
+procedure TWhisperDaemonSession.onInferenceProgress(aProgress: LongInt);
+var
+  tick: QWord;
+  ka: TJSONObject;
+begin
+  tick := GetTickCount64;
+  if (FlastKeepaliveTick <> 0) and (tick - FlastKeepaliveTick < KEEPALIVE_MIN_INTERVAL_MS) then
+    Exit;
+  FlastKeepaliveTick := tick;
+  ka := TJSONObject.Create;
+  try
+    ka.Add('event', 'keepalive');
+    ka.Add('progress', aProgress);
+    sendEvent(ka);
+  finally
+    ka.Free;
+  end;
+end;
+
 procedure TWhisperDaemonSession.inferPcm16le(const aAudioBytes: TBytes;
   out aBatchText: string;
   out aSegmentTexts: TStringArray;
@@ -1403,6 +1437,9 @@ begin
           // Passing language='auto' is enough for whisper to auto-detect and then transcribe
           ctxParams.detectLanguage := False;
           ctxParams.language := PChar(languageUtf8);
+          ctxParams.progressCallback := @whisperProgressCallback;
+          ctxParams.progressCallbackUserData := Self;
+          FlastKeepaliveTick := 0;
 
           ack := gWhisperFullWithState(ctx, state, ctxParams, @pcm[0], Length(pcm));
           if ack <> 0 then

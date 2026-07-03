@@ -205,6 +205,28 @@ test("heartbeat fires when the daemon goes silent", async () => {
   await expect(p).rejects.toMatchObject({ message: expect.stringContaining("stalled") });
 });
 
+test("keepalive resets the heartbeat (no false stall during long silence)", async () => {
+  const socket = new FakeSocket();
+  const p = transcribeFileStreaming(ENDPOINT, "x.pcm", {
+    windowBytes: 999999,
+    heartbeatTimeoutMs: 60,
+    createSocket: () => socket,
+    openPcm: async () => fakePcm(10),
+  });
+  await nextTick();
+  socket.fireOpen();
+
+  // Silence longer than the 60ms heartbeat, but punctuated by keepalives every 30ms:
+  // if keepalive resets the timer, the session must NOT be failed as a stall.
+  for (let i = 0; i < 4; i += 1) {
+    await nextTick(30);
+    socket.emit({ event: "keepalive", progress: i * 25 });
+  }
+  socket.emit({ event: "session_final", text: "ok", language: "ru", duration_ms: 0, segment_count: 0 });
+
+  await expect(p).resolves.toMatchObject({ text: "ok" });
+});
+
 test("backpressure gates sending until bufferedAmount drains", async () => {
   const socket = new FakeSocket();
   socket.bufferedAmount = 10_000_000; // above high-water -> pump must wait before first window

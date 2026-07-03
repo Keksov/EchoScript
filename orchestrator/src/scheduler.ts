@@ -79,6 +79,10 @@ export const selectDispatchable = (
   return null;
 };
 
+/** Whether a job that already requeued `priorRequeues` times has hit the cap (SR-D1). */
+export const exceededRequeueCap = (priorRequeues: number, maxRequeueAttempts: number): boolean =>
+  priorRequeues >= maxRequeueAttempts;
+
 export class Scheduler {
   private outputWatcher: FSWatcher | null = null;
   private inputWatchers: FSWatcher[] = [];
@@ -348,6 +352,15 @@ export class Scheduler {
     this.daemonRegistry.invalidateModel(modelName);
     if (this.activeJobId === jobId) {
       this.activeJobId = null;
+    }
+    // Cap requeues so a live-but-silent/stalled daemon can't loop forever (SR-D1).
+    const priorRequeues = await this.jobManager.countJobStatus(jobId, "waiting");
+    if (exceededRequeueCap(priorRequeues, this.config.maxRequeueAttempts)) {
+      await this.jobManager.markFailed(
+        jobId,
+        `daemon ${modelName} unreachable/stalled after ${priorRequeues} requeue attempt(s)`,
+      );
+      return;
     }
     await this.jobManager.requeueJob(jobId);
   }
