@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "plan": "stream-stall-requeue-fix",
+  "planDoc": "spec/stream-stall-requeue-fix-plan.md",
+  "title": "Фикс бесконечного requeue при heartbeat-стойле (редкая речь / длинный инференс)",
+  "status": "active",
+  "createdAt": "2026-07-03",
+  "updatedAt": "2026-07-03T06:37:01Z",
+  "decisions": [
+    { "id": "SR-D1", "text": "Лимит повторов на задание (config max_requeue_attempts, дефолт 5); после порога terminal failed + output-маркер. Счётчик персистентный (число waiting в status.json). Безусловно убирает бесконечный цикл." },
+    { "id": "SR-D2", "text": "Демон шлёт keepalive во время инференса через whisper progressCallback (event keepalive, троттлинг ~3c); оркестратор сбрасывает heartbeat на любом событии (добавить case keepalive). Редкая речь/долгий инференс больше не дают ложного стойла." },
+    { "id": "SR-D3", "text": "Requeue остаётся только для транспортных сбоев (connect/close/stall), но ограничен SR-D1 и почти не срабатывает ложно после SR-D2; классы ошибок не усложняем." },
+    { "id": "SR-D4", "text": "Abort-on-disconnect и не-блокирующий WS-сервер демона — ВНЕ scope (нужен threading-рефактор fpwebsocketserver); известное ограничение. Каскад гасится P1+P2." },
+    { "id": "SR-D5", "text": "Чистое ядро + DI + тесты; демон-правка минимальна (progressCallback); проверка пересборкой + E2E на реальном файле." }
+  ],
+  "steps": [
+    {
+      "id": "SR0.1",
+      "phase": 0,
+      "title": "Plan & ledger",
+      "status": "not-started",
+      "dependsOn": [],
+      "artifacts": ["orchestrator/spec/stream-stall-requeue-fix-plan.md", "orchestrator/spec/stream-stall-requeue-fix-progress.json"],
+      "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SR1.1",
+      "phase": 1,
+      "title": "Лимит повторов requeue (max_requeue_attempts)",
+      "status": "not-started",
+      "dependsOn": ["SR0.1"],
+      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/job-manager.ts", "orchestrator/src/config.ts", "config.json", "orchestrator/src/scheduler.test.ts"],
+      "verify": "bun test: при requeue scheduler считает прошлые waiting; после max_requeue_attempts (дефолт 5) -> markFailed + output-маркер вместо requeue; иначе requeue как раньше.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SR2.1",
+      "phase": 2,
+      "title": "Keepalive демона (progressCallback) + оркестратор case keepalive",
+      "status": "not-started",
+      "dependsOn": ["SR0.1"],
+      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas", "orchestrator/src/daemon-stream-driver.ts", "orchestrator/src/daemon-stream-driver.test.ts"],
+      "verify": "Демон пересобран: во время whisper_full progressCallback шлёт {event:keepalive} (троттлинг ~3c). Оркестратор: touchHeartbeat на keepalive (уже на любом событии) + явный case; тест что keepalive сбрасывает heartbeat.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "SR3.1",
+      "phase": 3,
+      "title": "E2E на реальном файле + docs",
+      "status": "not-started",
+      "dependsOn": ["SR1.1", "SR2.1"],
+      "artifacts": ["orchestrator/scripts/e2e_drop_manual.sh", "EchoRecorder/docs/ARCHITECTURE.md"],
+      "verify": "E2E на CD4-8-The Absolute.flac (изолированно): нет бесконечного цикла (ready | failed-after-cap), без 60 циклов/CPU-часов; регресс короткой речи -> ready. Docs: known-limitation про блокирующий WS-сервер.",
+      "startedAt": null, "finishedAt": null, "blockedReason": null,
+      "evidence": []
+    }
+  ],
+  "log": []
+}
