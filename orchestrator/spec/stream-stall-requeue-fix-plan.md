@@ -1,6 +1,6 @@
 # Фикс: бесконечный requeue при heartbeat-стойле (редкая речь / длинный инференс)
 
-Status: **active**
+Status: **complete**
 Created: 2026-07-03
 Authoritative progress ledger: [stream-stall-requeue-fix-progress.json](stream-stall-requeue-fix-progress.json)
 
@@ -64,7 +64,7 @@ Authoritative progress ledger: [stream-stall-requeue-fix-progress.json](stream-s
   после порога `failed` + маркер вместо requeue; config + тесты.
 - [x] **SR2.1 — Keepalive демона** (`progressCallback` → `keepalive`) + оркестратор `case "keepalive"`;
   пересборка демона + тест.
-- [ ] **SR3.1 — E2E** на реальном файле (изолированно): нет цикла (ready|failed-after-cap), регресс
+- [x] **SR3.1 — E2E** на реальном файле (изолированно): нет цикла (ready|failed-after-cap), регресс
   на короткой речи; + docs (ARCHITECTURE.md, known-limitation про блокирующий WS-сервер).
 
 ## References

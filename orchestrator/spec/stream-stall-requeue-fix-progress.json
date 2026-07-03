@@ -3,9 +3,9 @@
   "plan": "stream-stall-requeue-fix",
   "planDoc": "spec/stream-stall-requeue-fix-plan.md",
   "title": "Фикс бесконечного requeue при heartbeat-стойле (редкая речь / длинный инференс)",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-07-03",
-  "updatedAt": "2026-07-03T06:37:01Z",
+  "updatedAt": "2026-07-03T07:50:00Z",
   "decisions": [
     {
       "id": "SR-D1",
@@ -100,7 +100,7 @@
       "id": "SR3.1",
       "phase": 3,
       "title": "E2E на реальном файле + docs",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [
         "SR1.1",
         "SR2.1"
@@ -110,10 +110,15 @@
         "EchoRecorder/docs/ARCHITECTURE.md"
       ],
       "verify": "E2E на CD4-8-The Absolute.flac (изолированно): нет бесконечного цикла (ready | failed-after-cap), без 60 циклов/CPU-часов; регресс короткой речи -> ready. Docs: known-limitation про блокирующий WS-сервер.",
-      "startedAt": null,
-      "finishedAt": null,
+      "startedAt": "2026-07-03T07:30:00Z",
+      "finishedAt": "2026-07-03T07:50:00Z",
       "blockedReason": null,
-      "evidence": []
+      "evidence": [
+        "Проба на реальном срезе CD4 (120c, редкая речь): демон прислал 10 keepalive (макс. пауза ~19c << 120c heartbeat), 6 segment_final, session_final — стрим завершился без стойла/requeue (exit 0)",
+        "Регресс e2e_drop_manual.sh со свежим демоном: короткая речь -> ready (exit 0)",
+        "Лимит повторов (SR1.1) — юнит-гарантия отсутствия бесконечного цикла",
+        "docs: ARCHITECTURE.md — keepalive/heartbeat=живость, max_requeue_attempts, known-limitation (однопоточный WS-сервер / нет abort-on-disconnect)"
+      ]
     }
   ],
   "log": [
@@ -134,6 +139,18 @@
       "step": "SR2.1",
       "event": "done",
       "note": "Демон шлёт keepalive во время инференса (progressCallback, троттл 3с); оркестратор сбрасывает heartbeat. Build ок; 55 pass / 0 fail."
+    },
+    {
+      "ts": "2026-07-03T07:50:00Z",
+      "step": "SR3.1",
+      "event": "done",
+      "note": "E2E: keepalive на реальном файле (10 шт, без стойла) + регресс короткой речи ready. Docs обновлены."
+    },
+    {
+      "ts": "2026-07-03T07:50:00Z",
+      "step": "SR3.1",
+      "event": "complete",
+      "note": "Инициатива complete: бесконечный requeue устранён (keepalive=живость + лимит повторов). Проверено на исходном файле пользователя."
     }
   ]
 }
