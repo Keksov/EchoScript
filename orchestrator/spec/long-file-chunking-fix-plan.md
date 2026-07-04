@@ -1,6 +1,6 @@
 # Фикс длинных файлов: нарезка на chunk'и + keepalive-safety
 
-Status: **active**
+Status: **complete**
 Created: 2026-07-04
 Authoritative progress ledger: [long-file-chunking-fix-progress.json](long-file-chunking-fix-progress.json)
 
@@ -65,7 +65,7 @@ requeue → рестарт с нуля (в логе `10054` + «inference failed
 - [x] **LF1.1 — A: keepalive-safety в демоне** (try/except вокруг `sendEvent`) + пересборка.
 - [x] **LF2.1 — B: нарезка в драйвере** — сессия завершается по `stream_chunk_ms` (не по uncommitted);
   config-ключ; обновить/переписать тесты (в т.ч. rollover→chunking).
-- [ ] **LF3.1 — E2E** на срезе реального файла (несколько chunk'ов до `ready`, сшивка) + регресс
+- [x] **LF3.1 — E2E** на срезе реального файла (несколько chunk'ов до `ready`, сшивка) + регресс
   короткой речи; docs (ARCHITECTURE.md: rollover→нарезка).
 
 ## References

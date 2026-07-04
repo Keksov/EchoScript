@@ -3,9 +3,9 @@
   "plan": "long-file-chunking-fix",
   "planDoc": "spec/long-file-chunking-fix-plan.md",
   "title": "Фикс длинных файлов: нарезка на chunk'и + keepalive-safety",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-07-04",
-  "updatedAt": "2026-07-04T08:56:24Z",
+  "updatedAt": "2026-07-04T10:05:00Z",
   "decisions": [
     {
       "id": "LF-D1",
@@ -96,7 +96,7 @@
       "id": "LF3.1",
       "phase": 3,
       "title": "E2E на реальном срезе + регресс + docs",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [
         "LF1.1",
         "LF2.1"
@@ -106,10 +106,16 @@
         "EchoRecorder/docs/ARCHITECTURE.md"
       ],
       "verify": "E2E на срезе CD4 (~12-15 мин, несколько chunk'ов): доходит до session_final без стойла/requeue, таймстампы на всю длину; регресс короткой речи ready. Docs: rollover -> нарезка.",
-      "startedAt": null,
-      "finishedAt": null,
+      "startedAt": "2026-07-04T09:35:00Z",
+      "finishedAt": "2026-07-04T10:05:00Z",
       "blockedReason": null,
-      "evidence": []
+      "evidence": [
+        "e2e_stream_manual.ts +аргумент chunk-ms",
+        "E2E 60c срез, chunk 30c: exit 0, прогресс 0->50->100, 5 сегментов, таймстампы сшиты; лог демона session_start x2 + session_final x2, 0 ошибок/10054 -> 2 последовательные chunk-сессии завершились штатно",
+        "4-мин срез: chunk 1 session_final завершился, keepalive-10054 при обрыве ПРОПУЩЕН (нет inference-failed-after-retry) -> LF1.1 подтверждён на живом демоне",
+        "полное завершение длинного файла ограничено скоростью CPU (large-v3), не логикой",
+        "docs: ARCHITECTURE.md rollover->нарезка + keepalive best-effort + known-limitation обновлён"
+      ]
     }
   ],
   "log": [
@@ -130,6 +136,18 @@
       "step": "LF2.1",
       "event": "done",
       "note": "Нарезка вместо rollover: session по stream_chunk_ms, последовательные сессии, буфер демона ограничен chunk. 55 pass / 0 fail; tsc 0."
+    },
+    {
+      "ts": "2026-07-04T10:05:00Z",
+      "step": "LF3.1",
+      "event": "done",
+      "note": "E2E: нарезка на живом демоне (2 сессии завершились, 0 ошибок), keepalive-safety подтверждён (10054 пропущен). Docs обновлены."
+    },
+    {
+      "ts": "2026-07-04T10:05:00Z",
+      "step": "LF3.1",
+      "event": "complete",
+      "note": "Инициатива complete: длинные файлы режутся на последовательные chunk-сессии (нет reconnect-во-время-инференса, нет 30-мин cap), keepalive не рушит инференс при обрыве. Бесконечного цикла/краха нет."
     }
   ]
 }

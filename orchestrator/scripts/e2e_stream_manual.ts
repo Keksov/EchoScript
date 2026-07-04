@@ -22,6 +22,7 @@ import { transcribeFileStreaming, bytesForMs, msForBytes } from "../src/daemon-s
 
 const wav = process.argv[2] ?? "C:/projects/EchoScript/EchoRecorder/tests/Два человека.wav";
 const port = Number(process.argv[3] ?? 7801);
+const chunkMs = Number(process.argv[4] ?? 0); // optional: force a small chunk to exercise multiple sessions
 const ffmpeg = process.env.ECHOSCRIPT_FFMPEG_PATH ?? "C:/projects/EchoScript/tools/ffmpeg/ffmpeg.exe";
 const pcm = path.join(tmpdir(), `e2e-stream-${crypto.randomUUID()}.pcm`);
 
@@ -35,7 +36,12 @@ try {
   const result = await transcribeFileStreaming(
     { host: "127.0.0.1", port, modelName: "whisper_podlodka" },
     pcm,
-    { windowBytes: bytesForMs(3000), language: "ru", wordTimestamps: true },
+    {
+      windowBytes: bytesForMs(3000),
+      chunkBytes: chunkMs > 0 ? bytesForMs(chunkMs) : undefined,
+      language: "ru",
+      wordTimestamps: true,
+    },
     (pr) => {
       if (ticks.length === 0) console.log("windows_total:", pr.windowsTotal);
       ticks.push(Math.round(pr.progressPct));
