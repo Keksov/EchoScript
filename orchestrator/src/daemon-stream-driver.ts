@@ -35,7 +35,7 @@ export const DEFAULT_STREAM_WINDOW_MS = 30000;
 // Each streaming session handles at most this much audio, then finalizes and the next
 // session continues on a fresh connection (LF-D1). Bounds the daemon buffer well under
 // its 30-min cap and keeps sessions sequential/short — no reconnect mid-inference.
-export const DEFAULT_STREAM_CHUNK_MS = 300000;
+export const DEFAULT_STREAM_CHUNK_MS = 120000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 120000;
 const MIN_HIGH_WATER_BYTES = 4_000_000;
 
@@ -250,6 +250,10 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
           audio_format: AUDIO_FORMAT,
           language: ctx.language,
           mode: ctx.mode,
+          // File streaming: infer once per chunk on flush, not on every frame — the
+          // orchestrator already delimits chunks, so per-frame re-inference is wasteful
+          // (O(n^2) on sparse-speech audio).
+          auto_flush: false,
         }),
       );
 

@@ -3,9 +3,9 @@
   "plan": "long-file-chunking-fix",
   "planDoc": "spec/long-file-chunking-fix-plan.md",
   "title": "Фикс длинных файлов: нарезка на chunk'и + keepalive-safety",
-  "status": "complete",
+  "status": "active",
   "createdAt": "2026-07-04",
-  "updatedAt": "2026-07-04T10:05:00Z",
+  "updatedAt": "2026-07-04T11:10:00Z",
   "decisions": [
     {
       "id": "LF-D1",
@@ -26,6 +26,10 @@
     {
       "id": "LF-D5",
       "text": "Чистое ядро + DI + тесты; демон-правка минимальна; E2E на реальном срезе CD4 (несколько chunk'ов, сшитые таймстампы, ready)."
+    },
+    {
+      "id": "LF-D6",
+      "text": "O(n^2) пере-инференс: при редкой речи демон пере-инференсил растущий буфер на каждый auto-flush. Фикс: флаг auto_flush в session_start (дефолт true=живой стриминг); файловый драйвер шлёт auto_flush=false -> демон копит chunk и инференсит ОДИН раз на flush (O(n) на chunk). stream_chunk_ms -> 120000 (2 мин) для мельче прогресса/памяти."
     }
   ],
   "steps": [
@@ -116,6 +120,30 @@
         "полное завершение длинного файла ограничено скоростью CPU (large-v3), не логикой",
         "docs: ARCHITECTURE.md rollover->нарезка + keepalive best-effort + known-limitation обновлён"
       ]
+    },
+    {
+      "id": "LF4.1",
+      "phase": 4,
+      "title": "Buffered mode (auto_flush=false) против O(n^2) + chunk 2мин",
+      "status": "done",
+      "dependsOn": [
+        "LF2.1"
+      ],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas",
+        "orchestrator/src/daemon-stream-driver.ts",
+        "orchestrator/src/config.ts",
+        "config.json"
+      ],
+      "verify": "Демон: FautoFlush из session_start (дефолт true); при false handleBinary только копит, инференс один раз на flush. Драйвер шлёт auto_flush=false. Демон собран; bun test 55 pass.",
+      "startedAt": "2026-07-04T10:55:00Z",
+      "finishedAt": "2026-07-04T11:10:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "WhisperDaemon: поле FautoFlush; парс auto_flush в handleSessionStart (дефолт true); handleBinary при not FautoFlush только appendAudioBytes (без processBufferedAudio(False)); build успешен",
+        "daemon-stream-driver: session_start шлёт auto_flush:false; DEFAULT_STREAM_CHUNK_MS 300000->120000",
+        "config stream_chunk_ms 120000; bun test 55 pass / 0 fail; tsc 0"
+      ]
     }
   ],
   "log": [
@@ -148,6 +176,12 @@
       "step": "LF3.1",
       "event": "complete",
       "note": "Инициатива complete: длинные файлы режутся на последовательные chunk-сессии (нет reconnect-во-время-инференса, нет 30-мин cap), keepalive не рушит инференс при обрыве. Бесконечного цикла/краха нет."
+    },
+    {
+      "ts": "2026-07-04T11:10:00Z",
+      "step": "LF4.1",
+      "event": "done",
+      "note": "Buffered-режим демона (auto_flush=false) убирает O(n^2) пере-инференс на редкой речи; один инференс на chunk. chunk 2мин. Реоткрыт план после инцидента с зависшим chunk 3."
     }
   ]
 }

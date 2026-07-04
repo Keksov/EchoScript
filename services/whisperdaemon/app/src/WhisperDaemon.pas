@@ -177,6 +177,7 @@ type
   private
     Fmode                    : string;
     Fstarted                 : Boolean;
+    FautoFlush               : Boolean;
     FaudioBytes              : TBytes;
     Flanguage                : string;
     FresolvedLanguage        : string;
@@ -981,6 +982,7 @@ begin
   inherited Create;
   Fmode := 'dictation';
   Fstarted := False;
+  FautoFlush := True;
   Flanguage := 'ru';
   FaudioBytes := nil;
   FresolvedLanguage := '';
@@ -1801,6 +1803,9 @@ begin
   end;
 
   appendAudioBytes(aBytes);
+  { Buffered mode: just accumulate; the whole chunk is inferred once on flush. }
+  if not FautoFlush then
+    Exit;
   if Length(FaudioBytes) < AUTO_FLUSH_MIN_BYTES then
     Exit;
   if Length(FaudioBytes) < (FlastAutoCheckBytes + AUTO_FLUSH_STEP_BYTES) then
@@ -1942,6 +1947,7 @@ var
   channels: Integer;
   sampleRate: Integer;
   sampleFormat: string;
+  autoFlushNode: TJSONData;
 begin
   if Fstarted then
   begin
@@ -1969,6 +1975,13 @@ begin
     Flanguage := 'ru';
   if Trim(Fmode) = '' then
     Fmode := 'dictation';
+  { Buffered mode (LF perf): when the client sets auto_flush=false (file streaming),
+    skip per-chunk re-inference and infer once on explicit flush — avoids O(n^2)
+    re-inference of a growing buffer on sparse-speech audio. Default true (live). }
+  FautoFlush := True;
+  autoFlushNode := aRoot.Find('auto_flush');
+  if (autoFlushNode <> nil) and (autoFlushNode.JSONType = jtBoolean) and (not autoFlushNode.AsBoolean) then
+    FautoFlush := False;
   Fstarted := True;
 
   ack := TJSONObject.Create;

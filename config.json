@@ -3,7 +3,7 @@
   "max_workers": 1,
   "poll_interval_ms": 500,
   "stream_window_ms": 30000,
-  "stream_chunk_ms": 300000,
+  "stream_chunk_ms": 120000,
   "daemon_registry_ttl_ms": 15000,
   "drop_stable_ms": 2000,
   "max_requeue_attempts": 5,

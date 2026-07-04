@@ -90,7 +90,7 @@ const DEFAULT_MODEL_STOP_TIMEOUT_MS = 120000;
 // per streaming session before it finalizes and the next chunk continues on a fresh
 // connection (LF-D1, replaces the old rollover threshold).
 const DEFAULT_STREAM_WINDOW_MS = 30000;
-const DEFAULT_STREAM_CHUNK_MS = 300000;
+const DEFAULT_STREAM_CHUNK_MS = 120000;
 // Daemon registry (jobs/registry/<name>.json): a registration is "ready" only if its
 // heartbeat is within this TTL (invariant: TTL >= ~3x the daemon heartbeat interval).
 const DEFAULT_DAEMON_REGISTRY_TTL_MS = 15000;
