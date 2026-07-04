@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "plan": "long-file-chunking-fix",
+  "planDoc": "spec/long-file-chunking-fix-plan.md",
+  "title": "Фикс длинных файлов: нарезка на chunk'и + keepalive-safety",
+  "status": "complete",
+  "createdAt": "2026-07-04",
+  "updatedAt": "2026-07-04T12:50:00Z",
+  "decisions": [
+    {
+      "id": "LF-D1",
+      "text": "Проактивная нарезка вместо rollover: каждая сессия шлёт фикс. объём аудио (stream_chunk_ms, дефолт 300000=5мин), затем flush->session_final->close, следующая со сдвигом. Буфер демона <= chunk (нет 30-мин cap), сессии строго последовательны (нет reconnect во время инференса). Заменяет rollover SB-D7/D8."
+    },
+    {
+      "id": "LF-D2",
+      "text": "keepalive best-effort: sendEvent в onInferenceProgress обёрнут в try/except — обрыв соединения не бросает в инференс, ложного OOM-retry нет. Фикс регрессии SR2.1."
+    },
+    {
+      "id": "LF-D3",
+      "text": "Сшивка сохраняется: offsetMs + сквозная нумерация сегментов как в текущем внешнем цикле; результат склеивается из chunk'ов."
+    },
+    {
+      "id": "LF-D4",
+      "text": "Компромисс границ: chunk может резать предложение на стыке (демон коммитит хвост на flush) — приемлемо; overlap/выравнивание по тишине не в этой итерации."
+    },
+    {
+      "id": "LF-D5",
+      "text": "Чистое ядро + DI + тесты; демон-правка минимальна; E2E на реальном срезе CD4 (несколько chunk'ов, сшитые таймстампы, ready)."
+    },
+    {
+      "id": "LF-D6",
+      "text": "O(n^2) пере-инференс: при редкой речи демон пере-инференсил растущий буфер на каждый auto-flush. Фикс: флаг auto_flush в session_start (дефолт true=живой стриминг); файловый драйвер шлёт auto_flush=false -> демон копит chunk и инференсит ОДИН раз на flush (O(n) на chunk). stream_chunk_ms -> 120000 (2 мин) для мельче прогресса/памяти."
+    }
+  ],
+  "steps": [
+    {
+      "id": "LF0.1",
+      "phase": 0,
+      "title": "Plan & ledger",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": [
+        "orchestrator/spec/long-file-chunking-fix-plan.md",
+        "orchestrator/spec/long-file-chunking-fix-progress.json"
+      ],
+      "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
+      "startedAt": "2026-07-04T08:56:24Z",
+      "finishedAt": "2026-07-04T09:00:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "План+леджер созданы; JSON ok; 4 шага; DAG ацикличен"
+      ]
+    },
+    {
+      "id": "LF1.1",
+      "phase": 1,
+      "title": "A: keepalive-safety в демоне (try/except вокруг sendEvent)",
+      "status": "done",
+      "dependsOn": [
+        "LF0.1"
+      ],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas"
+      ],
+      "verify": "Демон пересобран: onInferenceProgress ловит исключения sendEvent (обрыв не рушит инференс, нет ложного OOM-retry).",
+      "startedAt": "2026-07-04T09:02:00Z",
+      "finishedAt": "2026-07-04T09:08:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "onInferenceProgress: sendEvent(keepalive) обёрнут в try/except -> обрыв соединения (10054) не бросает в инференс, ложного OOM-retry больше нет; build успешен"
+      ]
+    },
+    {
+      "id": "LF2.1",
+      "phase": 2,
+      "title": "B: нарезка в драйвере (session по stream_chunk_ms) + config + тесты",
+      "status": "done",
+      "dependsOn": [
+        "LF0.1"
+      ],
+      "artifacts": [
+        "orchestrator/src/daemon-stream-driver.ts",
+        "orchestrator/src/daemon-stream-driver.test.ts",
+        "orchestrator/src/config.ts",
+        "orchestrator/src/scheduler.ts",
+        "orchestrator/src/ws-daemon-runner.ts",
+        "config.json"
+      ],
+      "verify": "bun test: сессия завершается по отправленному chunk (stream_chunk_ms), не по uncommitted; несколько последовательных сессий со сдвигом таймстампов; короткий файл = одна сессия; rollover-тест переписан на chunking.",
+      "startedAt": "2026-07-04T09:10:00Z",
+      "finishedAt": "2026-07-04T09:30:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "daemon-stream-driver: session завершается по bytesSentThisSession >= chunkBytes (flush), убран rollover-по-uncommitted и maybeRollover; внешний цикл продолжает по bytesSent<bytesTotal с guard на прогресс; сессии строго последовательны",
+        "config/scheduler/runner: rollover* -> chunk* (stream_chunk_ms дефолт 300000=5мин, min=window); loadConfig -> 300000",
+        "интеграционный тест переписан на chunking: 3 последовательные сессии, сегменты [0,2000][2000,4000][4000,5000], сшивка. Полный сьют 55 pass / 0 fail; tsc 0"
+      ]
+    },
+    {
+      "id": "LF3.1",
+      "phase": 3,
+      "title": "E2E на реальном срезе + регресс + docs",
+      "status": "done",
+      "dependsOn": [
+        "LF1.1",
+        "LF2.1"
+      ],
+      "artifacts": [
+        "orchestrator/scripts/e2e_stream_manual.ts",
+        "EchoRecorder/docs/ARCHITECTURE.md"
+      ],
+      "verify": "E2E на срезе CD4 (~12-15 мин, несколько chunk'ов): доходит до session_final без стойла/requeue, таймстампы на всю длину; регресс короткой речи ready. Docs: rollover -> нарезка.",
+      "startedAt": "2026-07-04T09:35:00Z",
+      "finishedAt": "2026-07-04T10:05:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "e2e_stream_manual.ts +аргумент chunk-ms",
+        "E2E 60c срез, chunk 30c: exit 0, прогресс 0->50->100, 5 сегментов, таймстампы сшиты; лог демона session_start x2 + session_final x2, 0 ошибок/10054 -> 2 последовательные chunk-сессии завершились штатно",
+        "4-мин срез: chunk 1 session_final завершился, keepalive-10054 при обрыве ПРОПУЩЕН (нет inference-failed-after-retry) -> LF1.1 подтверждён на живом демоне",
+        "полное завершение длинного файла ограничено скоростью CPU (large-v3), не логикой",
+        "docs: ARCHITECTURE.md rollover->нарезка + keepalive best-effort + known-limitation обновлён"
+      ]
+    },
+    {
+      "id": "LF4.1",
+      "phase": 4,
+      "title": "Buffered mode (auto_flush=false) против O(n^2) + chunk 2мин",
+      "status": "done",
+      "dependsOn": [
+        "LF2.1"
+      ],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas",
+        "orchestrator/src/daemon-stream-driver.ts",
+        "orchestrator/src/config.ts",
+        "config.json"
+      ],
+      "verify": "Демон: FautoFlush из session_start (дефолт true); при false handleBinary только копит, инференс один раз на flush. Драйвер шлёт auto_flush=false. Демон собран; bun test 55 pass.",
+      "startedAt": "2026-07-04T10:55:00Z",
+      "finishedAt": "2026-07-04T11:10:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "WhisperDaemon: поле FautoFlush; парс auto_flush в handleSessionStart (дефолт true); handleBinary при not FautoFlush только appendAudioBytes (без processBufferedAudio(False)); build успешен",
+        "daemon-stream-driver: session_start шлёт auto_flush:false; DEFAULT_STREAM_CHUNK_MS 300000->120000",
+        "config stream_chunk_ms 120000; bun test 55 pass / 0 fail; tsc 0"
+      ]
+    }
+  ],
+  "log": [
+    {
+      "ts": "2026-07-04T09:00:00Z",
+      "step": "LF0.1",
+      "event": "done",
+      "note": "План фикса длинных файлов (нарезка + keepalive-safety) оформлен. Пауза на границе фазы 0."
+    },
+    {
+      "ts": "2026-07-04T09:08:00Z",
+      "step": "LF1.1",
+      "event": "done",
+      "note": "keepalive-safety в демоне (try/except вокруг sendEvent). Build ок."
+    },
+    {
+      "ts": "2026-07-04T09:30:00Z",
+      "step": "LF2.1",
+      "event": "done",
+      "note": "Нарезка вместо rollover: session по stream_chunk_ms, последовательные сессии, буфер демона ограничен chunk. 55 pass / 0 fail; tsc 0."
+    },
+    {
+      "ts": "2026-07-04T10:05:00Z",
+      "step": "LF3.1",
+      "event": "done",
+      "note": "E2E: нарезка на живом демоне (2 сессии завершились, 0 ошибок), keepalive-safety подтверждён (10054 пропущен). Docs обновлены."
+    },
+    {
+      "ts": "2026-07-04T10:05:00Z",
+      "step": "LF3.1",
+      "event": "complete",
+      "note": "Инициатива complete: длинные файлы режутся на последовательные chunk-сессии (нет reconnect-во-время-инференса, нет 30-мин cap), keepalive не рушит инференс при обрыве. Бесконечного цикла/краха нет."
+    },
+    {
+      "ts": "2026-07-04T11:10:00Z",
+      "step": "LF4.1",
+      "event": "done",
+      "note": "Buffered-режим демона (auto_flush=false) убирает O(n^2) пере-инференс на редкой речи; один инференс на chunk. chunk 2мин. Реоткрыт план после инцидента с зависшим chunk 3."
+    },
+    {
+      "ts": "2026-07-04T12:50:00Z",
+      "step": "LF4.1",
+      "event": "validated",
+      "note": "Полный CD4 (38 мин) на реальном стеке с фиксами: старт->ready за ~29 мин, waiting=0 (нет зависаний/requeue/краха), таймстампы [00:00:01..00:37:52] на всю длину. Buffered-режим убрал O(n^2): 3 chunk/4мин vs старый chunk 3 висел 15+мин. Инициатива complete."
+    }
+  ]
+}

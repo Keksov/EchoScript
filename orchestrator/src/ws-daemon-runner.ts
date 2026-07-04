@@ -19,7 +19,7 @@ export interface WsDaemonJobDeps {
   readonly ffmpegPath: string;
   readonly endpoint: WsDaemonConfig;
   readonly windowBytes?: number;
-  readonly rolloverBytes?: number;
+  readonly chunkBytes?: number;
   readonly convert?: ConvertFn;
   readonly transcribe?: TranscribeFn;
 }
@@ -280,7 +280,7 @@ export const runWsDaemonJob = async (
         language: language ?? "auto",
         wordTimestamps: includeWords,
         windowBytes: deps.windowBytes,
-        rolloverBytes: deps.rolloverBytes,
+        chunkBytes: deps.chunkBytes,
       },
       progress.onProgress,
     );

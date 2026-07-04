@@ -32,7 +32,10 @@ const BYTES_PER_SAMPLE = 2; // pcm16le mono
 const AUDIO_FORMAT = "pcm16le";
 
 export const DEFAULT_STREAM_WINDOW_MS = 30000;
-export const DEFAULT_STREAM_ROLLOVER_MS = 1200000;
+// Each streaming session handles at most this much audio, then finalizes and the next
+// session continues on a fresh connection (LF-D1). Bounds the daemon buffer well under
+// its 30-min cap and keeps sessions sequential/short — no reconnect mid-inference.
+export const DEFAULT_STREAM_CHUNK_MS = 120000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 120000;
 const MIN_HIGH_WATER_BYTES = 4_000_000;
 
@@ -83,7 +86,7 @@ export interface TranscribeStreamOptions {
   readonly wordTimestamps?: boolean;
   readonly mode?: string;
   readonly windowBytes?: number;
-  readonly rolloverBytes?: number;
+  readonly chunkBytes?: number;
   readonly heartbeatTimeoutMs?: number;
   readonly highWaterBytes?: number;
   readonly createSocket?: (url: string) => StreamSocket;
@@ -170,7 +173,6 @@ interface StreamState {
 }
 
 interface SessionResult {
-  readonly endedByRollover: boolean;
   readonly text: string;
   readonly language: string;
   readonly detectedLanguage: string | null;
@@ -181,7 +183,7 @@ interface SessionContext {
   readonly url: string;
   readonly source: PcmSource;
   readonly windowBytes: number;
-  readonly rolloverMs: number;
+  readonly chunkBytes: number;
   readonly heartbeatTimeoutMs: number;
   readonly highWaterBytes: number;
   readonly createSocket: (url: string) => StreamSocket;
@@ -199,15 +201,14 @@ interface SessionContext {
 
 /**
  * Run one WS session over a fresh connection, streaming windows from the shared
- * source until EOF or the rollover threshold. Pushes offset-adjusted segments/words
- * into the shared sink and resolves on the daemon's `session_final`.
+ * source until EOF or this session's chunk is full. Pushes offset-adjusted
+ * segments/words into the shared sink and resolves on the daemon's `session_final`.
  */
 const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
   return new Promise<SessionResult>((resolve, reject) => {
     const socket = ctx.createSocket(ctx.url);
     let settled = false;
     let heartbeat: ReturnType<typeof setTimeout> | null = null;
-    let rolloverRequested = false;
     let sessionMaxEndMs = 0;
 
     const cleanup = (): void => {
@@ -239,17 +240,6 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
       );
     };
 
-    const maybeRollover = (): void => {
-      if (rolloverRequested) {
-        return;
-      }
-      const uncommittedMs = msForBytes(ctx.state.bytesSent) - ctx.state.processedMs;
-      if (uncommittedMs >= ctx.rolloverMs) {
-        rolloverRequested = true;
-        socket.send(JSON.stringify({ event: "flush" }));
-      }
-    };
-
     const pump = async (): Promise<void> => {
       socket.send(
         JSON.stringify({
@@ -260,14 +250,19 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
           audio_format: AUDIO_FORMAT,
           language: ctx.language,
           mode: ctx.mode,
+          // File streaming: infer once per chunk on flush, not on every frame — the
+          // orchestrator already delimits chunks, so per-frame re-inference is wasteful
+          // (O(n^2) on sparse-speech audio).
+          auto_flush: false,
         }),
       );
 
-      while (!settled && !rolloverRequested) {
+      let bytesSentThisSession = 0;
+      while (!settled) {
         const window = await ctx.source.read(ctx.windowBytes);
         if (window === null) {
           if (!settled) {
-            socket.send(JSON.stringify({ event: "flush" }));
+            socket.send(JSON.stringify({ event: "flush" })); // EOF -> finalize
           }
           return;
         }
@@ -284,8 +279,18 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
         socket.send(window);
         ctx.state.bytesSent += window.length;
         ctx.state.windowsSent += 1;
+        bytesSentThisSession += window.length;
         ctx.emitProgress();
-        maybeRollover();
+
+        // Chunk full: finalize this session (flush -> session_final); the caller opens
+        // a fresh session for the next chunk, so the daemon buffer stays bounded and no
+        // reconnect happens mid-inference (LF-D1).
+        if (bytesSentThisSession >= ctx.chunkBytes) {
+          if (!settled) {
+            socket.send(JSON.stringify({ event: "flush" }));
+          }
+          return;
+        }
       }
     };
 
@@ -353,7 +358,6 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
           }
           ctx.emitProgress();
           done({
-            endedByRollover: rolloverRequested,
             text: toStr(message.text),
             language: toStr(message.language),
             detectedLanguage:
@@ -379,8 +383,9 @@ const runStreamSession = (ctx: SessionContext): Promise<SessionResult> => {
 
 /**
  * Stream a pre-converted pcm16le file to the daemon over its live-session
- * protocol and collect the transcription. Emits incremental progress; spans
- * multiple sessions if rollover triggers, stitching timestamps and segment ids.
+ * protocol and collect the transcription. Emits incremental progress; splits long
+ * audio into sequential fixed-size chunk sessions (each on a fresh connection),
+ * stitching timestamps and segment ids.
  */
 export const transcribeFileStreaming = async (
   endpoint: WsDaemonConfig,
@@ -392,8 +397,7 @@ export const transcribeFileStreaming = async (
   const language = options.language ?? "auto";
   const mode = options.mode ?? "dictation";
   const windowBytes = Math.max(BYTES_PER_SAMPLE, options.windowBytes ?? bytesForMs(DEFAULT_STREAM_WINDOW_MS));
-  const rolloverBytes = Math.max(windowBytes, options.rolloverBytes ?? bytesForMs(DEFAULT_STREAM_ROLLOVER_MS));
-  const rolloverMs = msForBytes(rolloverBytes);
+  const chunkBytes = Math.max(windowBytes, options.chunkBytes ?? bytesForMs(DEFAULT_STREAM_CHUNK_MS));
   const heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS;
   const highWaterBytes = Math.max(windowBytes * 2, options.highWaterBytes ?? MIN_HIGH_WATER_BYTES);
   const createSocket = options.createSocket ?? createDefaultSocket;
@@ -430,11 +434,12 @@ export const transcribeFileStreaming = async (
     let more = true;
     while (more) {
       const offsetMs = msForBytes(state.bytesSent);
+      const bytesBefore = state.bytesSent;
       const session = await runStreamSession({
         url,
         source,
         windowBytes,
-        rolloverMs,
+        chunkBytes,
         heartbeatTimeoutMs,
         highWaterBytes,
         createSocket,
@@ -461,8 +466,9 @@ export const transcribeFileStreaming = async (
       }
       durationMs = offsetMs + session.durationMs;
 
-      // Continue only if the session cut off for rollover and there is more audio.
-      more = session.endedByRollover && state.bytesSent < bytesTotal;
+      // Continue while there is more audio and this session actually made progress
+      // (guards against an empty trailing session looping forever).
+      more = state.bytesSent < bytesTotal && state.bytesSent > bytesBefore;
     }
   } finally {
     await source.close().catch(() => undefined);
