@@ -253,7 +253,7 @@ test("backpressure gates sending until bufferedAmount drains", async () => {
   await p;
 });
 
-test("integration: rollover spans multiple sessions and stitches timestamps", async () => {
+test("integration: chunking spans multiple sequential sessions and stitches timestamps", async () => {
   const total = 160000; // 5s -> 5 windows of 1s
   const tmpPath = path.join(tmpdir(), `stream-rollover-${crypto.randomUUID()}.pcm`);
   await writeFile(tmpPath, Buffer.alloc(total, 1));
@@ -298,7 +298,7 @@ test("integration: rollover spans multiple sessions and stitches timestamps", as
     const result = await transcribeFileStreaming(
       endpoint,
       tmpPath,
-      { windowBytes: 32000, rolloverBytes: 64000 }, // rollover every 2s of uncommitted audio
+      { windowBytes: 32000, chunkBytes: 64000 }, // finalize each session every 2s of audio
       (pr) => {
         lastPct = pr.progressPct;
       },

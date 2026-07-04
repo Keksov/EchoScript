@@ -324,7 +324,7 @@ export class Scheduler {
       ffmpegPath: this.config.ffmpegPath,
       endpoint,
       windowBytes: bytesForMs(this.config.streamWindowMs),
-      rolloverBytes: bytesForMs(this.config.streamRolloverMs),
+      chunkBytes: bytesForMs(this.config.streamChunkMs),
     })
       .then((outcome) => this.onWsDaemonJobOutcome(jobId, targetModel, outcome))
       .catch((error) => {

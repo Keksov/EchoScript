@@ -70,7 +70,7 @@
       "id": "LF2.1",
       "phase": 2,
       "title": "B: нарезка в драйвере (session по stream_chunk_ms) + config + тесты",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [
         "LF0.1"
       ],
@@ -78,13 +78,19 @@
         "orchestrator/src/daemon-stream-driver.ts",
         "orchestrator/src/daemon-stream-driver.test.ts",
         "orchestrator/src/config.ts",
+        "orchestrator/src/scheduler.ts",
+        "orchestrator/src/ws-daemon-runner.ts",
         "config.json"
       ],
       "verify": "bun test: сессия завершается по отправленному chunk (stream_chunk_ms), не по uncommitted; несколько последовательных сессий со сдвигом таймстампов; короткий файл = одна сессия; rollover-тест переписан на chunking.",
-      "startedAt": null,
-      "finishedAt": null,
+      "startedAt": "2026-07-04T09:10:00Z",
+      "finishedAt": "2026-07-04T09:30:00Z",
       "blockedReason": null,
-      "evidence": []
+      "evidence": [
+        "daemon-stream-driver: session завершается по bytesSentThisSession >= chunkBytes (flush), убран rollover-по-uncommitted и maybeRollover; внешний цикл продолжает по bytesSent<bytesTotal с guard на прогресс; сессии строго последовательны",
+        "config/scheduler/runner: rollover* -> chunk* (stream_chunk_ms дефолт 300000=5мин, min=window); loadConfig -> 300000",
+        "интеграционный тест переписан на chunking: 3 последовательные сессии, сегменты [0,2000][2000,4000][4000,5000], сшивка. Полный сьют 55 pass / 0 fail; tsc 0"
+      ]
     },
     {
       "id": "LF3.1",
@@ -118,6 +124,12 @@
       "step": "LF1.1",
       "event": "done",
       "note": "keepalive-safety в демоне (try/except вокруг sendEvent). Build ок."
+    },
+    {
+      "ts": "2026-07-04T09:30:00Z",
+      "step": "LF2.1",
+      "event": "done",
+      "note": "Нарезка вместо rollover: session по stream_chunk_ms, последовательные сессии, буфер демона ограничен chunk. 55 pass / 0 fail; tsc 0."
     }
   ]
 }

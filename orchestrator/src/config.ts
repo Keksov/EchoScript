@@ -26,7 +26,7 @@ export interface AppConfig {
   readonly pollIntervalMs: number;
   readonly modelStopTimeoutMs: number;
   readonly streamWindowMs: number;
-  readonly streamRolloverMs: number;
+  readonly streamChunkMs: number;
   readonly daemonRegistryTtlMs: number;
   readonly dropStableMs: number;
   readonly maxRequeueAttempts: number;
@@ -54,7 +54,7 @@ interface RawConfig {
   readonly poll_interval_ms?: unknown;
   readonly model_stop_timeout_ms?: unknown;
   readonly stream_window_ms?: unknown;
-  readonly stream_rollover_ms?: unknown;
+  readonly stream_chunk_ms?: unknown;
   readonly daemon_registry_ttl_ms?: unknown;
   readonly drop_stable_ms?: unknown;
   readonly max_requeue_attempts?: unknown;
@@ -86,10 +86,11 @@ const DEFAULT_JOBS_ROOT = "./jobs";
 const DEFAULT_MAX_WORKERS = 1;
 const DEFAULT_POLL_INTERVAL_MS = 500;
 const DEFAULT_MODEL_STOP_TIMEOUT_MS = 120000;
-// Streaming file bridge (see orchestrator/spec/file-streaming-bridge-plan.md, SB-D3/SB-D8):
-// window of audio streamed per binary frame, and rollover cap before a fresh session.
+// Streaming file bridge: window of audio streamed per binary frame, and the max audio
+// per streaming session before it finalizes and the next chunk continues on a fresh
+// connection (LF-D1, replaces the old rollover threshold).
 const DEFAULT_STREAM_WINDOW_MS = 30000;
-const DEFAULT_STREAM_ROLLOVER_MS = 1200000;
+const DEFAULT_STREAM_CHUNK_MS = 300000;
 // Daemon registry (jobs/registry/<name>.json): a registration is "ready" only if its
 // heartbeat is within this TTL (invariant: TTL >= ~3x the daemon heartbeat interval).
 const DEFAULT_DAEMON_REGISTRY_TTL_MS = 15000;
@@ -253,9 +254,9 @@ export const loadConfig = async (): Promise<AppConfig> => {
     asNumber(rawConfig.model_stop_timeout_ms) ?? DEFAULT_MODEL_STOP_TIMEOUT_MS,
   );
   const streamWindowMs = Math.max(1000, asNumber(rawConfig.stream_window_ms) ?? DEFAULT_STREAM_WINDOW_MS);
-  const streamRolloverMs = Math.max(
+  const streamChunkMs = Math.max(
     streamWindowMs,
-    asNumber(rawConfig.stream_rollover_ms) ?? DEFAULT_STREAM_ROLLOVER_MS,
+    asNumber(rawConfig.stream_chunk_ms) ?? DEFAULT_STREAM_CHUNK_MS,
   );
   const daemonRegistryTtlMs = Math.max(
     1000,
@@ -283,7 +284,7 @@ export const loadConfig = async (): Promise<AppConfig> => {
     pollIntervalMs,
     modelStopTimeoutMs,
     streamWindowMs,
-    streamRolloverMs,
+    streamChunkMs,
     daemonRegistryTtlMs,
     dropStableMs,
     maxRequeueAttempts,
