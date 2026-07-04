@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "plan": "long-file-chunking-fix",
+  "planDoc": "spec/long-file-chunking-fix-plan.md",
+  "title": "Фикс длинных файлов: нарезка на chunk'и + keepalive-safety",
+  "status": "active",
+  "createdAt": "2026-07-04",
+  "updatedAt": "2026-07-04T08:56:24Z",
+  "decisions": [
+    {
+      "id": "LF-D1",
+      "text": "Проактивная нарезка вместо rollover: каждая сессия шлёт фикс. объём аудио (stream_chunk_ms, дефолт 300000=5мин), затем flush->session_final->close, следующая со сдвигом. Буфер демона <= chunk (нет 30-мин cap), сессии строго последовательны (нет reconnect во время инференса). Заменяет rollover SB-D7/D8."
+    },
+    {
+      "id": "LF-D2",
+      "text": "keepalive best-effort: sendEvent в onInferenceProgress обёрнут в try/except — обрыв соединения не бросает в инференс, ложного OOM-retry нет. Фикс регрессии SR2.1."
+    },
+    {
+      "id": "LF-D3",
+      "text": "Сшивка сохраняется: offsetMs + сквозная нумерация сегментов как в текущем внешнем цикле; результат склеивается из chunk'ов."
+    },
+    {
+      "id": "LF-D4",
+      "text": "Компромисс границ: chunk может резать предложение на стыке (демон коммитит хвост на flush) — приемлемо; overlap/выравнивание по тишине не в этой итерации."
+    },
+    {
+      "id": "LF-D5",
+      "text": "Чистое ядро + DI + тесты; демон-правка минимальна; E2E на реальном срезе CD4 (несколько chunk'ов, сшитые таймстампы, ready)."
+    }
+  ],
+  "steps": [
+    {
+      "id": "LF0.1",
+      "phase": 0,
+      "title": "Plan & ledger",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": [
+        "orchestrator/spec/long-file-chunking-fix-plan.md",
+        "orchestrator/spec/long-file-chunking-fix-progress.json"
+      ],
+      "verify": "JSON парсится, DAG ацикличен, оба файла закоммичены атомарно.",
+      "startedAt": "2026-07-04T08:56:24Z",
+      "finishedAt": "2026-07-04T09:00:00Z",
+      "blockedReason": null,
+      "evidence": [
+        "План+леджер созданы; JSON ok; 4 шага; DAG ацикличен"
+      ]
+    },
+    {
+      "id": "LF1.1",
+      "phase": 1,
+      "title": "A: keepalive-safety в демоне (try/except вокруг sendEvent)",
+      "status": "not-started",
+      "dependsOn": [
+        "LF0.1"
+      ],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas"
+      ],
+      "verify": "Демон пересобран: onInferenceProgress ловит исключения sendEvent (обрыв не рушит инференс, нет ложного OOM-retry).",
+      "startedAt": null,
+      "finishedAt": null,
+      "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "LF2.1",
+      "phase": 2,
+      "title": "B: нарезка в драйвере (session по stream_chunk_ms) + config + тесты",
+      "status": "not-started",
+      "dependsOn": [
+        "LF0.1"
+      ],
+      "artifacts": [
+        "orchestrator/src/daemon-stream-driver.ts",
+        "orchestrator/src/daemon-stream-driver.test.ts",
+        "orchestrator/src/config.ts",
+        "config.json"
+      ],
+      "verify": "bun test: сессия завершается по отправленному chunk (stream_chunk_ms), не по uncommitted; несколько последовательных сессий со сдвигом таймстампов; короткий файл = одна сессия; rollover-тест переписан на chunking.",
+      "startedAt": null,
+      "finishedAt": null,
+      "blockedReason": null,
+      "evidence": []
+    },
+    {
+      "id": "LF3.1",
+      "phase": 3,
+      "title": "E2E на реальном срезе + регресс + docs",
+      "status": "not-started",
+      "dependsOn": [
+        "LF1.1",
+        "LF2.1"
+      ],
+      "artifacts": [
+        "orchestrator/scripts/e2e_stream_manual.ts",
+        "EchoRecorder/docs/ARCHITECTURE.md"
+      ],
+      "verify": "E2E на срезе CD4 (~12-15 мин, несколько chunk'ов): доходит до session_final без стойла/requeue, таймстампы на всю длину; регресс короткой речи ready. Docs: rollover -> нарезка.",
+      "startedAt": null,
+      "finishedAt": null,
+      "blockedReason": null,
+      "evidence": []
+    }
+  ],
+  "log": [
+    {
+      "ts": "2026-07-04T09:00:00Z",
+      "step": "LF0.1",
+      "event": "done",
+      "note": "План фикса длинных файлов (нарезка + keepalive-safety) оформлен. Пауза на границе фазы 0."
+    }
+  ]
+}
