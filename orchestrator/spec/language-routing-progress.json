@@ -1,0 +1,103 @@
+{
+  "initiative": "language-routing",
+  "title": "Язык оригинала через input/<model>/<lang>/ + демон на язык",
+  "plan": "language-routing-plan.md",
+  "branch": "feature/language-routing",
+  "created": "2026-07-04",
+  "updated": "2026-07-04",
+  "decisions": [
+    "LG-D1: язык из подкаталога input/<model>/<lang>/ (en, ru, ...); файл прямо в input/<model>/ (без lang) = мульти-язык/auto.",
+    "LG-D2: отдельный демон на язык (whisperdaemon_<lang>, своя модель/порт); оркестратор роутит по языку; переиспользует реестр/readiness; расширяемо.",
+    "LG-D3: мульти-язык → сперва SPIKE по whisper (auto / per-window / VAD+routing) + дизайн-гейт; временный fallback whisper auto.",
+    "LG-D4: роутинг — lang из подкаталога → params.language + выбор ws_daemon по (engine, language); readiness-gate per language daemon; схема конфига фиксируется в P1.",
+    "LG-D5: скрипт скачивания моделей расширяется (манифест язык→модель, докачать en).",
+    "LG-D6: только whisperdaemon (vosk/vibevoice/diarization вне scope).",
+    "LG-D7: чистое ядро + DI + тесты; демон-правки минимальны; аддитивно (RU-путь не ломаем)."
+  ],
+  "phases": [
+    { "id": "P0", "title": "Plan & ledger", "gate": "pause: обзор плана владельцем" },
+    { "id": "P1", "title": "Spike whisper multi-lang + EN-модель + схема роутинга", "gate": "pause: дизайн-гейт (подход к мульти-языку + EN-модель + схема конфига)" },
+    { "id": "P2", "title": "Директория input/<model>/<lang>/ + роутинг (оркестратор)", "gate": "pause: bun test зелёный + регресс RU" },
+    { "id": "P3", "title": "Скрипт моделей + EN-демон + регистрация", "gate": "pause: EN-модель докачана, whisperdaemon_en в реестре" },
+    { "id": "P4", "title": "Мульти-язык по итогам спайка", "gate": "pause: подтверждено поведение файла без lang" },
+    { "id": "P5", "title": "E2E en/ru/multi + docs", "gate": "pause: E2E зелёный + ARCHITECTURE.md" }
+  ],
+  "steps": [
+    {
+      "id": "LG0.1",
+      "phase": "P0",
+      "title": "Plan & ledger",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": [
+        "orchestrator/spec/language-routing-plan.md",
+        "orchestrator/spec/language-routing-progress.json"
+      ],
+      "verify": "план описывает LG-D1..LG-D7 и фазы P0-P5 (spike-first); JSON парсится; DAG ацикличен",
+      "evidence": "Файлы плана и леджера созданы; решения и фазы зафиксированы; ветка feature/language-routing от master (все прошлые фиксы включены)."
+    },
+    {
+      "id": "LG1.1",
+      "phase": "P1",
+      "title": "Spike + дизайн-гейт",
+      "status": "todo",
+      "dependsOn": ["LG0.1"],
+      "artifacts": [
+        "orchestrator/spec/language-routing-spike.md"
+      ],
+      "verify": "воспроизведено поведение whisper на смешанном сэмпле (auto/per-window/VAD); выбрана EN-модель и способ докачки; описана схема роутинга (engine,lang)→daemon и кодирование job; согласовано с владельцем",
+      "evidence": ""
+    },
+    {
+      "id": "LG2.1",
+      "phase": "P2",
+      "title": "Директория input/<model>/<lang>/ + роутинг (оркестратор)",
+      "status": "todo",
+      "dependsOn": ["LG1.1"],
+      "artifacts": [
+        "orchestrator/src/input-drop.ts",
+        "orchestrator/src/scheduler.ts",
+        "orchestrator/src/config.ts",
+        "orchestrator/src/*.test.ts"
+      ],
+      "verify": "сканер читает input/<model>/<lang>/ и проставляет lang→params.language; файл прямо в input/<model>/ = мульти/auto; scheduler роутит по (model, lang) с readiness-gate языкового демона; bun test зелёный; RU-путь без регресса",
+      "evidence": ""
+    },
+    {
+      "id": "LG3.1",
+      "phase": "P3",
+      "title": "Скрипт моделей + EN-демон + регистрация",
+      "status": "todo",
+      "dependsOn": ["LG1.1"],
+      "artifacts": [
+        "services/whisperdaemon/scripts/stage_whisperdaemon_model.bat",
+        "services/whisperdaemon/scripts/*.bat",
+        "config.json"
+      ],
+      "verify": "скрипт скачивания расширен манифестом язык→модель и умеет докачать EN-модель; config/start-скрипты для whisperdaemon_en; демон поднимается и регистрируется в jobs/registry",
+      "evidence": ""
+    },
+    {
+      "id": "LG4.1",
+      "phase": "P4",
+      "title": "Мульти-язык по итогам спайка",
+      "status": "todo",
+      "dependsOn": ["LG1.1", "LG2.1"],
+      "artifacts": [],
+      "verify": "файл без lang обрабатывается согласно решению спайка (fallback whisper auto либо per-fragment routing); тесты покрывают выбранный путь",
+      "evidence": ""
+    },
+    {
+      "id": "LG5.1",
+      "phase": "P5",
+      "title": "E2E en/ru/multi + docs",
+      "status": "todo",
+      "dependsOn": ["LG2.1", "LG3.1", "LG4.1"],
+      "artifacts": [
+        "EchoRecorder/docs/ARCHITECTURE.md"
+      ],
+      "verify": "E2E: input/whisper_podlodka/en/ → EN-демон (англ. текст); .../ru/ → RU-демон; без lang → по спайку; регресс RU; ARCHITECTURE.md описывает языковой роутинг",
+      "evidence": ""
+    }
+  ]
+}
