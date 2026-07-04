@@ -1,7 +1,14 @@
 # LG1.1 — Спайк: язык оригинала + маршрутизация по языку (дизайн-гейт)
 
-Status: **awaiting owner sign-off** (design gate)
+Status: **signed off by owner 2026-07-04** (design gate passed)
 Part of: [language-routing-plan.md](language-routing-plan.md) · Ledger: [language-routing-progress.json](language-routing-progress.json)
+
+## Итог дизайн-гейта (решения владельца)
+1. **Директория = `engine`:** `input/whisper/<lang>/`; `whisper_podlodka` — легаси-алиас на RU-даймон.
+2. **Mixed — ОТКЛОНЯТЬ до P4:** файл прямо в `input/<engine>/` (без lang) НЕ берётся в работу (лог +
+   не-роутится), пока P4 не сделает per-fragment. **Никакого `auto`-фолбэка** (не плодим битые
+   результаты). Отменяет промежуточную рекомендацию Q1 ниже.
+3. **turbo = f16 (~1.6 ГБ)** (не квант).
 
 Спайк отвечает на три вопроса P1 и предлагает дизайн к реализации в P2/P3. Всё обосновано кодом и
 семантикой whisper.cpp; живые прогоны (EN на turbo, смешанный сэмпл) вынесены в P3/P4/E2E, т.к.

@@ -25,14 +25,16 @@ Authoritative progress ledger: [language-routing-progress.json](language-routing
   языков (манифест язык→модель).
 
 ## Decisions (locked)
-- **LG-D1 — Язык из подкаталога** `input/<model>/<lang>/` (`en`, `ru`, …). Файл прямо в `input/<model>/`
-  (без lang-подкаталога) = мульти-язык/`auto`. *(подтверждено владельцем)*
+- **LG-D1 — Язык из подкаталога** `input/<engine>/<lang>/` (`en`, `ru`, …), где сегмент-1 = **семейство
+  движка** (`whisper`). Файл прямо в `input/<engine>/` (без lang) = мульти-язык и **ОТКЛОНЯЕТСЯ до P4**
+  (лог + не-роутится; никакого `auto`-фолбэка). Легаси `input/whisper_podlodka/…` (сегмент-1 = известный
+  `model_name`) = плоский RU-путь. *(дизайн-гейт 2026-07-04)*
 - **LG-D2 — Отдельный демон на язык:** `whisperdaemon_<lang>` со своей моделью/портом; оркестратор
   роутит задание по языку. Переиспользует однодельный демон + реестр + readiness-gate; расширяемо
   (добавил язык = ещё демон + модель). Память — только по запущенным языкам. *(владелец)*
-- **LG-D3 — Мульти-язык — сначала SPIKE** по whisper (auto на весь файл / per-window detect /
-  VAD+detect+routing), затем дизайн-гейт; временный fallback до решения — whisper `auto`
-  (single-language). *(владелец)*
+- **LG-D3 — Мульти-язык — сначала SPIKE** по whisper (гейт пройден): whisper детектит язык **один раз**
+  на файл, mixed «из коробки» нет → полноценный per-fragment (VAD+language-ID) в **P4**. До P4 mixed
+  **отклоняется** (см. LG-D1; auto-фолбэк отклонён владельцем). *(дизайн-гейт 2026-07-04)*
 - **LG-D4 — Роутинг:** `lang` из подкаталога → `params.language`; scheduler выбирает ws_daemon по
   **(engine, language)** из конфига; readiness-gate применяется к языковому демону; реестр даёт его
   готовность. Точная схема конфига (`language_daemons`/`(engine,lang)→daemon`) и кодирование job —
@@ -45,12 +47,12 @@ Authoritative progress ledger: [language-routing-progress.json](language-routing
   (`input/whisper_podlodka/…`, `auto`) не ломаем.
 
 ## Acceptance / gates
-- `bun test` (orchestrator) зелёный: сканер языковых подкаталогов, роутинг по (model, lang),
-  обратная совместимость (файл без lang → auto/мульти).
+- `bun test` (orchestrator) зелёный: сканер `input/<engine>/<lang>/`, резолв (engine,lang)→model на
+  интейке, отклонение mixed (файл в корне движка без lang), легаси-алиас (сегмент-1 = model_name).
 - Скрипт моделей умеет докачать EN-модель; поднимается `whisperdaemon_en`, регистрируется в реестре.
-- **E2E:** файл в `input/whisper_podlodka/en/` → распознан EN-демоном (английский текст); файл в
-  `.../ru/` → RU-демоном; файл без lang → по итогам спайка (fallback whisper auto). Регресс RU-пути.
-- Дизайн-гейт после P1: подход к мульти-языку и EN-модели согласован до реализации.
+- **E2E:** файл в `input/whisper/en/` → распознан EN-демоном (англ. текст); `input/whisper/ru/` →
+  RU-демоном; файл прямо в `input/whisper/` (без lang) → отклонён (до P4). Регресс RU-легаси-пути.
+- Дизайн-гейт после P1 (✅ 2026-07-04): engine-директория, отклонение mixed до P4, turbo f16.
 
 ## Risks
 - **whisper_podlodka заточен под RU** — EN на нём плохой; нужна отдельная EN-модель. Выбрана
@@ -68,12 +70,14 @@ Authoritative progress ledger: [language-routing-progress.json](language-routing
 - [ ] **LG1.1 — Spike + дизайн-гейт.** whisper мульти-язык (auto/per-window/VAD) на смешанном сэмпле;
   проверка EN на **`large-v3-turbo`** (качество + память/скорость) и способа докачки; схема роутинга
   (engine,lang)→daemon и кодирование job. Согласовать с владельцем.
-- [ ] **LG2.1 — Директория + роутинг (оркестратор).** Сканер `input/<model>/<lang>/` (+ файл в
-  `input/<model>/` = мульти/auto); `lang`→`params.language`; scheduler роутит по (model, lang);
-  readiness-gate по языковому демону; тесты + регресс RU.
+- [ ] **LG2.1 — Директория + роутинг (оркестратор).** Сканер `input/<engine>/<lang>/`; резолв
+  (engine,lang)→конкретная model на интейке + `lang`→`params.language`; файл в корне движка (без lang)
+  = mixed → **отклоняется** (до P4); легаси `input/<model_name>/` — плоско; роутинг/реестр/readiness
+  не трогаем (job уже несёт model); `ws_daemons` +`engine`/`language`; тесты + регресс RU.
 - [ ] **LG3.1 — Модели + EN-демон.** Расширить скрипт скачивания (манифест язык→модель) + докачать
   EN-модель (`ggml-large-v3-turbo`); config/start-скрипты `whisperdaemon_en`; регистрация в реестре.
-- [ ] **LG4.1 — Мульти-язык** по итогам спайка (fallback whisper `auto` или per-fragment routing).
+- [ ] **LG4.1 — Мульти-язык** (снимает отклонение mixed из P2): per-fragment (per-chunk `auto` vs
+  VAD+language-ID+роутинг фрагментов) + замер на реальном mixed-сэмпле.
 - [ ] **LG5.1 — E2E + docs.** en→EN-демон, ru→RU-демон, multi→по спайку; регресс; ARCHITECTURE.md.
 
 ## References

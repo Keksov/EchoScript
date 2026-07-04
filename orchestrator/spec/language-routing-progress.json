@@ -6,9 +6,10 @@
   "created": "2026-07-04",
   "updated": "2026-07-04",
   "decisions": [
-    "LG-D1: язык из подкаталога input/<model>/<lang>/ (en, ru, ...); файл прямо в input/<model>/ (без lang) = мульти-язык/auto.",
+    "LG-D1: язык из подкаталога input/<engine>/<lang>/ (сегмент-1 = семейство движка whisper); файл прямо в input/<engine>/ (без lang) = мульти-язык и ОТКЛОНЯЕТСЯ до P4 (без auto-фолбэка); легаси input/<model_name>/ = плоский путь. [дизайн-гейт 2026-07-04]",
     "LG-D2: отдельный демон на язык (whisperdaemon_<lang>, своя модель/порт); оркестратор роутит по языку; переиспользует реестр/readiness; расширяемо.",
-    "LG-D3: мульти-язык → сперва SPIKE по whisper (auto / per-window / VAD+routing) + дизайн-гейт; временный fallback whisper auto.",
+    "LG-D3: мульти-язык SPIKE пройден — whisper детектит язык один раз на файл, mixed из коробки нет → per-fragment (VAD+language-ID) в P4; до P4 mixed отклоняется (auto-фолбэк отклонён владельцем). [дизайн-гейт 2026-07-04]",
+    "LG-D8: EN-модель turbo берётся в f16 (~1.6ГБ, не квант). [дизайн-гейт 2026-07-04]",
     "LG-D4: роутинг — lang из подкаталога → params.language + выбор ws_daemon по (engine, language); readiness-gate per language daemon; схема конфига фиксируется в P1.",
     "LG-D5: скрипт скачивания моделей расширяется (манифест язык→модель, докачать en). EN-модель = ggml-large-v3-turbo (меньше RAM/VRAM и быстрее large-v3, качество EN сопоставимо).",
     "LG-D6: только whisperdaemon (vosk/vibevoice/diarization вне scope).",
@@ -40,13 +41,13 @@
       "id": "LG1.1",
       "phase": "P1",
       "title": "Spike + дизайн-гейт",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": ["LG0.1"],
       "artifacts": [
         "orchestrator/spec/language-routing-spike.md"
       ],
       "verify": "поведение whisper по мульти-языку установлено из кода даймона + семантики whisper.cpp (детект один раз на файл, mixed 'из коробки' нет); выбран артефакт ggml-large-v3-turbo (f16) + способ докачки из HF; описана схема роутинга (резолв (engine,lang)→model на интейке, ws_daemons+engine/language) и кодирование job; живые замеры EN/памяти → P3, mixed-сэмпл → P4; согласовано с владельцем на дизайн-гейте",
-      "evidence": "spike.md написан. Q1: whisper детектит язык один раз (WhisperDaemon.pas:1442-1463), mixed требует VAD+language-ID (P4); interim fallback auto. Q2: turbo f16 ~1.6ГБ (≈вдвое легче large-v3 ~3.1ГБ), качество EN хорошее; скачивание из HF ggerganov/whisper.cpp → ggml-whisper_en_turbo.bin. Q3: рекомендован резолв (engine,lang)→model на интейке — роутинг/реестр/readiness не меняются (scheduler.ts:288-304), правки только в input-drop + ws_daemons config; RU-легаси через алиас сегмента-1=model_name. AWAITING owner sign-off на 3 открытых решениях."
+      "evidence": "spike.md написан, дизайн-гейт пройден 2026-07-04. Q1: whisper детектит язык один раз (WhisperDaemon.pas:1442-1463), mixed требует VAD+language-ID (P4). Q2: turbo f16 ~1.6ГБ (≈вдвое легче large-v3 ~3.1ГБ); скачивание из HF ggerganov/whisper.cpp → ggml-whisper_en_turbo.bin. Q3: резолв (engine,lang)→model на интейке — роутинг/реестр/readiness не меняются (scheduler.ts:288-304), правки только в input-drop + ws_daemons config; RU-легаси через алиас сегмента-1=model_name. РЕШЕНИЯ ВЛАДЕЛЬЦА: (1) директория=engine input/whisper/<lang>/; (2) mixed ОТКЛОНЯТЬ до P4 (без auto); (3) turbo f16."
     },
     {
       "id": "LG2.1",
@@ -60,7 +61,7 @@
         "orchestrator/src/config.ts",
         "orchestrator/src/*.test.ts"
       ],
-      "verify": "сканер читает input/<model>/<lang>/ и проставляет lang→params.language; файл прямо в input/<model>/ = мульти/auto; scheduler роутит по (model, lang) с readiness-gate языкового демона; bun test зелёный; RU-путь без регресса",
+      "verify": "сканер читает input/<engine>/<lang>/, резолвит (engine,lang)→конкретную model на интейке и проставляет lang→params.language; файл в корне движка (без lang) = mixed → ОТКЛОНЯЕТСЯ (до P4); легаси input/<model_name>/ — плоско; роутинг/реестр/readiness не тронуты; ws_daemons +engine/language; bun test зелёный; RU-легаси без регресса",
       "evidence": ""
     },
     {
@@ -84,7 +85,7 @@
       "status": "todo",
       "dependsOn": ["LG1.1", "LG2.1"],
       "artifacts": [],
-      "verify": "файл без lang обрабатывается согласно решению спайка (fallback whisper auto либо per-fragment routing); тесты покрывают выбранный путь",
+      "verify": "снимает отклонение mixed из P2: файл без lang обрабатывается per-fragment (per-chunk auto vs VAD+language-ID+роутинг фрагментов), проверено на реальном mixed-сэмпле; тесты покрывают выбранный путь",
       "evidence": ""
     },
     {
@@ -96,7 +97,7 @@
       "artifacts": [
         "EchoRecorder/docs/ARCHITECTURE.md"
       ],
-      "verify": "E2E: input/whisper_podlodka/en/ → EN-демон (англ. текст); .../ru/ → RU-демон; без lang → по спайку; регресс RU; ARCHITECTURE.md описывает языковой роутинг",
+      "verify": "E2E: input/whisper/en/ → EN-демон (англ. текст); input/whisper/ru/ → RU-демон; файл в корне input/whisper/ (без lang) → отклонён (до P4) либо per-fragment (если P4 включён); регресс RU-легаси; ARCHITECTURE.md описывает языковой роутинг (engine/<lang>, резолв на интейке)",
       "evidence": ""
     }
   ]
