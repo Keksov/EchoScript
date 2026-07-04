@@ -40,13 +40,13 @@
       "id": "LG1.1",
       "phase": "P1",
       "title": "Spike + дизайн-гейт",
-      "status": "todo",
+      "status": "in-progress",
       "dependsOn": ["LG0.1"],
       "artifacts": [
         "orchestrator/spec/language-routing-spike.md"
       ],
-      "verify": "воспроизведено поведение whisper на смешанном сэмпле (auto/per-window/VAD); подтверждено качество EN и замерена память/скорость на ggml-large-v3-turbo + способ докачки; описана схема роутинга (engine,lang)→daemon и кодирование job; согласовано с владельцем",
-      "evidence": ""
+      "verify": "поведение whisper по мульти-языку установлено из кода даймона + семантики whisper.cpp (детект один раз на файл, mixed 'из коробки' нет); выбран артефакт ggml-large-v3-turbo (f16) + способ докачки из HF; описана схема роутинга (резолв (engine,lang)→model на интейке, ws_daemons+engine/language) и кодирование job; живые замеры EN/памяти → P3, mixed-сэмпл → P4; согласовано с владельцем на дизайн-гейте",
+      "evidence": "spike.md написан. Q1: whisper детектит язык один раз (WhisperDaemon.pas:1442-1463), mixed требует VAD+language-ID (P4); interim fallback auto. Q2: turbo f16 ~1.6ГБ (≈вдвое легче large-v3 ~3.1ГБ), качество EN хорошее; скачивание из HF ggerganov/whisper.cpp → ggml-whisper_en_turbo.bin. Q3: рекомендован резолв (engine,lang)→model на интейке — роутинг/реестр/readiness не меняются (scheduler.ts:288-304), правки только в input-drop + ws_daemons config; RU-легаси через алиас сегмента-1=model_name. AWAITING owner sign-off на 3 открытых решениях."
     },
     {
       "id": "LG2.1",
