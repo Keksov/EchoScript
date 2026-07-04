@@ -10,7 +10,8 @@
   "default_model": "whisper_podlodka",
   "ffmpeg_path": "./tools/ffmpeg/ffmpeg.exe",
   "ws_daemons": {
-    "whisperdaemon": { "host": "127.0.0.1", "port": 7801, "engine": "whisper", "language": "ru", "model_name": "whisper_podlodka" }
+    "whisperdaemon": { "host": "127.0.0.1", "port": 7801, "engine": "whisper", "language": "ru", "model_name": "whisper_podlodka" },
+    "whisperdaemon_en": { "host": "127.0.0.1", "port": 7802, "engine": "whisper", "language": "en", "model_name": "whisper_en_turbo" }
   },
   "speech": {
     "command_grammars": {
@@ -29,6 +30,11 @@
     "whisper_podlodka": {
       "service_dir": "./services/whisper_podlodka",
       "python_executable": "./services/whisper_podlodka/venv/bin/python",
+      "module": "app.main"
+    },
+    "whisper_en_turbo": {
+      "service_dir": "./services/whisperdaemon",
+      "python_executable": "./services/whisperdaemon/venv/bin/python",
       "module": "app.main"
     },
     "borealis": {

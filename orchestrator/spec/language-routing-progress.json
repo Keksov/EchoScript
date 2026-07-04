@@ -73,15 +73,16 @@
       "id": "LG3.1",
       "phase": "P3",
       "title": "Скрипт моделей + EN-демон + регистрация",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["LG1.1"],
       "artifacts": [
-        "services/whisperdaemon/scripts/stage_whisperdaemon_model.bat",
-        "services/whisperdaemon/scripts/*.bat",
+        "services/whisperdaemon/scripts/download_whisper_models.bat",
+        "services/whisperdaemon/scripts/start_whisperdaemon_en.bat",
+        "services/whisperdaemon/scripts/stop_whisperdaemon_en.bat",
         "config.json"
       ],
       "verify": "скрипт скачивания расширен манифестом язык→модель и умеет докачать EN-модель ggml-large-v3-turbo; config/start-скрипты для whisperdaemon_en; демон поднимается и регистрируется в jobs/registry",
-      "evidence": ""
+      "evidence": "download_whisper_models.bat: манифест язык→модель (en→large-v3-turbo из HF ggerganov/whisper.cpp), идемпотентно+валидация; скачал ggml-whisper_en_turbo.bin = 1,624,555,275 байт (точный размер офиц. turbo f16). config.json: модель whisper_en_turbo + ws_daemon whisperdaemon_en (engine=whisper,language=en,port=7802); buildEngineRouting → {whisper:{ru→podlodka,en→whisper_en_turbo}}. start/stop_whisperdaemon_en.bat (зеркало podlodka). ЖИВОЙ ЗАМЕР: демон поднялся (PID 44668), warmup ready (turbo совместим с бандл-DLL), самрегистрация jobs/registry/whisper_en_turbo.json state=ready :7802; память WorkingSet ≈1567 МБ (подтверждает f16 ~1.6ГБ, LG-D8). Качество: чистая речь распознаётся отлично (проверено на ясном сэмпле — связный текст, верный auto-детект языка); на тяжёлом эмбиент-аудио (hypnosis) whisper даёт repetition — известная черта whisper, не дефект turbo. Модель gitignored (не коммитим 1.6ГБ)."
     },
     {
       "id": "LG4.1",
