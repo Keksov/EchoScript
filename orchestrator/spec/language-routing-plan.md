@@ -38,7 +38,8 @@ Authoritative progress ledger: [language-routing-progress.json](language-routing
   готовность. Точная схема конфига (`language_daemons`/`(engine,lang)→daemon`) и кодирование job —
   фиксируется в P1 (дизайн) и реализуется в P2.
 - **LG-D5 — Скрипт моделей расширяется:** обобщённый манифест «язык→модель» + докачка английской
-  модели; инкрементально `ru`+`en`, дальше расширяемо.
+  модели. EN-модель = **`ggml-large-v3-turbo`** (меньше RAM/VRAM и быстрее `large-v3`, качество EN
+  сопоставимо); инкрементально `ru`+`en`, дальше расширяемо. *(владелец)*
 - **LG-D6 — Только whisperdaemon** (vosk/vibevoice/diarization — вне scope этой инициативы).
 - **LG-D7 — Чистое ядро + DI + тесты;** демон-правки минимальны; аддитивно — текущий RU-путь
   (`input/whisper_podlodka/…`, `auto`) не ломаем.
@@ -52,8 +53,9 @@ Authoritative progress ledger: [language-routing-progress.json](language-routing
 - Дизайн-гейт после P1: подход к мульти-языку и EN-модели согласован до реализации.
 
 ## Risks
-- **whisper_podlodka заточен под RU** — EN на нём плохой; нужна отдельная EN-модель (спайк выберет:
-  стандартный large-v3 vs english ggml).
+- **whisper_podlodka заточен под RU** — EN на нём плохой; нужна отдельная EN-модель. Выбрана
+  **`large-v3-turbo`** (меньше RAM/VRAM, быстрее `large-v3`); спайк подтверждает качество EN и замеряет
+  память/скорость.
 - **Мульти-язык** — whisper мид-файл язык не переключает; настоящий mixed требует VAD+language-ID+
   роутинг по фрагментам (дорого). Спайк определит реальную границу возможностей.
 - **Память/порты:** каждый языковой демон — своя модель (~1.6 ГБ) и порт; поднимать по мере надобности.
@@ -64,13 +66,13 @@ Authoritative progress ledger: [language-routing-progress.json](language-routing
 ## Steps (mirror the ledger)
 - [ ] **LG0.1 — Plan & ledger.**
 - [ ] **LG1.1 — Spike + дизайн-гейт.** whisper мульти-язык (auto/per-window/VAD) на смешанном сэмпле;
-  выбор EN-модели и способа докачки; схема роутинга (engine,lang)→daemon и кодирование job. Согласовать
-  с владельцем.
+  проверка EN на **`large-v3-turbo`** (качество + память/скорость) и способа докачки; схема роутинга
+  (engine,lang)→daemon и кодирование job. Согласовать с владельцем.
 - [ ] **LG2.1 — Директория + роутинг (оркестратор).** Сканер `input/<model>/<lang>/` (+ файл в
   `input/<model>/` = мульти/auto); `lang`→`params.language`; scheduler роутит по (model, lang);
   readiness-gate по языковому демону; тесты + регресс RU.
 - [ ] **LG3.1 — Модели + EN-демон.** Расширить скрипт скачивания (манифест язык→модель) + докачать
-  EN-модель; config/start-скрипты `whisperdaemon_en`; регистрация в реестре.
+  EN-модель (`ggml-large-v3-turbo`); config/start-скрипты `whisperdaemon_en`; регистрация в реестре.
 - [ ] **LG4.1 — Мульти-язык** по итогам спайка (fallback whisper `auto` или per-fragment routing).
 - [ ] **LG5.1 — E2E + docs.** en→EN-демон, ru→RU-демон, multi→по спайку; регресс; ARCHITECTURE.md.
 

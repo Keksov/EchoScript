@@ -10,7 +10,7 @@
     "LG-D2: отдельный демон на язык (whisperdaemon_<lang>, своя модель/порт); оркестратор роутит по языку; переиспользует реестр/readiness; расширяемо.",
     "LG-D3: мульти-язык → сперва SPIKE по whisper (auto / per-window / VAD+routing) + дизайн-гейт; временный fallback whisper auto.",
     "LG-D4: роутинг — lang из подкаталога → params.language + выбор ws_daemon по (engine, language); readiness-gate per language daemon; схема конфига фиксируется в P1.",
-    "LG-D5: скрипт скачивания моделей расширяется (манифест язык→модель, докачать en).",
+    "LG-D5: скрипт скачивания моделей расширяется (манифест язык→модель, докачать en). EN-модель = ggml-large-v3-turbo (меньше RAM/VRAM и быстрее large-v3, качество EN сопоставимо).",
     "LG-D6: только whisperdaemon (vosk/vibevoice/diarization вне scope).",
     "LG-D7: чистое ядро + DI + тесты; демон-правки минимальны; аддитивно (RU-путь не ломаем)."
   ],
@@ -45,7 +45,7 @@
       "artifacts": [
         "orchestrator/spec/language-routing-spike.md"
       ],
-      "verify": "воспроизведено поведение whisper на смешанном сэмпле (auto/per-window/VAD); выбрана EN-модель и способ докачки; описана схема роутинга (engine,lang)→daemon и кодирование job; согласовано с владельцем",
+      "verify": "воспроизведено поведение whisper на смешанном сэмпле (auto/per-window/VAD); подтверждено качество EN и замерена память/скорость на ggml-large-v3-turbo + способ докачки; описана схема роутинга (engine,lang)→daemon и кодирование job; согласовано с владельцем",
       "evidence": ""
     },
     {
@@ -74,7 +74,7 @@
         "services/whisperdaemon/scripts/*.bat",
         "config.json"
       ],
-      "verify": "скрипт скачивания расширен манифестом язык→модель и умеет докачать EN-модель; config/start-скрипты для whisperdaemon_en; демон поднимается и регистрируется в jobs/registry",
+      "verify": "скрипт скачивания расширен манифестом язык→модель и умеет докачать EN-модель ggml-large-v3-turbo; config/start-скрипты для whisperdaemon_en; демон поднимается и регистрируется в jobs/registry",
       "evidence": ""
     },
     {
