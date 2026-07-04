@@ -6,6 +6,7 @@ import process from "node:process";
 import type { AppConfig } from "./config";
 import { getNodeErrorCode } from "./node-error";
 import { buildMediaJobId } from "./file-drop";
+import { buildEngineRouting } from "./engine-routing";
 
 export class InvalidJobError extends Error {}
 export class UnknownModelError extends Error {}
@@ -200,6 +201,15 @@ export class JobManager {
     for (const modelName of Object.keys(this.config.models)) {
       await mkdir(this.getModelInputDir(modelName), { recursive: true });
     }
+
+    // Pre-create the language drop dirs input/<engine>/<language>/ (LG-D1) so the layout
+    // is discoverable; only for (engine, language) whose model is registered.
+    const engines = buildEngineRouting(this.config.wsDaemons, Object.keys(this.config.models));
+    for (const [engine, langMap] of engines) {
+      for (const language of langMap.keys()) {
+        await mkdir(path.join(this.config.jobsRoot, "input", engine, language), { recursive: true });
+      }
+    }
   }
 
   public normalizeRequestedModel(modelName: string | null | undefined): string | null {
@@ -291,6 +301,7 @@ export class JobManager {
     processingPath: string,
     originalFilename: string,
     modelName: string,
+    meta: { readonly language?: string } = {},
   ): Promise<CreatedJob> {
     if (!(modelName in this.config.models)) {
       throw new UnknownModelError(`Unknown model: ${modelName}`);
@@ -306,6 +317,9 @@ export class JobManager {
       source: "input",
       original_filename: originalFilename,
       created_from: "file_drop",
+      // Language resolved from the input/<engine>/<language>/ subfolder (LG-D1), kept for
+      // traceability; the effective routing value is written into params.json by enqueueJob.
+      ...(meta.language !== undefined ? { requested_language: meta.language } : {}),
     });
 
     return { jobId, model: modelName, dataDir };

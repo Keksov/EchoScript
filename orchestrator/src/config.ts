@@ -16,6 +16,11 @@ export interface WsDaemonConfig {
   readonly host: string;
   readonly port: number;
   readonly modelName: string;
+  // Language routing (LG-D1/LG-D4): when a daemon declares an engine family and a
+  // language, a file dropped in input/<engine>/<language>/ resolves to this daemon's
+  // model at intake. Absent for legacy model-only daemons.
+  readonly engine?: string;
+  readonly language?: string;
 }
 
 export interface AppConfig {
@@ -207,10 +212,14 @@ const resolveWsDaemons = (raw: unknown): Record<string, WsDaemonConfig> => {
       throw new Error(`ws_daemons.${name}: numeric port is required`);
     }
 
+    const engine = asString(value.engine);
+    const language = asString(value.language);
     result[name] = {
       host: asString(value.host) ?? "127.0.0.1",
       port,
       modelName: asString(value.model_name) ?? name,
+      ...(engine !== null ? { engine: engine.toLowerCase() } : {}),
+      ...(language !== null ? { language: language.toLowerCase() } : {}),
     };
   }
 

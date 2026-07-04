@@ -10,7 +10,7 @@
   "default_model": "whisper_podlodka",
   "ffmpeg_path": "./tools/ffmpeg/ffmpeg.exe",
   "ws_daemons": {
-    "whisperdaemon": { "host": "127.0.0.1", "port": 7801, "model_name": "whisper_podlodka" }
+    "whisperdaemon": { "host": "127.0.0.1", "port": 7801, "engine": "whisper", "language": "ru", "model_name": "whisper_podlodka" }
   },
   "speech": {
     "command_grammars": {

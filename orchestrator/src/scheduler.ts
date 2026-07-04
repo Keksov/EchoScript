@@ -10,6 +10,7 @@ import { runWsDaemonJob } from "./ws-daemon-runner";
 import { bytesForMs } from "./daemon-stream-driver";
 import { DaemonRegistry } from "./daemon-registry";
 import { scanInputDrops } from "./input-drop";
+import { buildEngineRouting } from "./engine-routing";
 
 interface SchedulerState {
   readonly activeJobId: string | null;
@@ -150,13 +151,25 @@ export class Scheduler {
   }
 
   private startInputWatchers(): void {
-    for (const modelName of Object.keys(this.config.models)) {
-      const dir = path.join(this.config.jobsRoot, "input", modelName);
+    const watchDir = (dir: string, options?: { recursive: boolean }): void => {
       try {
-        this.inputWatchers.push(watch(dir, () => void this.triggerSweep()));
+        this.inputWatchers.push(
+          options !== undefined
+            ? watch(dir, options, () => void this.triggerSweep())
+            : watch(dir, () => void this.triggerSweep()),
+        );
       } catch {
-        // dir may not exist yet; JobManager.initialize creates model input dirs
+        // dir may not exist yet; JobManager.initialize creates the drop dirs
       }
+    };
+
+    for (const modelName of Object.keys(this.config.models)) {
+      watchDir(path.join(this.config.jobsRoot, "input", modelName));
+    }
+    // Engine dirs (input/<engine>/) hold language subfolders — watch recursively so drops
+    // into input/<engine>/<language>/ trigger a sweep (the reconcile tick is the fallback).
+    for (const engine of buildEngineRouting(this.config.wsDaemons, Object.keys(this.config.models)).keys()) {
+      watchDir(path.join(this.config.jobsRoot, "input", engine), { recursive: true });
     }
   }
 
@@ -179,9 +192,13 @@ export class Scheduler {
   }
 
   private async sweepInputDrops(): Promise<void> {
+    const legacyModels = Object.keys(this.config.models);
     await scanInputDrops(
       this.config.jobsRoot,
-      Object.keys(this.config.models),
+      {
+        legacyModels,
+        engines: buildEngineRouting(this.config.wsDaemons, legacyModels),
+      },
       this.config.dropStableMs,
       this.jobManager,
     );

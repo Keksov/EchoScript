@@ -1,6 +1,6 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { stat as fsStat, rename as fsRename } from "node:fs/promises";
+import { stat as fsStat, rename as fsRename, mkdir as fsMkdir } from "node:fs/promises";
 
 /**
  * File-drop core (pure) — restores the old python watcher behaviour: raw media files
@@ -86,6 +86,19 @@ export interface ClaimDeps {
 
 const defaultClaimDeps: ClaimDeps = { stat: fsStat, rename: fsRename, now: () => Date.now() };
 
+/**
+ * A file is "stable" (done being written) if it has not been touched within the last
+ * `stableMs`. `stableMs <= 0` disables the debounce entirely — treated as always stable,
+ * so a tiny clock skew (mtime a few ms ahead of `now` — common on Windows timestamp
+ * granularity) can never be misread as "still being written".
+ */
+const isStable = (mtimeMs: number, stableMs: number, now: number): boolean => {
+  if (stableMs <= 0) {
+    return true;
+  }
+  return now - mtimeMs >= stableMs;
+};
+
 export interface ClaimedMedia {
   readonly processingPath: string;
   readonly originalFilename: string;
@@ -114,7 +127,7 @@ export const claimMediaFile = async (
   } catch {
     return null;
   }
-  if (!stats.isFile() || deps.now() - stats.mtimeMs < stableMs) {
+  if (!stats.isFile() || !isStable(stats.mtimeMs, stableMs, deps.now())) {
     return null; // gone/dir, or still being written
   }
 
@@ -125,4 +138,46 @@ export const claimMediaFile = async (
     return null; // already claimed / removed concurrently
   }
   return { processingPath, originalFilename: fileName };
+};
+
+/** Subdir where mixed-language drops (no language subfolder) are parked until P4. */
+export const UNROUTED_DIR_NAME = "_unrouted";
+
+/**
+ * Park a file dropped directly in input/<engine>/ (no language subfolder) — that means
+ * "mixed language", which is rejected until P4 (LG-D1, design gate). We move it into
+ * `<engine>/_unrouted/` rather than transcribing it with the wrong language, and so it is
+ * not re-scanned every sweep. Same stability debounce as claimMediaFile (never move a file
+ * mid-copy). Returns the destination path, or null if not a media file / not yet stable.
+ */
+export const rejectMixedFile = async (
+  engineDir: string,
+  fileName: string,
+  stableMs: number,
+  deps: ClaimDeps = defaultClaimDeps,
+): Promise<string | null> => {
+  if (!isProcessableMediaFile(fileName)) {
+    return null;
+  }
+  const src = path.join(engineDir, fileName);
+
+  let stats: { mtimeMs: number; isFile: () => boolean };
+  try {
+    stats = await deps.stat(src);
+  } catch {
+    return null;
+  }
+  if (!stats.isFile() || !isStable(stats.mtimeMs, stableMs, deps.now())) {
+    return null; // gone/dir, or still being written
+  }
+
+  const unroutedDir = path.join(engineDir, UNROUTED_DIR_NAME);
+  await fsMkdir(unroutedDir, { recursive: true });
+  const dest = path.join(unroutedDir, fileName);
+  try {
+    await deps.rename(src, dest);
+  } catch {
+    return null; // gone / lost the race
+  }
+  return dest;
 };

@@ -53,16 +53,21 @@
       "id": "LG2.1",
       "phase": "P2",
       "title": "Директория input/<model>/<lang>/ + роутинг (оркестратор)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["LG1.1"],
       "artifacts": [
+        "orchestrator/src/engine-routing.ts",
+        "orchestrator/src/engine-routing.test.ts",
         "orchestrator/src/input-drop.ts",
-        "orchestrator/src/scheduler.ts",
+        "orchestrator/src/input-drop.test.ts",
+        "orchestrator/src/file-drop.ts",
         "orchestrator/src/config.ts",
-        "orchestrator/src/*.test.ts"
+        "orchestrator/src/job-manager.ts",
+        "orchestrator/src/scheduler.ts",
+        "config.json"
       ],
       "verify": "сканер читает input/<engine>/<lang>/, резолвит (engine,lang)→конкретную model на интейке и проставляет lang→params.language; файл в корне движка (без lang) = mixed → ОТКЛОНЯЕТСЯ (до P4); легаси input/<model_name>/ — плоско; роутинг/реестр/readiness не тронуты; ws_daemons +engine/language; bun test зелёный; RU-легаси без регресса",
-      "evidence": ""
+      "evidence": "Реализовано: engine-routing.ts (buildEngineRouting (engine,lang)→model из ws_daemons, фильтр по known models для порядка P2/P3); config.ts WsDaemonConfig +engine/+language; input-drop.ts сканер engine/<lang> + reject mixed в _unrouted/ + легаси плоско + язык в params/input.json; file-drop.ts rejectMixedFile + UNROUTED_DIR_NAME; job-manager createDroppedJob(meta.language)→requested_language + initialize создаёт input/<engine>/<lang>/; scheduler sweep/watchers строят routing (рекурсивный watcher на engine-дир). config.json whisperdaemon engine=whisper language=ru. Тесты: engine-routing.test.ts (5) + input-drop.test.ts (7: engine ru/en, mixed→_unrouted идемпотентно, неизвестный язык, легаси, интеграция params.language). tsc чист; bun test 64 pass 6/6 прогонов детерминированно. Побочно: исправлен латентный баг стабильности (stableMs=0 при mtime-скью на Windows считал файл 'пишется') — isStable(): 0 = без дебаунса."
     },
     {
       "id": "LG3.1",
