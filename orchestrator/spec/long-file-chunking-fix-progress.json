@@ -51,7 +51,7 @@
       "id": "LF1.1",
       "phase": 1,
       "title": "A: keepalive-safety в демоне (try/except вокруг sendEvent)",
-      "status": "not-started",
+      "status": "done",
       "dependsOn": [
         "LF0.1"
       ],
@@ -59,10 +59,12 @@
         "services/whisperdaemon/app/src/WhisperDaemon.pas"
       ],
       "verify": "Демон пересобран: onInferenceProgress ловит исключения sendEvent (обрыв не рушит инференс, нет ложного OOM-retry).",
-      "startedAt": null,
-      "finishedAt": null,
+      "startedAt": "2026-07-04T09:02:00Z",
+      "finishedAt": "2026-07-04T09:08:00Z",
       "blockedReason": null,
-      "evidence": []
+      "evidence": [
+        "onInferenceProgress: sendEvent(keepalive) обёрнут в try/except -> обрыв соединения (10054) не бросает в инференс, ложного OOM-retry больше нет; build успешен"
+      ]
     },
     {
       "id": "LF2.1",
@@ -110,6 +112,12 @@
       "step": "LF0.1",
       "event": "done",
       "note": "План фикса длинных файлов (нарезка + keepalive-safety) оформлен. Пауза на границе фазы 0."
+    },
+    {
+      "ts": "2026-07-04T09:08:00Z",
+      "step": "LF1.1",
+      "event": "done",
+      "note": "keepalive-safety в демоне (try/except вокруг sendEvent). Build ок."
     }
   ]
 }

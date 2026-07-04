@@ -1338,7 +1338,15 @@ begin
   try
     ka.Add('event', 'keepalive');
     ka.Add('progress', aProgress);
-    sendEvent(ka);
+    { Best-effort (LF-D2): a broken/closing client connection must NOT throw into the
+      inference — otherwise the send error (e.g. WSAECONNRESET 10054) is misread by the
+      generic inference handler as OOM and triggers a bogus low-memory retry. }
+    try
+      sendEvent(ka);
+    except
+      on E: Exception do
+        WriteLn('[whisperdaemon] keepalive send skipped: ', E.Message);
+    end;
   finally
     ka.Free;
   end;

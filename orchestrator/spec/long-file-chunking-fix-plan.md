@@ -62,7 +62,7 @@ requeue → рестарт с нуля (в логе `10054` + «inference failed
 
 ## Steps (mirror the ledger)
 - [x] **LF0.1 — Plan & ledger.**
-- [ ] **LF1.1 — A: keepalive-safety в демоне** (try/except вокруг `sendEvent`) + пересборка.
+- [x] **LF1.1 — A: keepalive-safety в демоне** (try/except вокруг `sendEvent`) + пересборка.
 - [ ] **LF2.1 — B: нарезка в драйвере** — сессия завершается по `stream_chunk_ms` (не по uncommitted);
   config-ключ; обновить/переписать тесты (в т.ч. rollover→chunking).
 - [ ] **LF3.1 — E2E** на срезе реального файла (несколько chunk'ов до `ready`, сшивка) + регресс
