@@ -3,9 +3,9 @@
   "plan": "long-file-chunking-fix",
   "planDoc": "spec/long-file-chunking-fix-plan.md",
   "title": "Фикс длинных файлов: нарезка на chunk'и + keepalive-safety",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-07-04",
-  "updatedAt": "2026-07-04T11:10:00Z",
+  "updatedAt": "2026-07-04T12:50:00Z",
   "decisions": [
     {
       "id": "LF-D1",
@@ -182,6 +182,12 @@
       "step": "LF4.1",
       "event": "done",
       "note": "Buffered-режим демона (auto_flush=false) убирает O(n^2) пере-инференс на редкой речи; один инференс на chunk. chunk 2мин. Реоткрыт план после инцидента с зависшим chunk 3."
+    },
+    {
+      "ts": "2026-07-04T12:50:00Z",
+      "step": "LF4.1",
+      "event": "validated",
+      "note": "Полный CD4 (38 мин) на реальном стеке с фиксами: старт->ready за ~29 мин, waiting=0 (нет зависаний/requeue/краха), таймстампы [00:00:01..00:37:52] на всю длину. Buffered-режим убрал O(n^2): 3 chunk/4мин vs старый chunk 3 висел 15+мин. Инициатива complete."
     }
   ]
 }
