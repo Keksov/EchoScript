@@ -1,0 +1,86 @@
+{
+  "initiative": "whisper-repetition-fix",
+  "title": "Повторяющиеся фразы: петля декодера whisper на не-речи",
+  "plan": "whisper-repetition-fix-plan.md",
+  "branch": "fix/whisper-repetition",
+  "baseBranch": "feature/language-routing",
+  "created": "2026-07-05",
+  "updated": "2026-07-05",
+  "decisions": [
+    "WR-D1 (по фактам): причина — петля декодера whisper на не-речи, НЕ re-send аудио. Признак: 27 подряд одинаковых сегментов с монотонно растущими таймингами внутри одного чанка (буфер-режим = 1 whisper_full/чанк); Thank you.×54 и *Painful music* — галлюцинации whisper на не-речи.",
+    "WR-D2 (подтвердить P1): аудит пампа/оффсетов чанков (исключить перекрытие/re-send) + аудит доступных полей TWhisperFullParams в текущей DLL (no_speech_thold, entropy_thold, logprob_thold, temperature/fallback, suppress_nst, VAD) и версии whisper.cpp.",
+    "WR-D3 (дизайн-гейт): выбор митигаций — A whisper-параметры (temperature fallback + entropy/logprob/no_speech thresholds + suppress_nst), B VAD (whisper.cpp Silero или префильтр sherpa), C оркестраторный post-dedup подряд идущих дублей. Предполагаемо A+C, B если A мало.",
+    "WR-D4: аддитивно, без регресса на чистой/тихой речи (img8726 RU, чистый EN); правки минимальны; проверка на over-suppression."
+  ],
+  "phases": [
+    { "id": "P0", "title": "Plan & ledger", "gate": "pause: обзор плана владельцем" },
+    { "id": "P1", "title": "Диагностика (аудит пампа + параметров DLL) + дизайн-гейт", "gate": "pause: причина подтверждена, набор митигаций A/B/C согласован" },
+    { "id": "P2", "title": "Демон: анти-репетишн whisper-параметры и/или VAD", "gate": "pause: пересборка зелёная, повтор на CD4-чанке устранён/уменьшен" },
+    { "id": "P3", "title": "Оркестратор: post-dedup подряд идущих дублей (по гейту)", "gate": "pause: bun test зелёный" },
+    { "id": "P4", "title": "Валидация CD4 + регресс чистой речи + docs", "gate": "pause: повторы ушли, регресс чист" }
+  ],
+  "steps": [
+    {
+      "id": "WR0.1",
+      "phase": "P0",
+      "title": "Plan & ledger",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": [
+        "services/whisperdaemon/spec/whisper-repetition-fix-plan.md",
+        "services/whisperdaemon/spec/whisper-repetition-progress.json"
+      ],
+      "verify": "план описывает предварительный вывод (whisper, не re-send), решения WR-D1..WR-D4 и фазы P0-P4; JSON парсится; DAG ацикличен",
+      "evidence": "Улика: result_timestamp.txt CD4 — 'You are the number one in your mind.' ×27 подряд, тайминги 00:37:00→00:37:54 непрерывно; 'Thank you.' ×54; всё в одном чанке (1 инференс). Демон не задаёт анти-галлюцинационные пороги (WhisperDaemon.pas:1420-1454). Ветка fix/whisper-repetition от feature/language-routing."
+    },
+    {
+      "id": "WR1.1",
+      "phase": "P1",
+      "title": "Диагностика + дизайн-гейт",
+      "status": "todo",
+      "dependsOn": ["WR0.1"],
+      "artifacts": [
+        "services/whisperdaemon/spec/whisper-repetition-diagnosis.md"
+      ],
+      "verify": "строго подтверждено: (1) timestamp/паттерн-анализ; (2) аудит daemon-stream-driver пампа/оффсетов — нет перекрытия/re-send; (3) аудит WhisperDaemon.pas + версии DLL — какие анти-репетишн параметры и VAD доступны; выбран набор митигаций A/B/C; согласовано с владельцем",
+      "evidence": ""
+    },
+    {
+      "id": "WR2.1",
+      "phase": "P2",
+      "title": "Демон: анти-репетишн параметры и/или VAD",
+      "status": "todo",
+      "dependsOn": ["WR1.1"],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas"
+      ],
+      "verify": "в WhisperDaemon.pas заданы выбранные пороги/temperature-fallback/suppress_nst (и VAD по гейту) для обоих путей (beam и safeMode greedy); демон пересобран (build_whisperdaemon.bat); прогон проблемного CD4-чанка даёт устранение/резкое уменьшение повтора",
+      "evidence": ""
+    },
+    {
+      "id": "WR3.1",
+      "phase": "P3",
+      "title": "Оркестратор: post-dedup (по гейту)",
+      "status": "todo",
+      "dependsOn": ["WR1.1"],
+      "artifacts": [
+        "orchestrator/src/ws-daemon-runner.ts",
+        "orchestrator/src/*.test.ts"
+      ],
+      "verify": "подряд идущие идентичные сегменты схлопываются в сборке результата (страховка читабельности); тесты покрывают дедуп; bun test зелёный",
+      "evidence": ""
+    },
+    {
+      "id": "WR4.1",
+      "phase": "P4",
+      "title": "Валидация + docs",
+      "status": "todo",
+      "dependsOn": ["WR2.1", "WR3.1"],
+      "artifacts": [
+        "EchoRecorder/docs/ARCHITECTURE.md"
+      ],
+      "verify": "CD4 EN: повторы (number one/Thank you./Move through) устранены или схлопнуты, связная речь сохранена; регресс — чистая/тихая речь (img8726 RU, чистый EN) без деградации; заметка в docs",
+      "evidence": ""
+    }
+  ]
+}
