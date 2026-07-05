@@ -10,6 +10,8 @@ export type ServiceAction = "start" | "stop" | "restart"
 interface ServiceScripts {
   readonly start_script: string
   readonly stop_script: string
+  readonly host?: string
+  readonly port?: number
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -45,6 +47,11 @@ const resolveEndpoint = (name: string): { host: string; port: number } | null =>
     }
   } catch {
     // fall through
+  }
+  // inventory-declared host/port (vosk daemons — not in config.ws_daemons)
+  const entry = loadInventory()[name]
+  if (entry !== undefined && typeof entry.port === "number") {
+    return { host: entry.host ?? "127.0.0.1", port: entry.port }
   }
   return null
 }

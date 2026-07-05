@@ -1,4 +1,4 @@
-export type ServiceKind = "orchestrator" | "ws-daemon"
+export type ServiceKind = "orchestrator" | "ws-daemon" | "vosk-daemon"
 
 export interface DaemonStatus {
   readonly name: string

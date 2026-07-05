@@ -2,11 +2,11 @@ import { readdir, readFile } from "node:fs/promises"
 import { connect } from "node:net"
 import { join } from "node:path"
 
-import { configJsonPath, orchestratorEndpoint, registryDir } from "./config"
+import { configJsonPath, orchestratorEndpoint, registryDir, serverDir } from "./config"
 
 const DEFAULT_REGISTRY_TTL_MS = 15000
 
-export type ServiceKind = "orchestrator" | "ws-daemon"
+export type ServiceKind = "orchestrator" | "ws-daemon" | "vosk-daemon"
 
 export interface WsDaemonConfig {
   readonly host?: string
@@ -151,10 +151,16 @@ export const isPortOpen = (host: string, port: number, timeoutMs = 800): Promise
     socket.once("error", () => finish(false))
   })
 
-/** Build the orchestrator's service status from a port probe (it is not in the registry). */
-export const orchestratorStatus = (host: string, port: number, up: boolean): DaemonStatus => ({
-  name: "orchestrator",
-  kind: "orchestrator",
+/** Build a service status from a TCP port probe (for services not in the registry). */
+export const portProbeStatus = (
+  name: string,
+  kind: ServiceKind,
+  host: string,
+  port: number,
+  up: boolean,
+): DaemonStatus => ({
+  name,
+  kind,
   up,
   detail: up ? "listening" : "down",
   modelName: null,
@@ -170,6 +176,38 @@ export const orchestratorStatus = (host: string, port: number, up: boolean): Dae
   updatedAt: null,
   ageMs: null,
 })
+
+/** Build the orchestrator's service status from a port probe (it is not in the registry). */
+export const orchestratorStatus = (host: string, port: number, up: boolean): DaemonStatus =>
+  portProbeStatus("orchestrator", "orchestrator", host, port, up)
+
+interface InventoryEntry {
+  readonly host?: string
+  readonly port?: number
+  readonly kind?: string
+}
+
+/** Port-probed statuses for inventory services that carry a port (vosk daemons — CP6.7). */
+const readInventoryPortStatuses = async (exclude: Set<string>): Promise<DaemonStatus[]> => {
+  const inventory = await readJson(join(serverDir, "services.json"))
+  if (!isRecord(inventory) || !isRecord(inventory.services)) {
+    return []
+  }
+  const statuses: DaemonStatus[] = []
+  for (const [name, raw] of Object.entries(inventory.services as Record<string, unknown>)) {
+    if (exclude.has(name) || !isRecord(raw)) {
+      continue
+    }
+    const entry = raw as InventoryEntry
+    if (typeof entry.port !== "number") {
+      continue
+    }
+    const host = entry.host ?? "127.0.0.1"
+    const kind: ServiceKind = entry.kind === "vosk-daemon" ? "vosk-daemon" : "ws-daemon"
+    statuses.push(portProbeStatus(name, kind, host, entry.port, await isPortOpen(host, entry.port)))
+  }
+  return statuses
+}
 
 const readJson = async (path: string): Promise<unknown> => {
   try {
@@ -206,8 +244,12 @@ export const readDaemonStatuses = async (now: number = Date.now()): Promise<Daem
     }
   }
 
-  // Orchestrator (data plane) first — status via TCP port probe, then the ws-daemons.
+  // Orchestrator (data plane) first — status via TCP port probe, then the registry ws-daemons
+  // (whisper), then port-probed inventory daemons that don't self-register (vosk — CP6.7).
   const orch = orchestratorEndpoint()
   const orchestrator = orchestratorStatus(orch.host, orch.port, await isPortOpen(orch.host, orch.port))
-  return [orchestrator, ...computeDaemonStatuses(wsDaemons, registry, ttlMs, now)]
+  const wsStatuses = computeDaemonStatuses(wsDaemons, registry, ttlMs, now)
+  const covered = new Set<string>(["orchestrator", ...wsStatuses.map((status) => status.name)])
+  const inventoryStatuses = await readInventoryPortStatuses(covered)
+  return [orchestrator, ...wsStatuses, ...inventoryStatuses]
 }

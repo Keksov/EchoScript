@@ -1,5 +1,5 @@
 {
-  "note": "Control-panel service lifecycle inventory (CP3.1). Maps a service name (orchestrator + ws_daemons keys from config.json) to its start/stop scripts, relative to the repo root. Host/port/engine/language live in config.json; status comes from the registry / port probe. The native Monitor keeps its own orchestrator/monitor/daemons.json (CP-D4).",
+  "note": "Control-panel service lifecycle inventory (CP3.1/CP6.7). Maps a service name to its start/stop scripts (repo-relative). For services NOT in config.ws_daemons (orchestrator, vosk) host/port/kind drive a port-probe status; ws-daemons (whisper) get host/port/status from config.json + jobs/registry. The native Monitor keeps its own orchestrator/monitor/daemons.json (CP-D4).",
   "services": {
     "orchestrator": {
       "start_script": "orchestrator/scripts/start_orchestrator.bat",
@@ -12,6 +12,20 @@
     "whisperdaemon_en": {
       "start_script": "services/whisperdaemon/scripts/start_whisperdaemon_en.bat",
       "stop_script": "services/whisperdaemon/scripts/stop_whisperdaemon_en.bat"
+    },
+    "vosk_ru": {
+      "start_script": "services/voskdaemon/scripts/start_voskdaemon_ru.bat",
+      "stop_script": "services/voskdaemon/scripts/stop_voskdaemon_ru.bat",
+      "host": "127.0.0.1",
+      "port": 7701,
+      "kind": "vosk-daemon"
+    },
+    "vosk_ru_cmd": {
+      "start_script": "services/voskdaemon/scripts/start_voskdaemon_ru_cmd.bat",
+      "stop_script": "services/voskdaemon/scripts/stop_voskdaemon_ru_cmd.bat",
+      "host": "127.0.0.1",
+      "port": 7702,
+      "kind": "vosk-daemon"
     }
   }
 }

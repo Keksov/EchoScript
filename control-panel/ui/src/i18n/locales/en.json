@@ -10,7 +10,8 @@
   },
   "kinds": {
     "orchestrator": "Orchestrator (data plane :3000)",
-    "wsDaemon": "Recognition WS daemon"
+    "wsDaemon": "Recognition WS daemon",
+    "voskDaemon": "VOSK daemon (fast partial results, for EchoRecorder)"
   },
   "common": {
     "refresh": "Refresh",

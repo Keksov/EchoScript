@@ -193,11 +193,11 @@
       "id": "CP6.7",
       "phase": "P6",
       "title": "VOSK-демоны в панель + проверка протокола EchoRecorder",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["CP3.1", "CP5.1"],
-      "artifacts": ["control-panel/server/services.json", "control-panel/server/models-provision.ts", "orchestrator/monitor/daemons.json"],
+      "artifacts": ["control-panel/server/services.json", "control-panel/server/status.ts", "control-panel/server/services-control.ts", "control-panel/ui/src/pages/OverviewPage.vue"],
       "verify": "изучен протокол EchoRecorder↔vosk (быстрый показ распознанного текста); подтверждено, что работает; vosk-демоны добавлены в панель (services-инвентарь start/stop/restart + статус) и, если применимо, их модели в Модели",
-      "evidence": ""
+      "evidence": "ПРОТОКОЛ: voskdaemon — отдельный WS-демон (:7701 vosk_ru, :7702 vosk_ru_cmd), к нему EchoRecorder подключается НАПРЯМУЮ (backend rbVoskDaemon, echo_recorder_core_voskdaemon.pas) для быстрых частичных результатов — событие local_partial (echo_recorder_core_protocol.pas). Минует оркестратор/jobs (streaming-категория). В jobs/registry НЕ пишет → статус по порт-пробе. Вход pcm_s16le 16k mono; API describe/health. Модели — каталоги в C:\\var\\vosk (ru-0.42/small-ru/en-gigaspeech/spk), libvosk.dll из services/vosk_ru/venv. ПРОВЕРЕНО РАБОТАЕТ: VoskDaemon.exe собран; модели на месте; лог warmup ready model=vosk_ru; поднял vosk_ru → :7701 listening; describe_ack {model:vosk_ru, engine:vosk, sr:16000, port:7701}. ПАНЕЛЬ: services.json += vosk_ru/vosk_ru_cmd (host/port/kind); status.ts portProbeStatus + readInventoryPortStatuses (инвентарные сервисы с портом, не в config/registry) + kind vosk-daemon; services-control.resolveEndpoint fallback на инвентарь (верификация рестарта портом); UI иконка record_voice_over + kinds.voskDaemon (ru/en). Живо: /api/daemons → vosk_ru up=listening, vosk_ru_cmd down, оба controllable. Модели vosk (C:\\var\\vosk) в Модели НЕ добавлял (внешний каталог, не наш download-манифест) — отдельно при необходимости."
     }
   ]
 }

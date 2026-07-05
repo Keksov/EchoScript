@@ -10,7 +10,8 @@
   },
   "kinds": {
     "orchestrator": "Оркестратор (data plane :3000)",
-    "wsDaemon": "WS-демон распознавания"
+    "wsDaemon": "WS-демон распознавания",
+    "voskDaemon": "VOSK-демон (быстрые частичные результаты, для EchoRecorder)"
   },
   "common": {
     "refresh": "Обновить",

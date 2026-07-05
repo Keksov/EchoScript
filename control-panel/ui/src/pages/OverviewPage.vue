@@ -52,8 +52,8 @@
           <tbody>
             <tr v-for="d in daemons" :key="d.name">
               <td class="text-left">
-                <q-icon :name="d.kind === 'orchestrator' ? 'hub' : 'dns'" size="18px" color="grey-5">
-                  <q-tooltip>{{ t(`kinds.${d.kind === 'orchestrator' ? 'orchestrator' : 'wsDaemon'}`) }}</q-tooltip>
+                <q-icon :name="kindIcon(d.kind)" size="18px" color="grey-5">
+                  <q-tooltip>{{ t(`kinds.${kindKey(d.kind)}`) }}</q-tooltip>
                 </q-icon>
               </td>
               <td class="text-left">{{ d.name }}</td>
@@ -179,6 +179,12 @@ const highlightJson = (text: string): string => {
     },
   )
 }
+
+const kindIcon = (kind: string): string =>
+  kind === "orchestrator" ? "hub" : kind === "vosk-daemon" ? "record_voice_over" : "dns"
+
+const kindKey = (kind: string): string =>
+  kind === "orchestrator" ? "orchestrator" : kind === "vosk-daemon" ? "voskDaemon" : "wsDaemon"
 
 const statusColor = (d: DaemonStatus): string => {
   if (d.up) return "green-7"
