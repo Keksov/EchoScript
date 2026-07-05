@@ -30,7 +30,7 @@ if not exist "%WHISPER_MODELS_DIR%" mkdir "%WHISPER_MODELS_DIR%"
 
 pwsh -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop';" ^
-  "$manifest = @{ en = @{ model = 'whisper_en_turbo'; url = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin' } };" ^
+  "$manifest = @{ en = @{ model = 'whisper_en_turbo'; url = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin'; minMb = 100 }; vad = @{ model = 'silero-v5.1.2'; url = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin'; minMb = 0 } };" ^
   "$modelsDir = Join-Path (Get-Location).Path $env:WHISPER_MODELS_DIR;" ^
   "$force = $env:WHISPER_MODEL_FORCE -match '^(?i:1|true|yes|on)$';" ^
   "$langs = ($env:WHISPER_MODEL_LANGS -split '\s+') | Where-Object { $_ };" ^
@@ -48,7 +48,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -Command ^
   "  if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }" ^
   "  try { Invoke-WebRequest -Uri $url -OutFile $tmp -Headers @{ 'User-Agent' = 'EchoScript-WhisperDaemon-Downloader' } } catch { Write-Host ('[ERROR] Download failed for ' + $lang + ': ' + $_.Exception.Message); if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }; $fail = 1; continue }" ^
   "  $len = (Get-Item -LiteralPath $tmp).Length;" ^
-  "  if ($len -lt 100MB) { Write-Host ('[ERROR] Downloaded file suspiciously small (' + $len + ' bytes) for ' + $lang); Remove-Item -LiteralPath $tmp -Force; $fail = 1; continue }" ^
+  "  $minMb = if ($entry.ContainsKey('minMb')) { [long]$entry.minMb } else { 100 };" ^
+  "  if (($len -lt 100KB) -or ($len -lt ($minMb * 1MB))) { Write-Host ('[ERROR] Downloaded file suspiciously small (' + $len + ' bytes, min ' + $minMb + ' MB) for ' + $lang); Remove-Item -LiteralPath $tmp -Force; $fail = 1; continue }" ^
   "  Move-Item -LiteralPath $tmp -Destination $target -Force;" ^
   "  $mb = [math]::Round($len / 1MB, 1); Write-Host ('[OK] ' + $lang + ' -> ' + $entry.model + ' ready (' + $mb + ' MB)');" ^
   "}" ^

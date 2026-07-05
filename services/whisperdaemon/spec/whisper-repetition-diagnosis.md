@@ -62,3 +62,33 @@ DLL по умолчанию — `services/whisperdaemon/releases/1.8.4/whisper.d
 - **VAD × нарезка:** VAD применяется на каждый чанк-`whisper_full`; тайминги whisper ремапит к позиции в
   чанке, наш offset-ститчинг должен сохраниться — проверить в P2/P4.
 - Пересборка Pascal-демона (PASCAL_RULES.md) — менять точечно.
+
+## P2-находка (2026-07-05): VAD-флаг инертен — нужен рефактор даймона
+Поставил `ctxParams.vad:=True; vadModelPath:=<silero>` + консервативные `vadParams`, пересобрал,
+прогнал проблемный участок CD4 36:00–38:00 → **петля осталась**, инференс те же 117с (не ускорился),
+в stderr **ноль** VAD-строк. Причина (по исходнику whisper.cpp):
+- `whisper_full_with_state` (наш вызов, [WhisperDaemon.pas:1454](../app/src/WhisperDaemon.pas#L1454))
+  **VAD НЕ делает**. VAD живёт в `whisper_full` (src/whisper.cpp:7749-7763): `if (params.vad) {
+  whisper_vad(...); samples = vad_samples; } return whisper_full_with_state(...)`.
+- Даймон создаёт контекст `whisper_init_from_file_with_params_no_state`
+  ([:908](../app/src/WhisperDaemon.pas#L908)) → `ctx->state == nil`, поэтому используется явный
+  `whisper_init_state` + всё `*_from_state`-семейство. `whisper_full` (использует `ctx->state`) в такой
+  схеме упадёт.
+- Структура `TWhisperFullParams` **совпадает** с whisper.h v1.8.4 поле-в-поле (сверено) — ABI не при чём,
+  просто мы не на том пути вызова.
+
+**Следствие:** включить VAD = не флаг, а рефактор:
+- **Путь A:** контекст `whisper_init_from_file_with_params` (со state) + вызов `whisper_full` + перейти на
+  ctx-аксессоры (`whisper_full_n_segments(ctx)`/`..._get_segment_*`/токены). VAD и ремап таймингов —
+  автоматом. Меняет lifecycle контекста + извлечение результата (~import 8 функций + правки).
+- **Путь B:** вручную: `whisper_vad_init_from_file_with_params` + `whisper_vad_segments_from_samples`,
+  сплайсить речевые сэмплы, **самим ремапить тайминги** обратно на ось чанка, затем существующий
+  `whisper_full_with_state`. Извлечение не трогаем, но remap-логика на нас (сложно/хрупко).
+
+**Пороги (A из меню) РАБОТАЮТ** через `with_state` (это decoding-параметры, не gated на `whisper_full`):
+`no_speech_thold`/`entropy_thold`/`temperature_inc` доходят до декодера. Дефолты активны, но петлю не
+сняли; тюнинг может уменьшить, но не гарантирует.
+
+**Дешёвая и надёжная для видимой проблемы — C (оркестраторный dedup)**: схлопывает 27 повторов в 1 в
+готовом тексте, TypeScript+тесты, без пересборки/риска даймона. Не лечит компьют/причину, но снимает
+жалобу пользователя.

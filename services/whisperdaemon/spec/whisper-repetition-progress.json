@@ -51,14 +51,14 @@
       "id": "WR2.1",
       "phase": "P2",
       "title": "Демон: встроенный Silero VAD (WR-D5)",
-      "status": "todo",
+      "status": "in-progress",
       "dependsOn": ["WR1.1"],
       "artifacts": [
         "services/whisperdaemon/app/src/WhisperDaemon.pas",
         "services/whisperdaemon/scripts/download_whisper_models.bat"
       ],
       "verify": "Silero-VAD-модель (ggml-silero-v5.1.2.bin) скачивается (манифест); в WhisperDaemon.pas vad:=True + vadModelPath + консервативные vadParams для обоих путей (beam и safeMode greedy); демон пересобран (build_whisperdaemon.bat); прогон проблемного CD4-чанка даёт устранение/резкое уменьшение повтора; A(тюнинг порогов) в резерве",
-      "evidence": ""
+      "evidence": "БЛОКЕР — нужен пересмотр подхода. Сделал: VAD-модель в манифест (ggml-silero-v5.1.2.bin из ggml-org/whisper-vad, 864КБ, скачана), в WhisperDaemon.pas vad:=True+vadModelPath+vadParams, демон пересобран (build ok после остановки демонов — running exe держал файл, err5). НО прогон CD4 36:00-38:00: петля ОСТАЛАСЬ, инференс те же 117с, в stderr ноль VAD-строк. Причина: whisper.cpp применяет VAD только в whisper_full (src:7749-7763), а даймон зовёт whisper_full_with_state (VAD не делает); контекст создан ..._no_state (ctx->state=nil). Структура ABI совпадает с whisper.h v1.8.4 (сверено) — дело не в ABI. Включить VAD = рефактор даймона (Путь A: whisper_full+with-state-контекст+ctx-аксессоры; Путь B: ручной VAD-API + самим ремапить тайминги). Пороги (A) работают через with_state, но петлю не сняли. Дешёвая надёжная для видимой жалобы — C (оркестраторный dedup). AWAITING owner: VAD-рефактор vs dedup-first."
     },
     {
       "id": "WR3.1",
