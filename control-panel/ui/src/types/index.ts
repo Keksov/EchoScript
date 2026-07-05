@@ -29,3 +29,31 @@ export interface HealthResponse {
   readonly service: string
   readonly port: number
 }
+
+export type ReloadClass = "hot" | "restart"
+export type FieldType = "int" | "string" | "select"
+
+export interface FieldSpec {
+  readonly key: string
+  readonly type: FieldType
+  readonly reload: ReloadClass
+  readonly min?: number
+  readonly max?: number
+  readonly optionsFrom?: "models"
+}
+
+export interface SchemaResponse {
+  readonly orchestrator: FieldSpec[]
+  readonly wsDaemon: FieldSpec[]
+}
+
+export interface SaveResult {
+  readonly path: string
+  readonly config: Record<string, unknown>
+  readonly restartRequired: boolean
+}
+
+export interface RestartResult {
+  readonly ok: boolean
+  readonly output: string
+}

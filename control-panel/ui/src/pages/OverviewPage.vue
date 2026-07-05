@@ -10,7 +10,8 @@
         align="left"
       >
         <q-tab name="daemons" icon="dns" :label="t('tabs.services')" />
-        <q-tab name="config" icon="settings" :label="t('tabs.config')" />
+        <q-tab name="settings" icon="tune" :label="t('settings.title')" />
+        <q-tab name="config" icon="data_object" :label="t('tabs.config')" />
       </q-tabs>
       <q-space />
       <q-btn
@@ -73,6 +74,11 @@
         </q-markup-table>
       </q-tab-panel>
 
+      <!-- Settings (editable) -->
+      <q-tab-panel name="settings" class="q-pa-none">
+        <SettingsForm />
+      </q-tab-panel>
+
       <!-- Config (read-only) -->
       <q-tab-panel name="config" class="q-pa-none">
         <div class="text-subtitle1">{{ t("config.title") }}</div>
@@ -103,6 +109,7 @@ import { computed, onMounted, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { fetchConfig, fetchDaemons } from "src/services/api"
 import type { DaemonStatus } from "src/types"
+import SettingsForm from "components/SettingsForm.vue"
 
 const { t } = useI18n()
 

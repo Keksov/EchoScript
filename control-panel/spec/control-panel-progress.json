@@ -64,16 +64,23 @@
       "id": "CP2.1",
       "phase": "P2",
       "title": "Настройки + оркестратор hot-reload + restart",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["CP1.1"],
       "artifacts": [
+        "control-panel/server/settings-schema.ts",
         "control-panel/server/settings.ts",
-        "control-panel/ui/src/pages/SettingsPage.vue",
+        "control-panel/server/orchestrator-control.ts",
+        "control-panel/server/server.ts",
+        "control-panel/ui/src/components/SettingsForm.vue",
+        "control-panel/ui/src/i18n/locales/ru.json",
+        "control-panel/ui/src/i18n/locales/en.json",
         "orchestrator/src/config.ts",
-        "orchestrator/src/index.ts"
+        "orchestrator/src/index.ts",
+        "orchestrator/src/scheduler.ts",
+        "orchestrator/src/daemon-registry.ts"
       ],
       "verify": "GET/PUT /api/config (single writer, atomic temp+rename, валидация по схеме); формы оркестратор + ws_daemons с i18n label/описанием; оркестратор fs.watch(config.json) перечитывает безопасные поля (интервалы/TTL/drop_stable/requeue/роутинг), помечает restart-required; кнопка restart оркестратора работает; bun test",
-      "evidence": ""
+      "evidence": "СЕРВЕР: settings-schema.ts (поля + reload-класс hot|restart), settings.ts (validate чисто + shallow/ws merge + atomic temp+rename + changedReloadClasses), эндпоинты GET/PUT /api/config, GET /api/schema, POST /api/orchestrator/restart. ОРКЕСТРАТОР hot-reload: config.ts watchConfigForReload (fs.watch+debounce, битый reload пропускается), index.ts мутирует общий config на месте (исключая restart-класс jobsRoot/maxWorkers), daemonRegistry.setTtlMs, scheduler.applyConfigReload (сброс таймера+watcher'ов). UI: SettingsForm.vue (формы из схемы, i18n label+описание на каждое поле ru/en, бейдж hot/restart, save→PUT, баннер+кнопка restart), вкладка Настройки в OverviewPage. ЖИВЫЕ ТЕСТЫ: PUT poll_interval_ms=600 → оркестратор логнул 'config hot-reloaded'; PUT max_workers=2 → restartRequired=true; битый PUT → 400 конфиг цел; POST restart → ok=true, оркестратор сменил PID, :3001 не унаследован (детач-spawn+stdio ignore, idleTimeout 60). Тесты: control-panel 13, orchestrator 64; tsc+vue-tsc+build чисты. ФИКСЫ по ходу: Bun.serve idleTimeout=60 (рестарт >10с); restart через detached+stdio:ignore+port-probe (иначе spawn наследовал слушающий сокет :3001)."
     },
     {
       "id": "CP3.1",

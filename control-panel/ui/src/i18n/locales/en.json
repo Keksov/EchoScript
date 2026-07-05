@@ -38,8 +38,40 @@
   },
   "config": {
     "title": "Configuration (read-only)",
-    "hint": "Editing arrives in the next phase; the source of truth is config.json.",
+    "hint": "The source of truth is config.json; edit it on the Settings tab.",
     "key": "Key",
     "value": "Value"
+  },
+  "settings": {
+    "title": "Settings",
+    "orchestrator": "Orchestrator",
+    "wsDaemons": "Daemons (ws_daemons)",
+    "save": "Save",
+    "reset": "Reset",
+    "saved": "Saved",
+    "hotBadge": "live",
+    "restartBadge": "restart",
+    "restartHint": "Some changed fields require an orchestrator restart to take effect.",
+    "restartBtn": "Restart orchestrator",
+    "restarting": "Restarting…",
+    "restarted": "Orchestrator restarted",
+    "restartFailed": "Failed to restart the orchestrator"
+  },
+  "fields": {
+    "max_workers": { "label": "Workers", "desc": "How many python model workers run in parallel (ws-daemons don't count)." },
+    "poll_interval_ms": { "label": "Poll interval (ms)", "desc": "How often the orchestrator re-scans the queue and drop folders." },
+    "stream_window_ms": { "label": "Stream window (ms)", "desc": "Size of the audio window sent to the daemon per binary frame." },
+    "stream_chunk_ms": { "label": "Stream chunk (ms)", "desc": "Max audio per streaming session; then a fresh session on a new connection." },
+    "daemon_registry_ttl_ms": { "label": "Registry TTL (ms)", "desc": "A daemon is ready only if its heartbeat is within this TTL." },
+    "drop_stable_ms": { "label": "Drop stability (ms)", "desc": "A dropped file is claimed only after its mtime has been stable this long (guards against mid-copy)." },
+    "max_requeue_attempts": { "label": "Max requeue", "desc": "How many times to requeue a job on transport failure before failing it." },
+    "default_model": { "label": "Default model", "desc": "Model used for jobs that don't specify one." },
+    "ffmpeg_path": { "label": "ffmpeg path", "desc": "Path to ffmpeg.exe used to convert audio to pcm16le 16k mono." },
+    "jobs_root": { "label": "Jobs root", "desc": "The file-queue directory jobs/." },
+    "host": { "label": "Host", "desc": "Host the daemon listens on." },
+    "port": { "label": "Port", "desc": "WS daemon port." },
+    "engine": { "label": "Engine", "desc": "Engine family for language routing (e.g. whisper)." },
+    "language": { "label": "Language", "desc": "Language this daemon serves (ru/en/…)." },
+    "model_name": { "label": "Model", "desc": "Model name this daemon is bound to (ggml-<model>.bin file)." }
   }
 }

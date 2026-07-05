@@ -84,6 +84,9 @@ const handleApi = async (request: Request, pathname: string): Promise<Response> 
 const server = Bun.serve({
   port,
   hostname: SERVER_HOST,
+  // Daemon/orchestrator restart shells out to stop+start scripts (cold pwsh ~several
+  // seconds), longer than the 10s default — give requests room before the idle cutoff.
+  idleTimeout: 60,
   async fetch(request) {
     const { pathname } = new URL(request.url)
     if (pathname.startsWith("/api/")) {
