@@ -1,6 +1,11 @@
+export type ServiceKind = "orchestrator" | "ws-daemon"
+
 export interface DaemonStatus {
   readonly name: string
-  readonly modelName: string
+  readonly kind: ServiceKind
+  readonly up: boolean
+  readonly detail: string
+  readonly modelName: string | null
   readonly engine: string | null
   readonly language: string | null
   readonly host: string

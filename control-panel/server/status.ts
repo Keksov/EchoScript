@@ -1,9 +1,12 @@
 import { readdir, readFile } from "node:fs/promises"
+import { connect } from "node:net"
 import { join } from "node:path"
 
-import { configJsonPath, registryDir } from "./config"
+import { configJsonPath, orchestratorEndpoint, registryDir } from "./config"
 
 const DEFAULT_REGISTRY_TTL_MS = 15000
+
+export type ServiceKind = "orchestrator" | "ws-daemon"
 
 export interface WsDaemonConfig {
   readonly host?: string
@@ -25,7 +28,12 @@ export interface RegistryEntry {
 
 export interface DaemonStatus {
   readonly name: string
-  readonly modelName: string
+  readonly kind: ServiceKind
+  /** Effectively up/ready: ws-daemon = fresh registry heartbeat; orchestrator = port open. */
+  readonly up: boolean
+  /** Short status token for the UI: ready | stale | down | orphan | listening. */
+  readonly detail: string
+  readonly modelName: string | null
   readonly engine: string | null
   readonly language: string | null
   readonly host: string
@@ -77,8 +85,12 @@ export const computeDaemonStatuses = (
     seenModels.add(modelName)
     const reg = byModel.get(modelName)
     const ageMs = ageMsOf(reg?.updated_at, now)
+    const fresh = reg !== undefined && ageMs !== null && ageMs <= ttlMs
     statuses.push({
       name,
+      kind: "ws-daemon",
+      up: fresh,
+      detail: fresh ? "ready" : reg !== undefined ? "stale" : "down",
       modelName,
       engine: cfg.engine ?? null,
       language: cfg.language ?? null,
@@ -86,7 +98,7 @@ export const computeDaemonStatuses = (
       port: reg?.port ?? cfg.port ?? 0,
       configured: true,
       registered: reg !== undefined,
-      fresh: reg !== undefined && ageMs !== null && ageMs <= ttlMs,
+      fresh,
       state: reg?.state ?? null,
       pid: reg?.pid ?? null,
       updatedAt: reg?.updated_at ?? null,
@@ -101,8 +113,12 @@ export const computeDaemonStatuses = (
       continue
     }
     const ageMs = ageMsOf(entry.updated_at, now)
+    const fresh = ageMs !== null && ageMs <= ttlMs
     statuses.push({
       name: entry.name ?? modelName,
+      kind: "ws-daemon",
+      up: fresh,
+      detail: "orphan",
       modelName,
       engine: null,
       language: null,
@@ -110,7 +126,7 @@ export const computeDaemonStatuses = (
       port: entry.port ?? 0,
       configured: false,
       registered: true,
-      fresh: ageMs !== null && ageMs <= ttlMs,
+      fresh,
       state: entry.state ?? null,
       pid: entry.pid ?? null,
       updatedAt: entry.updated_at ?? null,
@@ -120,6 +136,40 @@ export const computeDaemonStatuses = (
 
   return statuses
 }
+
+/** TCP port probe (proxy-immune, unlike fetch) — is anything listening on host:port? */
+export const isPortOpen = (host: string, port: number, timeoutMs = 800): Promise<boolean> =>
+  new Promise((resolve) => {
+    const socket = connect({ host, port })
+    const finish = (value: boolean): void => {
+      socket.destroy()
+      resolve(value)
+    }
+    socket.setTimeout(timeoutMs)
+    socket.once("connect", () => finish(true))
+    socket.once("timeout", () => finish(false))
+    socket.once("error", () => finish(false))
+  })
+
+/** Build the orchestrator's service status from a port probe (it is not in the registry). */
+export const orchestratorStatus = (host: string, port: number, up: boolean): DaemonStatus => ({
+  name: "orchestrator",
+  kind: "orchestrator",
+  up,
+  detail: up ? "listening" : "down",
+  modelName: null,
+  engine: null,
+  language: null,
+  host,
+  port,
+  configured: true,
+  registered: false,
+  fresh: up,
+  state: up ? "listening" : null,
+  pid: null,
+  updatedAt: null,
+  ageMs: null,
+})
 
 const readJson = async (path: string): Promise<unknown> => {
   try {
@@ -156,5 +206,8 @@ export const readDaemonStatuses = async (now: number = Date.now()): Promise<Daem
     }
   }
 
-  return computeDaemonStatuses(wsDaemons, registry, ttlMs, now)
+  // Orchestrator (data plane) first — status via TCP port probe, then the ws-daemons.
+  const orch = orchestratorEndpoint()
+  const orchestrator = orchestratorStatus(orch.host, orch.port, await isPortOpen(orch.host, orch.port))
+  return [orchestrator, ...computeDaemonStatuses(wsDaemons, registry, ttlMs, now)]
 }

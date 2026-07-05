@@ -33,3 +33,13 @@ export const resolveServerPort = (): number => {
 
 /** Bind localhost-only — the control plane edits config and controls processes (CP-D9). */
 export const SERVER_HOST = "127.0.0.1"
+
+/**
+ * The orchestrator (data plane) endpoint. It is not a ws-daemon and does not self-register
+ * in jobs/registry/, so its status is a TCP port probe (default :3000, ECHOSCRIPT_PORT env).
+ */
+export const orchestratorEndpoint = (): { host: string; port: number } => {
+  const raw = Bun.env.ECHOSCRIPT_PORT
+  const port = raw !== undefined && Number.isInteger(Number(raw.trim())) ? Number(raw.trim()) : 3000
+  return { host: "127.0.0.1", port }
+}

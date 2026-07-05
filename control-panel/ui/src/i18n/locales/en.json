@@ -5,7 +5,12 @@
   "tabs": {
     "overview": "Overview",
     "daemons": "Daemons",
+    "services": "Services",
     "config": "Config"
+  },
+  "kinds": {
+    "orchestrator": "Orchestrator (data plane :3000)",
+    "wsDaemon": "Recognition WS daemon"
   },
   "common": {
     "refresh": "Refresh",
@@ -15,8 +20,8 @@
     "no": "no"
   },
   "daemons": {
-    "title": "Recognition daemons",
-    "name": "Daemon",
+    "title": "Services (orchestrator + daemons)",
+    "name": "Service",
     "model": "Model",
     "engine": "Engine",
     "language": "Language",
@@ -25,10 +30,11 @@
     "pid": "PID",
     "age": "Updated",
     "ready": "ready",
+    "listening": "listening",
     "stale": "stale",
     "down": "down",
     "orphan": "not in config",
-    "empty": "No daemons found"
+    "empty": "No services found"
   },
   "config": {
     "title": "Configuration (read-only)",

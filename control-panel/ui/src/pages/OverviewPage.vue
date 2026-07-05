@@ -9,7 +9,7 @@
         indicator-color="cyan-3"
         align="left"
       >
-        <q-tab name="daemons" icon="dns" :label="t('tabs.daemons')" />
+        <q-tab name="daemons" icon="dns" :label="t('tabs.services')" />
         <q-tab name="config" icon="settings" :label="t('tabs.config')" />
       </q-tabs>
       <q-space />
@@ -35,6 +35,7 @@
         <q-markup-table flat bordered dense class="bg-dark">
           <thead>
             <tr>
+              <th class="text-left" style="width: 32px"></th>
               <th class="text-left">{{ t("daemons.name") }}</th>
               <th class="text-left">{{ t("daemons.model") }}</th>
               <th class="text-left">{{ t("daemons.engine") }}</th>
@@ -47,21 +48,26 @@
           </thead>
           <tbody>
             <tr v-for="d in daemons" :key="d.name">
+              <td class="text-left">
+                <q-icon :name="d.kind === 'orchestrator' ? 'hub' : 'dns'" size="18px" color="grey-5">
+                  <q-tooltip>{{ t(`kinds.${d.kind === 'orchestrator' ? 'orchestrator' : 'wsDaemon'}`) }}</q-tooltip>
+                </q-icon>
+              </td>
               <td class="text-left">{{ d.name }}</td>
-              <td class="text-left">{{ d.modelName }}</td>
+              <td class="text-left">{{ d.modelName ?? "—" }}</td>
               <td class="text-left">{{ d.engine ?? "—" }}</td>
               <td class="text-left">{{ d.language ?? "—" }}</td>
               <td class="text-left">{{ d.host }}:{{ d.port }}</td>
               <td class="text-left">
                 <q-chip :color="statusColor(d)" text-color="white" dense size="sm">
-                  {{ statusLabel(d) }}
+                  {{ t(`daemons.${d.detail}`) }}
                 </q-chip>
               </td>
               <td class="text-right">{{ d.pid ?? "—" }}</td>
               <td class="text-right">{{ ageText(d.ageMs) }}</td>
             </tr>
             <tr v-if="daemons.length === 0">
-              <td colspan="8" class="text-center text-grey-5">{{ t("daemons.empty") }}</td>
+              <td colspan="9" class="text-center text-grey-5">{{ t("daemons.empty") }}</td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -113,17 +119,10 @@ const configRows = computed(() =>
   })),
 )
 
-const statusLabel = (d: DaemonStatus): string => {
-  if (!d.configured) return t("daemons.orphan")
-  if (d.fresh) return t("daemons.ready")
-  if (d.registered) return t("daemons.stale")
-  return t("daemons.down")
-}
-
 const statusColor = (d: DaemonStatus): string => {
-  if (!d.configured) return "orange-8"
-  if (d.fresh) return "green-7"
-  if (d.registered) return "amber-8"
+  if (d.up) return "green-7"
+  if (d.detail === "orphan") return "orange-8"
+  if (d.detail === "stale") return "amber-8"
   return "grey-7"
 }
 

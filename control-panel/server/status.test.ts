@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test"
 
-import { computeDaemonStatuses, type RegistryEntry, type WsDaemonConfig } from "./status"
+import { computeDaemonStatuses, orchestratorStatus, type RegistryEntry, type WsDaemonConfig } from "./status"
 
 const NOW = 1_000_000
 const TTL = 15_000
@@ -31,6 +31,22 @@ test("fresh registry entry within TTL is ready", () => {
   expect(ru!.fresh).toBe(true)
   expect(ru!.state).toBe("ready")
   expect(ru!.pid).toBe(100)
+  expect(ru!.kind).toBe("ws-daemon")
+  expect(ru!.up).toBe(true)
+  expect(ru!.detail).toBe("ready")
+})
+
+test("orchestrator status is a port probe (not registry) and is listed as its own kind", () => {
+  const up = orchestratorStatus("127.0.0.1", 3000, true)
+  expect(up.kind).toBe("orchestrator")
+  expect(up.up).toBe(true)
+  expect(up.detail).toBe("listening")
+  expect(up.modelName).toBeNull()
+  expect(up.registered).toBe(false)
+
+  const down = orchestratorStatus("127.0.0.1", 3000, false)
+  expect(down.up).toBe(false)
+  expect(down.detail).toBe("down")
 })
 
 test("registry entry older than TTL is stale (registered but not fresh)", () => {
@@ -42,6 +58,8 @@ test("registry entry older than TTL is stale (registered but not fresh)", () => 
   )
   expect(ru!.registered).toBe(true)
   expect(ru!.fresh).toBe(false)
+  expect(ru!.up).toBe(false)
+  expect(ru!.detail).toBe("stale")
 })
 
 test("configured daemon with no registry entry is down", () => {
@@ -50,6 +68,7 @@ test("configured daemon with no registry entry is down", () => {
   expect(en!.registered).toBe(false)
   expect(en!.fresh).toBe(false)
   expect(en!.pid).toBeNull()
+  expect(en!.detail).toBe("down")
 })
 
 test("registry entry with no matching config is surfaced as an orphan", () => {
@@ -63,6 +82,7 @@ test("registry entry with no matching config is surfaced as an orphan", () => {
   expect(statuses[0]!.configured).toBe(false)
   expect(statuses[0]!.registered).toBe(true)
   expect(statuses[0]!.name).toBe("ghostdaemon")
+  expect(statuses[0]!.detail).toBe("orphan")
 })
 
 test("merges config endpoint when registry lacks it, prefers registry when present", () => {
