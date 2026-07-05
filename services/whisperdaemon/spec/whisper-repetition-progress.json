@@ -65,7 +65,8 @@
       "id": "WR3.1",
       "phase": "P3",
       "title": "Оркестратор: post-dedup (по гейту)",
-      "status": "todo",
+      "status": "deferred",
+      "note": "Отложено владельцем ('сразу P4'): VAD (WR2.1) вылечил причину — дедуп нужен лишь как опциональная страховка от остаточных петель. Можно вернуться при необходимости после P4.",
       "dependsOn": ["WR1.1"],
       "artifacts": [
         "orchestrator/src/ws-daemon-runner.ts",
@@ -78,13 +79,13 @@
       "id": "WR4.1",
       "phase": "P4",
       "title": "Валидация + docs",
-      "status": "todo",
-      "dependsOn": ["WR2.1", "WR3.1"],
+      "status": "done",
+      "dependsOn": ["WR2.1"],
       "artifacts": [
-        "EchoRecorder/docs/ARCHITECTURE.md"
+        "services/whisperdaemon/spec/whisper-repetition-diagnosis.md"
       ],
       "verify": "CD4 EN: повторы (number one/Thank you./Move through) устранены или схлопнуты, связная речь сохранена; регресс — чистая/тихая речь (img8726 RU, чистый EN) без деградации; заметка в docs",
-      "evidence": ""
+      "evidence": "ВАЛИДАЦИЯ ПРОЙДЕНА. Весь CD4 E2E через input/whisper/en/ (VAD): 169→39 сегментов, ВСЕ уникальны (×1); Thank you. ×54→0, number one ×27→0; время ~27мин→~4мин (VAD режет ~81% аудио); текст связный (In this exercise you may have the experience of graduating from the earth life...). Регресс RU: подлодка :7801 на img8726 распознала чисто и полностью — with-state рефактор RU не сломал, VAD не над-подавляет нормальную речь. Docs: резолюция+операционная заметка в diagnosis.md (VAD требует ggml-silero-v5.1.2.bin; WHISPER_VAD=0 отключает gracefully; активен для EN и RU). ARCHITECTURE.md (вложенный репо) — обновить при мердже. Временный проб _en_probe.ts удалён."
     }
   ]
 }

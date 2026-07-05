@@ -92,3 +92,25 @@ DLL по умолчанию — `services/whisperdaemon/releases/1.8.4/whisper.d
 **Дешёвая и надёжная для видимой проблемы — C (оркестраторный dedup)**: схлопывает 27 повторов в 1 в
 готовом тексте, TypeScript+тесты, без пересборки/риска даймона. Не лечит компьют/причину, но снимает
 жалобу пользователя.
+
+## Резолюция (WR-D6 → P2/P4): VAD-рефактор (Путь A) — сделано и подтверждено
+Владелец выбрал VAD-рефактор. Реализовано (WR2.1): переход с `whisper_full_with_state` на `whisper_full`
++ контекст `whisper_init_from_file_with_params` (со state) + ctx-аксессоры; `vad:=True`, Silero-модель
+`ggml-silero-v5.1.2.bin` (в манифесте `download_whisper_models.bat vad`), консервативные `vadParams`
+(threshold 0.4, speechPad 200мс). Whisper.cpp сам применяет VAD и ремапит тайминги.
+
+**P4-валидация:**
+- **Проблемный участок CD4 36:00–38:00:** `number one` ×27 → **×1**, инференс 117с → **19с**, stderr:
+  `Reduced audio … 83.0% reduction`, `time mapping 23 points`.
+- **Весь CD4 (E2E через `input/whisper/en/`):** 169 → **39 сегментов, все уникальны (×1)**, `Thank you.`
+  ×54 → **0**, `number one` ×27 → **0**; время ~27 мин → **~4 мин** (VAD режет ~81% аудио); текст связный
+  («In this exercise you may have the experience of graduating from the earth life…»).
+- **Регресс RU (подлодка :7801 на чистой речи img8726):** распознано полностью и связно — рефактор
+  with-state не сломал RU, VAD не над-подавляет нормальную/тихую речь.
+
+**Операционно:** демон теперь требует Silero VAD-модель в `services/whisperdaemon/models/` —
+`download_whisper_models.bat vad`. Если модели нет или `WHISPER_VAD=0` — VAD выключается gracefully
+(демон работает как раньше). VAD активен и для EN, и для RU (общий бинарь).
+
+**C (оркестраторный dedup) — отложен** (WR3.1 deferred): VAD снял причину, дедуп остаётся опциональной
+страховкой на будущее.
