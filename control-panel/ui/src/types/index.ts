@@ -25,6 +25,7 @@ export type ServiceAction = "start" | "stop" | "restart"
 export interface ConfigResponse {
   readonly path: string
   readonly config: Record<string, unknown>
+  readonly resolved?: Record<string, string>
 }
 
 export interface HealthResponse {
@@ -46,11 +47,17 @@ export interface FieldSpec {
   readonly max?: number
   readonly optionsFrom?: "models"
   readonly default?: string | number | boolean
+  readonly picker?: "directory" | "file"
 }
 
 export interface SchemaResponse {
   readonly orchestrator: FieldSpec[]
   readonly wsDaemon: FieldSpec[]
+}
+
+export interface PickPathResult {
+  readonly path: string | null
+  readonly cancelled: boolean
 }
 
 export interface SaveResult {
@@ -67,11 +74,12 @@ export interface RestartResult {
 export interface ModelStatus {
   readonly id: string
   readonly model: string
-  readonly file: string
-  readonly kind: "language" | "vad"
+  readonly kind: "language" | "vad" | "diarization"
+  readonly downloadable: boolean
   readonly downloaded: boolean
   readonly sizeMb: number | null
   readonly downloading: boolean
+  readonly note: string | null
 }
 
 export interface DownloadResult {

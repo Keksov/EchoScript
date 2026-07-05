@@ -4,6 +4,7 @@ import type {
   DownloadResult,
   HealthResponse,
   ModelStatus,
+  PickPathResult,
   RestartResult,
   SaveResult,
   SchemaResponse,
@@ -62,4 +63,13 @@ export const fetchModels = async (): Promise<ModelStatus[]> => {
 export const downloadModel = async (id: string): Promise<DownloadResult> => {
   const response = await fetch(`/api/models/${encodeURIComponent(id)}/download`, { method: "POST" })
   return (await response.json()) as DownloadResult
+}
+
+export const pickPath = async (kind: "directory" | "file", start: string): Promise<PickPathResult> => {
+  const response = await fetch("/api/pick-path", {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ kind, start }),
+  })
+  return (await response.json()) as PickPathResult
 }

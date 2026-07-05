@@ -32,8 +32,11 @@
               />
             </q-item-label>
             <q-item-label caption class="text-grey-5">{{ t(`fields.${spec.key}.desc`) }}</q-item-label>
+            <q-item-label v-if="spec.picker && resolvedPaths[spec.key]" caption class="text-blue-4">
+              →&nbsp;{{ resolvedPaths[spec.key] }}
+            </q-item-label>
           </q-item-section>
-          <q-item-section side style="min-width: 260px">
+          <q-item-section side :style="spec.picker ? 'min-width: 400px' : 'min-width: 260px'">
             <q-select
               v-if="spec.type === 'select'"
               v-model="orch[spec.key]"
@@ -48,7 +51,20 @@
               :type="spec.type === 'int' ? 'number' : 'text'"
               dense
               outlined
-            />
+            >
+              <template v-if="spec.picker" #append>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="folder_open"
+                  :loading="picking === spec.key"
+                  @click="browse(spec)"
+                >
+                  <q-tooltip>{{ t("settings.browse") }}</q-tooltip>
+                </q-btn>
+              </template>
+            </q-input>
           </q-item-section>
         </q-item>
       </q-list>
@@ -104,7 +120,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue"
 import { useI18n } from "vue-i18n"
-import { fetchConfig, fetchSchema, restartOrchestrator, saveConfig } from "src/services/api"
+import { fetchConfig, fetchSchema, pickPath, restartOrchestrator, saveConfig } from "src/services/api"
 import type { FieldSpec, SchemaResponse } from "src/types"
 
 const { t } = useI18n()
@@ -113,6 +129,8 @@ const schema = ref<SchemaResponse | null>(null)
 const orch = reactive<Record<string, string>>({})
 const ws = reactive<Record<string, Record<string, string>>>({})
 const modelOptions = ref<string[]>([])
+const resolvedPaths = ref<Record<string, string>>({})
+const picking = ref<string | null>(null)
 const error = ref<string | null>(null)
 const saving = ref(false)
 const savedFlash = ref(false)
@@ -149,6 +167,7 @@ const reload = async (): Promise<void> => {
   try {
     const [sc, cfg] = await Promise.all([fetchSchema(), fetchConfig()])
     schema.value = sc
+    resolvedPaths.value = cfg.resolved ?? {}
     const config = cfg.config
     for (const spec of sc.orchestrator) {
       orch[spec.key] = loadValue(spec, config[spec.key])
@@ -196,6 +215,24 @@ const save = async (): Promise<void> => {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
     saving.value = false
+  }
+}
+
+const browse = async (spec: FieldSpec): Promise<void> => {
+  if (spec.picker === undefined) return
+  picking.value = spec.key
+  error.value = null
+  try {
+    const start = resolvedPaths.value[spec.key] ?? orch[spec.key] ?? ""
+    const result = await pickPath(spec.picker, start)
+    if (!result.cancelled && result.path !== null) {
+      orch[spec.key] = result.path
+      resolvedPaths.value = { ...resolvedPaths.value, [spec.key]: result.path }
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    picking.value = null
   }
 }
 

@@ -2,8 +2,9 @@ import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
-import { configJsonPath, publicDir, resolveServerPort, SERVER_HOST } from "./config"
+import { configJsonPath, publicDir, repoRoot, resolveServerPort, SERVER_HOST } from "./config"
 import { readDaemonStatuses } from "./status"
+import { pickPath, type PickerKind } from "./directory-picker"
 import { applyConfig } from "./settings"
 import { ORCHESTRATOR_FIELDS, WS_DAEMON_FIELDS } from "./settings-schema"
 import { controlService, serviceNames, type ServiceAction } from "./services-control"
@@ -51,7 +52,15 @@ const handleApi = async (request: Request, pathname: string): Promise<Response> 
     if (config === null) {
       return json({ error: "config.json not found or invalid", path: configJsonPath }, 500)
     }
-    return json({ path: configJsonPath, config })
+    // Resolve path fields to absolute so the UI can show the full path (config may be relative).
+    const resolved: Record<string, string> = {}
+    for (const key of ["jobs_root", "ffmpeg_path"]) {
+      const value = (config as Record<string, unknown>)[key]
+      if (typeof value === "string" && value.length > 0) {
+        resolved[key] = resolve(repoRoot, value)
+      }
+    }
+    return json({ path: configJsonPath, config, resolved })
   }
   if (pathname === "/api/config" && request.method === "PUT") {
     let body: unknown
@@ -86,6 +95,12 @@ const handleApi = async (request: Request, pathname: string): Promise<Response> 
   if (serviceMatch !== null && request.method === "POST") {
     const result = await controlService(decodeURIComponent(serviceMatch[1]!), serviceMatch[2] as ServiceAction)
     return json(result, result.ok ? 200 : 500)
+  }
+  if (pathname === "/api/pick-path" && request.method === "POST") {
+    const body = (await request.json().catch(() => ({}))) as { kind?: string; start?: string }
+    const kind: PickerKind = body.kind === "file" ? "file" : "directory"
+    const result = await pickPath(kind, typeof body.start === "string" ? body.start : "")
+    return json(result)
   }
   if (pathname === "/api/models" && request.method === "GET") {
     return json({ models: listModels() })

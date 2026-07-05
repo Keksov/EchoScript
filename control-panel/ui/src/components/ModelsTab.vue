@@ -11,7 +11,6 @@
       <thead>
         <tr>
           <th class="text-left">{{ t("models.model") }}</th>
-          <th class="text-left">{{ t("models.file") }}</th>
           <th class="text-left">{{ t("models.status") }}</th>
           <th class="text-right">{{ t("models.actions") }}</th>
         </tr>
@@ -21,8 +20,10 @@
           <td class="text-left">
             {{ m.model }}
             <q-badge color="blue-grey-7" class="q-ml-sm" :label="m.kind" />
+            <div v-if="m.note" class="text-caption text-grey-6">
+              {{ t("models.staged") }}: {{ m.note }}
+            </div>
           </td>
-          <td class="text-left text-grey-5">{{ m.file }}</td>
           <td class="text-left">
             <q-chip v-if="m.downloading" color="blue-8" text-color="white" dense size="sm" icon="downloading">
               {{ t("models.downloading") }}
@@ -34,6 +35,7 @@
           </td>
           <td class="text-right">
             <q-btn
+              v-if="m.downloadable"
               dense
               flat
               icon="download"
@@ -42,6 +44,7 @@
               :loading="m.downloading"
               @click="doDownload(m.id)"
             />
+            <span v-else class="text-caption text-grey-6">{{ t("models.notDownloadable") }}</span>
           </td>
         </tr>
       </tbody>

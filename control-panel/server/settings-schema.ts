@@ -22,6 +22,8 @@ export interface FieldSpec {
   readonly optionsFrom?: "models"
   /** Default shown/written when the config has no value (daemon launch fields). */
   readonly default?: string | number | boolean
+  /** Show a native OS path picker button next to the field (control-server local pick). */
+  readonly picker?: "directory" | "file"
 }
 
 /** Top-level orchestrator scalar settings (config.json root keys). */
@@ -34,8 +36,8 @@ export const ORCHESTRATOR_FIELDS: readonly FieldSpec[] = [
   { key: "drop_stable_ms", type: "int", reload: "hot", min: 0, max: 600000 },
   { key: "max_requeue_attempts", type: "int", reload: "hot", min: 0, max: 100 },
   { key: "default_model", type: "select", reload: "hot", optionsFrom: "models" },
-  { key: "ffmpeg_path", type: "string", reload: "hot" },
-  { key: "jobs_root", type: "string", reload: "restart" },
+  { key: "ffmpeg_path", type: "string", reload: "hot", picker: "file" },
+  { key: "jobs_root", type: "string", reload: "restart", picker: "directory" },
 ]
 
 /**
