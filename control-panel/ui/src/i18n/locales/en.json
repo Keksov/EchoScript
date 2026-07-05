@@ -72,7 +72,7 @@
     "entropy_thold": { "label": "Entropy threshold", "desc": "Repetition detection via text compressibility; triggers temperature fallback. whisper.cpp default is 2.4." },
     "gpu": { "label": "GPU", "desc": "Use the GPU for inference (if the build/drivers support it)." },
     "gpu_device": { "label": "GPU device", "desc": "GPU device index (0 = first)." },
-    "max_workers": { "label": "Workers", "desc": "How many python model workers run in parallel (ws-daemons don't count)." },
+    "max_workers": { "label": "Workers", "desc": "Max local python workers running at once (batch models in config.models: vosk, gemma, vibevoice…). Whisper goes through the ws-daemon and does NOT count here." },
     "poll_interval_ms": { "label": "Poll interval (ms)", "desc": "How often the orchestrator re-scans the queue and drop folders." },
     "stream_window_ms": { "label": "Stream window (ms)", "desc": "Size of the audio window sent to the daemon per binary frame." },
     "stream_chunk_ms": { "label": "Stream chunk (ms)", "desc": "Max audio per streaming session; then a fresh session on a new connection." },
