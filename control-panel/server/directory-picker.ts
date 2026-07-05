@@ -34,16 +34,29 @@ if ($start) {
 if ($d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.FileName) }
 `
 
+// Safety net: if the dialog can't be shown (e.g. the server runs in a non-interactive
+// window station), ShowDialog blocks forever — kill it so the UI button doesn't hang.
+const PICKER_TIMEOUT_MS = 180000
+
 export const pickPath = async (
   kind: PickerKind,
   start: string,
-): Promise<{ path: string | null; cancelled: boolean }> => {
+): Promise<{ path: string | null; cancelled: boolean; timedOut?: boolean }> => {
   const script = kind === "directory" ? folderScript(start) : fileScript(start)
   const proc = Bun.spawn(["powershell.exe", "-STA", "-NoProfile", "-Command", script], {
     stdout: "pipe",
     stderr: "ignore",
   })
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    proc.kill()
+  }, PICKER_TIMEOUT_MS)
   const output = (await new Response(proc.stdout).text()).trim()
   await proc.exited
-  return output.length > 0 ? { path: output, cancelled: false } : { path: null, cancelled: true }
+  clearTimeout(timer)
+  if (output.length > 0) {
+    return { path: output, cancelled: false }
+  }
+  return { path: null, cancelled: true, timedOut }
 }
