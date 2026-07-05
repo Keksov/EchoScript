@@ -7,10 +7,11 @@
   "created": "2026-07-05",
   "updated": "2026-07-05",
   "decisions": [
-    "WR-D1 (по фактам): причина — петля декодера whisper на не-речи, НЕ re-send аудио. Признак: 27 подряд одинаковых сегментов с монотонно растущими таймингами внутри одного чанка (буфер-режим = 1 whisper_full/чанк); Thank you.×54 и *Painful music* — галлюцинации whisper на не-речи.",
-    "WR-D2 (подтвердить P1): аудит пампа/оффсетов чанков (исключить перекрытие/re-send) + аудит доступных полей TWhisperFullParams в текущей DLL (no_speech_thold, entropy_thold, logprob_thold, temperature/fallback, suppress_nst, VAD) и версии whisper.cpp.",
-    "WR-D3 (дизайн-гейт): выбор митигаций — A whisper-параметры (temperature fallback + entropy/logprob/no_speech thresholds + suppress_nst), B VAD (whisper.cpp Silero или префильтр sherpa), C оркестраторный post-dedup подряд идущих дублей. Предполагаемо A+C, B если A мало.",
-    "WR-D4: аддитивно, без регресса на чистой/тихой речи (img8726 RU, чистый EN); правки минимальны; проверка на over-suppression."
+    "WR-D1 (по фактам): причина — авторегрессионная петля декодера whisper на не-речи (модель опирается на свой вывод, а не звук), НЕ re-send аудио. Признак: 27 подряд одинаковых сегментов с монотонно растущими таймингами внутри одного чанка (буфер-режим = 1 whisper_full/чанк); Thank you.×54 и *Painful music* — галлюцинации whisper на не-речи.",
+    "WR-D1a (нюанс): экспертный фикс №1 condition_on_previous_text=False у нас УЖЕ есть (noContext=True, WhisperDaemon.pas:1433). Повторы всё равно есть и тянутся ~54с (≈2 окна) → либо noContext не доезжает до DLL (ABI-рассинхрон структуры), либо триггер — не-речь внутри окна (тогда главный рычаг VAD). P1 различит.",
+    "WR-D2 (подтвердить P1): (1) аудит пампа/оффсетов чанков — исключить re-send; (2) аудит ABI TWhisperFullParams vs версии whisper.h/DLL — проверить, что noContext и пороги реально действуют; (3) доступность полей entropy_thold(=compression_ratio_threshold), logprob_thold, no_speech_thold, temperature+temperature_inc(fallback), suppress_nst/suppress_blank, VAD; версия whisper.cpp.",
+    "WR-D3 (дизайн-гейт): выбор митигаций (эксперт: VAD + off-context решают в большинстве; off-context уже есть) — B VAD ПРИОРИТЕТ (whisper.cpp Silero ggml или префильтр через имеющиеся sherpa-VAD-ассеты), A whisper-параметры (temperature-fallback + entropy/no_speech/logprob thresholds + suppress_nst), C оркестраторный post-dedup. Предполагаемо B+A+C. Точный набор — после аудита P1 (доступность VAD/полей в DLL).",
+    "WR-D4: аддитивно, без регресса на чистой/тихой речи (img8726 RU, чистый EN); правки минимальны; проверка на over-suppression (медитация тихая — агрессивный no_speech/VAD может резать настоящую тихую речь)."
   ],
   "phases": [
     { "id": "P0", "title": "Plan & ledger", "gate": "pause: обзор плана владельцем" },
@@ -42,7 +43,7 @@
       "artifacts": [
         "services/whisperdaemon/spec/whisper-repetition-diagnosis.md"
       ],
-      "verify": "строго подтверждено: (1) timestamp/паттерн-анализ; (2) аудит daemon-stream-driver пампа/оффсетов — нет перекрытия/re-send; (3) аудит WhisperDaemon.pas + версии DLL — какие анти-репетишн параметры и VAD доступны; выбран набор митигаций A/B/C; согласовано с владельцем",
+      "verify": "строго подтверждено: (1) timestamp/паттерн-анализ; (2) аудит daemon-stream-driver пампа/оффсетов — нет перекрытия/re-send; (3) аудит ABI TWhisperFullParams vs whisper.h/DLL — noContext и пороги реально действуют; (4) какие анти-репетишн параметры и VAD доступны в DLL; выбран набор митигаций B/A/C; согласовано с владельцем",
       "evidence": ""
     },
     {
