@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "baseUrl": ".",
+    "jsx": "preserve",
+    "lib": ["ES2022", "DOM"],
+    "resolveJsonModule": true,
+    "paths": {
+      "src/*": ["./src/*"],
+      "layouts/*": ["./src/layouts/*"],
+      "pages/*": ["./src/pages/*"],
+      "components/*": ["./src/components/*"],
+      "services/*": ["./src/services/*"],
+      "composables/*": ["./src/composables/*"]
+    },
+    "types": ["@quasar/app-vite", "bun"],
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "tests/**/*.ts",
+    "env.d.ts"
+  ],
+  "exclude": ["node_modules", ".quasar", "dist"]
+}

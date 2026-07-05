@@ -1,0 +1,39 @@
+{
+  "app": {
+    "title": "EchoScript — Control Panel"
+  },
+  "tabs": {
+    "overview": "Overview",
+    "daemons": "Daemons",
+    "config": "Config"
+  },
+  "common": {
+    "refresh": "Refresh",
+    "loading": "Loading…",
+    "error": "Error",
+    "yes": "yes",
+    "no": "no"
+  },
+  "daemons": {
+    "title": "Recognition daemons",
+    "name": "Daemon",
+    "model": "Model",
+    "engine": "Engine",
+    "language": "Language",
+    "endpoint": "Endpoint",
+    "state": "State",
+    "pid": "PID",
+    "age": "Updated",
+    "ready": "ready",
+    "stale": "stale",
+    "down": "down",
+    "orphan": "not in config",
+    "empty": "No daemons found"
+  },
+  "config": {
+    "title": "Configuration (read-only)",
+    "hint": "Editing arrives in the next phase; the source of truth is config.json.",
+    "key": "Key",
+    "value": "Value"
+  }
+}

@@ -11,7 +11,8 @@
     "CP-D1: отдельное Bun-приложение control plane :3001 рядом с оркестратором data plane :3000.",
     "CP-D2: config.json = единый источник истины; control-server — ЕДИНСТВЕННЫЙ писатель (atomic+валидация); прочие только читают.",
     "CP-D3: оркестратор hot-reload (fs.watch config) безопасных полей + пометка restart-required + кнопка restart из UI.",
-    "CP-D4: UI поглощает Monitor — start/stop/restart демонов (портируем monitor_control) + статус (monitor_status: реестр+port/ws-health); нативный Monitor ретайрится.",
+    "CP-D4: UI получает управление демонами — start/stop/restart (портируем monitor_control) + статус (monitor_status: реестр+port/ws-health). ВЛАДЕЛЕЦ 2026-07-05: нативный Monitor НЕ трогаем — работает параллельно (не ретайрим в v1).",
+    "CP-D9 (владелец 2026-07-05): auth в v1 не нужен — control-server bind localhost-only, без логина.",
     "CP-D5: выносим ВСЕ настройки (оркестратор+демоны, вкл. VAD-пороги/GPU/DLL/decode); тонкие демон-настройки через CLI-флаги демона, генерируемые лаунчером из config (+ Pascal-правки).",
     "CP-D6: i18n ru/en — у каждой настройки label+description в обоих локалях.",
     "CP-D7: стек Quasar по конвенциям SoundTrainer; ui/→server/public; один порт prod, proxy dev.",
@@ -43,7 +44,7 @@
       "id": "CP1.1",
       "phase": "P1",
       "title": "Скелет control-panel (ui + server :3001, read-only)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["CP0.1"],
       "artifacts": [
         "control-panel/ui/quasar.config.ts",
@@ -57,7 +58,7 @@
         "control-panel/server/config.ts"
       ],
       "verify": "quasar dev (proxy /api,/ws→:3001) и quasar build (→server/public) работают; Bun-сервер :3001 отдаёт UI + GET /api/health,/api/config (read),/api/daemons (статус); UI показывает read-only config и статус демонов; i18n-каркас ru/en; vue-tsc зелёный",
-      "evidence": ""
+      "evidence": "Скелет по конвенциям SoundTrainer. server/ (Bun :3001, localhost-only): config.ts (порт/пути), server.ts (Bun.serve serveStatic SPA-fallback + /api/health,/api/config GET,/api/daemons GET), status.ts (merge config.ws_daemons + jobs/registry по TTL: fresh/stale/down/orphan) + status.test.ts (5 pass). ui/ (Quasar2 Vite + Vue3 + vue-i18n): quasar.config (distDir→server/public, hash, boot i18n, devServer.proxy /api,/ws→:3001), MainLayout (title + RU/EN тумблер), OverviewPage (табы Демоны/Конфиг, read-only), services/api.ts относительный fetch, i18n locales ru/en. ПРОВЕРЕНО: bun install (server+ui) ок; vue-tsc + tsc чисты; quasar build → server/public успешно; сервер отдаёт / (index.html), /assets/*.js 200, SPA-fallback /nope 200; /api/health ok; /api/daemons — оба демона fresh=True; /api/config — весь конфиг. (curl через HTTP_PROXY даёт 502 — обходится --noproxy; браузер/quasar-proxy бьют напрямую.)"
     },
     {
       "id": "CP2.1",
