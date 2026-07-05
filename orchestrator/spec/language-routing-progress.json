@@ -88,7 +88,8 @@
       "id": "LG4.1",
       "phase": "P4",
       "title": "Мульти-язык по итогам спайка",
-      "status": "todo",
+      "status": "deferred",
+      "note": "Отложено владельцем 2026-07-05 ('P4 не будем делать'): mixed остаётся безопасно отклонённым в _unrouted/ (LG-D1). Реальный per-fragment (VAD+language-ID) — будущая работа при необходимости.",
       "dependsOn": ["LG1.1", "LG2.1"],
       "artifacts": [],
       "verify": "снимает отклонение mixed из P2: файл без lang обрабатывается per-fragment (per-chunk auto vs VAD+language-ID+роутинг фрагментов), проверено на реальном mixed-сэмпле; тесты покрывают выбранный путь",
@@ -98,13 +99,13 @@
       "id": "LG5.1",
       "phase": "P5",
       "title": "E2E en/ru/multi + docs",
-      "status": "todo",
-      "dependsOn": ["LG2.1", "LG3.1", "LG4.1"],
+      "status": "done",
+      "dependsOn": ["LG2.1", "LG3.1"],
       "artifacts": [
         "EchoRecorder/docs/ARCHITECTURE.md"
       ],
       "verify": "E2E: input/whisper/en/ → EN-демон (англ. текст); input/whisper/ru/ → RU-демон; файл в корне input/whisper/ (без lang) → отклонён (до P4) либо per-fragment (если P4 включён); регресс RU-легаси; ARCHITECTURE.md описывает языковой роутинг (engine/<lang>, резолв на интейке)",
-      "evidence": ""
+      "evidence": "E2E ПРОЙДЕН (все пути). EN: весь CD4 через input/whisper/en/ → job whisper_en_turbo, params.language=en, ушёл на EN-демон :7802, английский текст (валидировано в whisper-repetition P4). RU: Два человека.wav через input/whisper/ru/ → job 1783239548225_..._whisper_podlodka_dva-cheloveka, params.language=ru, requested_language=ru, status ready, связный русский текст, ушёл на podlodka :7801. MIXED: mixed_no_lang.wav прямо в input/whisper/ → переехал в input/whisper/_unrouted/, из корня исчез, job НЕ создан. RU-легаси: покрыто юнит-тестами (input/<model_name>/ плоско) + исторический dva-cheloveka-ogg job. DOCS: ARCHITECTURE.md §6 — новая подсекция «Языковой роутинг + VAD» (engine/<lang>, резолв на интейке, reject mixed, модели по языку, VAD) + строка компонентов (engine-routing.ts). LG4.1 (mixed per-fragment) отложен владельцем."
     }
   ]
 }
