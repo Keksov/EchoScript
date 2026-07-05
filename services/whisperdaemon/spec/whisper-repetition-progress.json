@@ -11,7 +11,8 @@
     "WR-D1a (нюанс): экспертный фикс №1 condition_on_previous_text=False у нас УЖЕ есть (noContext=True, WhisperDaemon.pas:1433). Повторы всё равно есть и тянутся ~54с (≈2 окна) → либо noContext не доезжает до DLL (ABI-рассинхрон структуры), либо триггер — не-речь внутри окна (тогда главный рычаг VAD). P1 различит.",
     "WR-D2 (подтвердить P1): (1) аудит пампа/оффсетов чанков — исключить re-send; (2) аудит ABI TWhisperFullParams vs версии whisper.h/DLL — проверить, что noContext и пороги реально действуют; (3) доступность полей entropy_thold(=compression_ratio_threshold), logprob_thold, no_speech_thold, temperature+temperature_inc(fallback), suppress_nst/suppress_blank, VAD; версия whisper.cpp.",
     "WR-D3 (дизайн-гейт): выбор митигаций (эксперт: VAD + off-context решают в большинстве; off-context уже есть) — B VAD ПРИОРИТЕТ (whisper.cpp Silero ggml или префильтр через имеющиеся sherpa-VAD-ассеты), A whisper-параметры (temperature-fallback + entropy/no_speech/logprob thresholds + suppress_nst), C оркестраторный post-dedup. Предполагаемо B+A+C. Точный набор — после аудита P1 (доступность VAD/полей в DLL).",
-    "WR-D4: аддитивно, без регресса на чистой/тихой речи (img8726 RU, чистый EN); правки минимальны; проверка на over-suppression (медитация тихая — агрессивный no_speech/VAD может резать настоящую тихую речь)."
+    "WR-D4: аддитивно, без регресса на чистой/тихой речи (img8726 RU, чистый EN); правки минимальны; проверка на over-suppression (медитация тихая — агрессивный no_speech/VAD может резать настоящую тихую речь).",
+    "WR-D5 (дизайн-гейт 2026-07-05, владелец): выбрано B+C — VAD (встроенный Silero whisper.cpp: скачать ~1.5МБ модель, vad:=True+vadModelPath, консервативные пороги) как лечение причины + консервативный оркестраторный dedup подряд идущих идентичных сегментов как страховка. A (явный тюнинг порогов) — в резерве. Дедуп консервативный: не срезать легитимные повторы (мантры) — только длинные серии точных дублей."
   ],
   "phases": [
     { "id": "P0", "title": "Plan & ledger", "gate": "pause: обзор плана владельцем" },
@@ -38,24 +39,25 @@
       "id": "WR1.1",
       "phase": "P1",
       "title": "Диагностика + дизайн-гейт",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": ["WR0.1"],
       "artifacts": [
         "services/whisperdaemon/spec/whisper-repetition-diagnosis.md"
       ],
       "verify": "строго подтверждено: (1) timestamp/паттерн-анализ; (2) аудит daemon-stream-driver пампа/оффсетов — нет перекрытия/re-send; (3) аудит ABI TWhisperFullParams vs whisper.h/DLL — noContext и пороги реально действуют; (4) какие анти-репетишн параметры и VAD доступны в DLL; выбран набор митигаций B/A/C; согласовано с владельцем",
-      "evidence": "diagnosis.md написан. (1) RE-SEND ИСКЛЮЧЁН по коду: daemon-stream-driver.openPcmFile — один forward-курсор (position+=bytesRead), source общий на чанки, bytesSent монотонно, more=bytesSent<total&&>before → каждый байт 1 раз, без перекрытия; +буфер auto_flush=false = 1 whisper_full/чанк. (2) Причина — авторегрессионная петля whisper на не-речи (27 подряд, тайминги непрерывны, 1 инференс). (3) noContext=True ДЕЙСТВУЕТ (ABI выровнен: language/колбэки после noContext работают — img8726 идеальный RU), но лечит только межоконный перенос, не внутриоконную петлю. (4) DLL=whisper.cpp v1.8.4 (releases/1.8.4/whisper.dll), VAD доступен (vad/vadModelPath/vadParams в структуре 151-153), но ВЫКЛ по умолчанию → не-речь идёт в whisper. Дефолтные пороги активны, но недостаточны. РЕКОМЕНДАЦИЯ: B(VAD Silero)+C(оркестр. dedup), A(тюнинг) в резерве. AWAITING owner sign-off."
+      "evidence": "diagnosis.md написан. (1) RE-SEND ИСКЛЮЧЁН по коду: daemon-stream-driver.openPcmFile — один forward-курсор (position+=bytesRead), source общий на чанки, bytesSent монотонно, more=bytesSent<total&&>before → каждый байт 1 раз, без перекрытия; +буфер auto_flush=false = 1 whisper_full/чанк. (2) Причина — авторегрессионная петля whisper на не-речи (27 подряд, тайминги непрерывны, 1 инференс). (3) noContext=True ДЕЙСТВУЕТ (ABI выровнен: language/колбэки после noContext работают — img8726 идеальный RU), но лечит только межоконный перенос, не внутриоконную петлю. (4) DLL=whisper.cpp v1.8.4 (releases/1.8.4/whisper.dll), VAD доступен (vad/vadModelPath/vadParams в структуре 151-153), но ВЫКЛ по умолчанию → не-речь идёт в whisper. Дефолтные пороги активны, но недостаточны. РЕКОМЕНДАЦИЯ: B(VAD Silero)+C(оркестр. dedup), A(тюнинг) в резерве. ГЕЙТ ПРОЙДЕН 2026-07-05: владелец выбрал VAD + dedup (WR-D5)."
     },
     {
       "id": "WR2.1",
       "phase": "P2",
-      "title": "Демон: анти-репетишн параметры и/или VAD",
+      "title": "Демон: встроенный Silero VAD (WR-D5)",
       "status": "todo",
       "dependsOn": ["WR1.1"],
       "artifacts": [
-        "services/whisperdaemon/app/src/WhisperDaemon.pas"
+        "services/whisperdaemon/app/src/WhisperDaemon.pas",
+        "services/whisperdaemon/scripts/download_whisper_models.bat"
       ],
-      "verify": "в WhisperDaemon.pas заданы выбранные пороги/temperature-fallback/suppress_nst (и VAD по гейту) для обоих путей (beam и safeMode greedy); демон пересобран (build_whisperdaemon.bat); прогон проблемного CD4-чанка даёт устранение/резкое уменьшение повтора",
+      "verify": "Silero-VAD-модель (ggml-silero-v5.1.2.bin) скачивается (манифест); в WhisperDaemon.pas vad:=True + vadModelPath + консервативные vadParams для обоих путей (beam и safeMode greedy); демон пересобран (build_whisperdaemon.bat); прогон проблемного CD4-чанка даёт устранение/резкое уменьшение повтора; A(тюнинг порогов) в резерве",
       "evidence": ""
     },
     {
