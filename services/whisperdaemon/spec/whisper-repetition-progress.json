@@ -38,13 +38,13 @@
       "id": "WR1.1",
       "phase": "P1",
       "title": "Диагностика + дизайн-гейт",
-      "status": "todo",
+      "status": "in-progress",
       "dependsOn": ["WR0.1"],
       "artifacts": [
         "services/whisperdaemon/spec/whisper-repetition-diagnosis.md"
       ],
       "verify": "строго подтверждено: (1) timestamp/паттерн-анализ; (2) аудит daemon-stream-driver пампа/оффсетов — нет перекрытия/re-send; (3) аудит ABI TWhisperFullParams vs whisper.h/DLL — noContext и пороги реально действуют; (4) какие анти-репетишн параметры и VAD доступны в DLL; выбран набор митигаций B/A/C; согласовано с владельцем",
-      "evidence": ""
+      "evidence": "diagnosis.md написан. (1) RE-SEND ИСКЛЮЧЁН по коду: daemon-stream-driver.openPcmFile — один forward-курсор (position+=bytesRead), source общий на чанки, bytesSent монотонно, more=bytesSent<total&&>before → каждый байт 1 раз, без перекрытия; +буфер auto_flush=false = 1 whisper_full/чанк. (2) Причина — авторегрессионная петля whisper на не-речи (27 подряд, тайминги непрерывны, 1 инференс). (3) noContext=True ДЕЙСТВУЕТ (ABI выровнен: language/колбэки после noContext работают — img8726 идеальный RU), но лечит только межоконный перенос, не внутриоконную петлю. (4) DLL=whisper.cpp v1.8.4 (releases/1.8.4/whisper.dll), VAD доступен (vad/vadModelPath/vadParams в структуре 151-153), но ВЫКЛ по умолчанию → не-речь идёт в whisper. Дефолтные пороги активны, но недостаточны. РЕКОМЕНДАЦИЯ: B(VAD Silero)+C(оркестр. dedup), A(тюнинг) в резерве. AWAITING owner sign-off."
     },
     {
       "id": "WR2.1",
