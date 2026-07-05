@@ -24,7 +24,8 @@
     { "id": "P2", "title": "Настройки + оркестратор hot-reload + restart", "gate": "pause: правка config из UI (single writer atomic) + hot-reload + restart-кнопка" },
     { "id": "P3", "title": "Управление демонами (поглощение Monitor)", "gate": "pause: start/stop/restart + live-статус, паритет с Monitor" },
     { "id": "P4", "title": "Демон-настройки (CLI-флаги VAD/decode/GPU + лаунчер-из-config)", "gate": "pause: правка VAD/decode из UI доезжает до демона, эффект подтверждён" },
-    { "id": "P5", "title": "Провижининг моделей + полнота i18n + docs", "gate": "pause: скачивание из UI, ru/en полны, тесты зелёные, docs" }
+    { "id": "P5", "title": "Провижининг моделей + полнота i18n + docs", "gate": "pause: скачивание из UI, ru/en полны, тесты зелёные, docs" },
+    { "id": "P6", "title": "Доработки по фидбэку владельца", "gate": "pause: каждый пункт закрыт и собран" }
   ],
   "steps": [
     {
@@ -127,6 +128,76 @@
       ],
       "verify": "скачивание модели из UI (запуск download_whisper_models.bat + прогресс/лог); каждая настройка двуязычна ru/en (label+описание, проверка полноты локалей); bun test (control-server) + vue-tsc зелёные; ARCHITECTURE.md описывает control-plane :3001",
       "evidence": "models-provision.ts: манифест (en/vad) + listModels (файл+размер+downloading, самозаживление флага), startDownload (Bun.spawn download_whisper_models.bat, idempotent). server.ts: GET /api/models, POST /api/models/:id/download. UI: вкладка Модели (ModelsTab — статус downloaded/размер/downloading + кнопка Скачать, авто-поллинг 3с), i18n. ЖИВОЙ ТЕСТ: GET /api/models → en(1549.3MB)/vad(0.8MB) downloaded; POST vad/download → 202 started; unknown → 409. i18n: ru/en СБАЛАНСИРОВАНЫ (106/106 ключей). Docs: control-panel/README.md + ARCHITECTURE.md §6 подсекция control-plane. Тесты 14; tsc+vue-tsc+build чисты. НАХОДКА (задокументирована): Bun.serve сокет наследуется — демон, запущенный панелью, держит :3001 после смерти панели (node-spawn/start/Bun.spawn не лечат — сокет inheritable на уровне Bun.serve). Митигация: демоны напрямую скриптами / освобождать :3001 при рестарте панели. Штатная работа не затронута."
+    },
+    {
+      "id": "CP6.1",
+      "phase": "P6",
+      "title": "Уточнение описания max_workers (python-батч vs ws-демоны)",
+      "status": "done",
+      "dependsOn": ["CP2.1"],
+      "artifacts": ["control-panel/ui/src/i18n/locales/ru.json", "control-panel/ui/src/i18n/locales/en.json"],
+      "verify": "описание max_workers честно: лимит локальных python-воркеров (config.models: vosk/gemma/vibevoice), whisper через ws-демон не считается",
+      "evidence": "Подтверждено кодом: ProcessManager.spawnModel запускает pythonExecutable, max_workers лимитирует (process-manager.ts:51). Описание ru/en переписано."
+    },
+    {
+      "id": "CP6.2",
+      "phase": "P6",
+      "title": "jobs_root/ffmpeg: полный путь + нативный picker",
+      "status": "done",
+      "dependsOn": ["CP2.1"],
+      "artifacts": ["control-panel/server/directory-picker.ts", "control-panel/server/server.ts", "control-panel/ui/src/components/SettingsForm.vue"],
+      "verify": "GET /api/config resolved (абсолютные пути показаны под полем); кнопка Обзор → нативный виндовый диалог (браузер путь не отдаёт — сервер-сайд); picker с таймаутом; start-скрипт для интерактивного запуска",
+      "evidence": "server: resolved в /api/config, POST /api/pick-path (PowerShell -STA FolderBrowserDialog/OpenFileDialog, таймаут 180с). Схема: picker на jobs_root(dir)/ffmpeg(file). UI: кнопка Обзор + строка полного пути. Живо: jobs_root ./jobs→C:\\projects\\EchoScript\\jobs. НАХОДКА: диалог виден только в интерактивной оконной станции (сервер из сервис-контекста → невидимо); митигация start_control_panel.bat (интерактивный запуск) + ручной ввод пути."
+    },
+    {
+      "id": "CP6.3",
+      "phase": "P6",
+      "title": "Вкладка Модели: добавить whisper_podlodka + diarization",
+      "status": "done",
+      "dependsOn": ["CP5.1"],
+      "artifacts": ["control-panel/server/models-provision.ts", "control-panel/ui/src/components/ModelsTab.vue"],
+      "verify": "манифест покрывает podlodka (не скачивается, стейджинг локально) + diarization (download_diarize_models.bat) + en + vad; мульти-файловые записи; флаг downloadable",
+      "evidence": "Живо: /api/models → podlodka(1549МБ, downloadable=false, staged note) / en / vad / diarization(51МБ, seg+emb+dll). UI: note стейджинга, кнопка скрыта для не-скачиваемых."
+    },
+    {
+      "id": "CP6.4",
+      "phase": "P6",
+      "title": "podlodka: пояснить, почему «не скачивается»",
+      "status": "done",
+      "dependsOn": ["CP6.3"],
+      "artifacts": ["control-panel/ui/src/components/ModelsTab.vue", "control-panel/ui/src/i18n/locales/ru.json"],
+      "verify": "в UI видно/по тултипу понятно, что podlodka — локально дообученная модель (нет в публичном HF-манифесте), провижинится конвертацией+стейджингом",
+      "evidence": "Тултип на «не скачивается» (models.notDownloadableWhy ru/en): локально дообученная модель, нет в публичном HF-манифесте, провижинится конвертацией HF→ggml + стейджингом. + видимый staged-note со скриптами."
+    },
+    {
+      "id": "CP6.5",
+      "phase": "P6",
+      "title": "Вкладка Модели: полные пути к файлам моделей",
+      "status": "done",
+      "dependsOn": ["CP6.3"],
+      "artifacts": ["control-panel/server/models-provision.ts", "control-panel/ui/src/components/ModelsTab.vue"],
+      "verify": "для каждой модели показаны абсолютные пути её файлов (resolved от repoRoot)",
+      "evidence": "ModelStatus.paths = files.map(join(repoRoot,...)); UI показывает абсолютные пути моноширинно под каждой моделью (для diarization — 3 файла)."
+    },
+    {
+      "id": "CP6.6",
+      "phase": "P6",
+      "title": "Config: подсветка синтаксиса JSON",
+      "status": "done",
+      "dependsOn": ["CP1.1"],
+      "artifacts": ["control-panel/ui/src/pages/OverviewPage.vue"],
+      "verify": "JSON-значения на вкладке Конфиг подсвечены (ключи/строки/числа/bool/null разными цветами); без внешних зависимостей (CSP)",
+      "evidence": "highlightJson (dependency-free, escape HTML + regex-токены → span-классы) через v-html; :deep-стили j-key/str/num/bool/null. tsc/vue-tsc/build чисты."
+    },
+    {
+      "id": "CP6.7",
+      "phase": "P6",
+      "title": "VOSK-демоны в панель + проверка протокола EchoRecorder",
+      "status": "todo",
+      "dependsOn": ["CP3.1", "CP5.1"],
+      "artifacts": ["control-panel/server/services.json", "control-panel/server/models-provision.ts", "orchestrator/monitor/daemons.json"],
+      "verify": "изучен протокол EchoRecorder↔vosk (быстрый показ распознанного текста); подтверждено, что работает; vosk-демоны добавлены в панель (services-инвентарь start/stop/restart + статус) и, если применимо, их модели в Модели",
+      "evidence": ""
     }
   ]
 }

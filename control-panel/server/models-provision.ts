@@ -70,6 +70,8 @@ export interface ModelStatus {
   readonly sizeMb: number | null
   readonly downloading: boolean
   readonly note: string | null
+  /** Absolute paths of this model's file(s). */
+  readonly paths: string[]
 }
 
 export const listModels = (): ModelStatus[] =>
@@ -100,6 +102,7 @@ export const listModels = (): ModelStatus[] =>
       sizeMb: bytes > 0 ? Math.round((bytes / 1024 / 1024) * 10) / 10 : null,
       downloading: inProgress.has(entry.id),
       note: entry.note ?? null,
+      paths: entry.files.map((file) => join(repoRoot, file)),
     }
   })
 

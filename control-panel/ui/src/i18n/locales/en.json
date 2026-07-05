@@ -95,6 +95,7 @@
     "model": "Model",
     "staged": "Staged via",
     "notDownloadable": "not downloadable",
+    "notDownloadableWhy": "A locally fine-tuned model — not in the public HF download manifest. It is provisioned by converting the HF model to ggml + staging it (see \"Staged via\").",
     "status": "Status",
     "actions": "Actions",
     "download": "Download",

@@ -23,6 +23,14 @@
             <div v-if="m.note" class="text-caption text-grey-6">
               {{ t("models.staged") }}: {{ m.note }}
             </div>
+            <div
+              v-for="p in m.paths"
+              :key="p"
+              class="text-caption text-grey-7"
+              style="font-family: monospace; word-break: break-all"
+            >
+              {{ p }}
+            </div>
           </td>
           <td class="text-left">
             <q-chip v-if="m.downloading" color="blue-8" text-color="white" dense size="sm" icon="downloading">
@@ -44,7 +52,10 @@
               :loading="m.downloading"
               @click="doDownload(m.id)"
             />
-            <span v-else class="text-caption text-grey-6">{{ t("models.notDownloadable") }}</span>
+            <span v-else class="text-caption text-grey-6" style="cursor: help; border-bottom: 1px dotted">
+              {{ t("models.notDownloadable") }}
+              <q-tooltip max-width="320px">{{ t("models.notDownloadableWhy") }}</q-tooltip>
+            </span>
           </td>
         </tr>
       </tbody>

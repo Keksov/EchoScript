@@ -125,7 +125,7 @@
               <td class="text-left text-cyan-3" style="vertical-align: top; white-space: nowrap">
                 {{ row.key }}
               </td>
-              <td class="text-left"><pre class="cfg-value">{{ row.value }}</pre></td>
+              <td class="text-left"><pre class="cfg-value" v-html="highlightJson(row.value)"></pre></td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -156,6 +156,29 @@ const configRows = computed(() =>
     value: typeof value === "object" && value !== null ? JSON.stringify(value, null, 2) : String(value),
   })),
 )
+
+// Minimal dependency-free JSON syntax highlighter (CSP-safe): escape HTML, then wrap
+// tokens in colour classes. Used via v-html on the read-only Config tab.
+const highlightJson = (text: string): string => {
+  const escaped = text
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+  return escaped.replace(
+    /("(?:\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false)\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/gu,
+    (match) => {
+      let cls = "j-num"
+      if (match.startsWith('"')) {
+        cls = match.trimEnd().endsWith(":") ? "j-key" : "j-str"
+      } else if (match === "true" || match === "false") {
+        cls = "j-bool"
+      } else if (match === "null") {
+        cls = "j-null"
+      }
+      return `<span class="${cls}">${match}</span>`
+    },
+  )
+}
 
 const statusColor = (d: DaemonStatus): string => {
   if (d.up) return "green-7"
@@ -212,5 +235,20 @@ onMounted(reload)
   word-break: break-word;
   font-size: 12px;
   color: #cbd5e1;
+}
+.cfg-value :deep(.j-key) {
+  color: #7dd3fc;
+}
+.cfg-value :deep(.j-str) {
+  color: #86efac;
+}
+.cfg-value :deep(.j-num) {
+  color: #fca5a5;
+}
+.cfg-value :deep(.j-bool) {
+  color: #c4b5fd;
+}
+.cfg-value :deep(.j-null) {
+  color: #94a3b8;
 }
 </style>

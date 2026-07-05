@@ -80,6 +80,7 @@ export interface ModelStatus {
   readonly sizeMb: number | null
   readonly downloading: boolean
   readonly note: string | null
+  readonly paths: string[]
 }
 
 export interface DownloadResult {
