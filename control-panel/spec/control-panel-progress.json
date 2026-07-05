@@ -1,0 +1,120 @@
+{
+  "initiative": "control-panel",
+  "title": "Централизованный UI настроек + управление демонами (Quasar + Bun :3001)",
+  "plan": "control-panel-plan.md",
+  "branch": "feature/control-panel",
+  "baseBranch": "feature/language-routing",
+  "created": "2026-07-05",
+  "updated": "2026-07-05",
+  "conventions": "Зеркалим c:/Games/SoundTrainer: Quasar2(Vite)+Vue3+vue-i18n11+Bun; ui/ собирается в server/public (distDir), hash-routing; один Bun.serve отдаёт public/ (SPA-fallback index.html) + /api/* + /ws; dev quasar dev + devServer.proxy /api,/ws→server; i18n boot ru-default/en-fallback/localStorage; services/api.ts относительный fetch; tabbed SettingsPage.",
+  "decisions": [
+    "CP-D1: отдельное Bun-приложение control plane :3001 рядом с оркестратором data plane :3000.",
+    "CP-D2: config.json = единый источник истины; control-server — ЕДИНСТВЕННЫЙ писатель (atomic+валидация); прочие только читают.",
+    "CP-D3: оркестратор hot-reload (fs.watch config) безопасных полей + пометка restart-required + кнопка restart из UI.",
+    "CP-D4: UI поглощает Monitor — start/stop/restart демонов (портируем monitor_control) + статус (monitor_status: реестр+port/ws-health); нативный Monitor ретайрится.",
+    "CP-D5: выносим ВСЕ настройки (оркестратор+демоны, вкл. VAD-пороги/GPU/DLL/decode); тонкие демон-настройки через CLI-флаги демона, генерируемые лаунчером из config (+ Pascal-правки).",
+    "CP-D6: i18n ru/en — у каждой настройки label+description в обоих локалях.",
+    "CP-D7: стек Quasar по конвенциям SoundTrainer; ui/→server/public; один порт prod, proxy dev.",
+    "CP-D8: провижининг моделей из UI (запуск download_whisper_models.bat + прогресс)."
+  ],
+  "phases": [
+    { "id": "P0", "title": "Plan & ledger", "gate": "pause: обзор плана владельцем (структура/имя/порт/ветка/авторизация)" },
+    { "id": "P1", "title": "Скелет control-panel (ui Quasar + server Bun :3001, read-only)", "gate": "pause: dev+build работают, UI отдаётся, виден config + статус демонов" },
+    { "id": "P2", "title": "Настройки + оркестратор hot-reload + restart", "gate": "pause: правка config из UI (single writer atomic) + hot-reload + restart-кнопка" },
+    { "id": "P3", "title": "Управление демонами (поглощение Monitor)", "gate": "pause: start/stop/restart + live-статус, паритет с Monitor" },
+    { "id": "P4", "title": "Демон-настройки (CLI-флаги VAD/decode/GPU + лаунчер-из-config)", "gate": "pause: правка VAD/decode из UI доезжает до демона, эффект подтверждён" },
+    { "id": "P5", "title": "Провижининг моделей + полнота i18n + docs", "gate": "pause: скачивание из UI, ru/en полны, тесты зелёные, docs" }
+  ],
+  "steps": [
+    {
+      "id": "CP0.1",
+      "phase": "P0",
+      "title": "Plan & ledger",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": [
+        "control-panel/spec/control-panel-plan.md",
+        "control-panel/spec/control-panel-progress.json"
+      ],
+      "verify": "план фиксирует решения CP-D1..CP-D8, конвенции SoundTrainer, инвентарь настроек и фазы P0-P5; JSON парсится; DAG ацикличен",
+      "evidence": "Изучены конвенции SoundTrainer (ui/ Quasar2+Vite+Bun → server/public; Bun.serve public+/api+/ws; i18n boot ru/en; services/api.ts относительный fetch; tabbed SettingsPage). Ветка feature/control-panel от feature/language-routing (актуальный config.json + VAD-демон)."
+    },
+    {
+      "id": "CP1.1",
+      "phase": "P1",
+      "title": "Скелет control-panel (ui + server :3001, read-only)",
+      "status": "todo",
+      "dependsOn": ["CP0.1"],
+      "artifacts": [
+        "control-panel/ui/quasar.config.ts",
+        "control-panel/ui/package.json",
+        "control-panel/ui/src/boot/i18n.ts",
+        "control-panel/ui/src/i18n/locales/ru.json",
+        "control-panel/ui/src/i18n/locales/en.json",
+        "control-panel/ui/src/services/api.ts",
+        "control-panel/ui/src/pages/SettingsPage.vue",
+        "control-panel/server/server.ts",
+        "control-panel/server/config.ts"
+      ],
+      "verify": "quasar dev (proxy /api,/ws→:3001) и quasar build (→server/public) работают; Bun-сервер :3001 отдаёт UI + GET /api/health,/api/config (read),/api/daemons (статус); UI показывает read-only config и статус демонов; i18n-каркас ru/en; vue-tsc зелёный",
+      "evidence": ""
+    },
+    {
+      "id": "CP2.1",
+      "phase": "P2",
+      "title": "Настройки + оркестратор hot-reload + restart",
+      "status": "todo",
+      "dependsOn": ["CP1.1"],
+      "artifacts": [
+        "control-panel/server/settings.ts",
+        "control-panel/ui/src/pages/SettingsPage.vue",
+        "orchestrator/src/config.ts",
+        "orchestrator/src/index.ts"
+      ],
+      "verify": "GET/PUT /api/config (single writer, atomic temp+rename, валидация по схеме); формы оркестратор + ws_daemons с i18n label/описанием; оркестратор fs.watch(config.json) перечитывает безопасные поля (интервалы/TTL/drop_stable/requeue/роутинг), помечает restart-required; кнопка restart оркестратора работает; bun test",
+      "evidence": ""
+    },
+    {
+      "id": "CP3.1",
+      "phase": "P3",
+      "title": "Управление демонами (поглощение Monitor)",
+      "status": "todo",
+      "dependsOn": ["CP1.1"],
+      "artifacts": [
+        "control-panel/server/daemons.ts",
+        "control-panel/server/status.ts",
+        "control-panel/ui/src/pages/DaemonsPage.vue"
+      ],
+      "verify": "start/stop/restart демона из UI (портирован monitor_control: скрипты/инвентарь) + live-статус (monitor_status: реестр jobs/registry + port/ws-health + pid); паритет с нативным Monitor; bun test на чистом ядре daemons/status",
+      "evidence": ""
+    },
+    {
+      "id": "CP4.1",
+      "phase": "P4",
+      "title": "Демон-настройки (CLI-флаги + лаунчер-из-config)",
+      "status": "todo",
+      "dependsOn": ["CP2.1", "CP3.1"],
+      "artifacts": [
+        "services/whisperdaemon/app/src/WhisperDaemon.pas",
+        "control-panel/server/daemons.ts",
+        "control-panel/ui/src/pages/SettingsPage.vue"
+      ],
+      "verify": "в WhisperDaemon.pas добавлены CLI-флаги (VAD threshold/pad/min-*; decode entropy/logprob/no_speech/temperature; sampling; GPU); лаунчер control-server генерит args из config; формы UI (+ i18n); пересборка демона; эффект подтверждён (VAD threshold меняет % reduction)",
+      "evidence": ""
+    },
+    {
+      "id": "CP5.1",
+      "phase": "P5",
+      "title": "Провижининг моделей + полнота i18n + docs",
+      "status": "todo",
+      "dependsOn": ["CP2.1", "CP3.1", "CP4.1"],
+      "artifacts": [
+        "control-panel/server/models.ts",
+        "control-panel/ui/src/pages/ModelsPage.vue",
+        "EchoRecorder/docs/ARCHITECTURE.md"
+      ],
+      "verify": "скачивание модели из UI (запуск download_whisper_models.bat + прогресс/лог); каждая настройка двуязычна ru/en (label+описание, проверка полноты локалей); bun test (control-server) + vue-tsc зелёные; ARCHITECTURE.md описывает control-plane :3001",
+      "evidence": ""
+    }
+  ]
+}
