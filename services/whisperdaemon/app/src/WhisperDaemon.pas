@@ -205,7 +205,6 @@ type
     procedure   clearSessionData(aResetSummary: Boolean = True);
     procedure   collectSegmentWords(
                   aContext: PWhisperContext;
-                  aState: PWhisperState;
                   aWhisperSegmentIndex: LongInt;
                   aOutputSegmentIndex: Integer;
                   var aWordEvents: TWhisperWordEvents;
@@ -243,7 +242,7 @@ type
     function    jsonBoolOf(const aObject: TJSONObject; const aName: string): Boolean;
     function    jsonIntOf(const aObject: TJSONObject; const aName: string): Integer;
     function    jsonStringOf(const aObject: TJSONObject; const aName: string): string;
-    function    resolveDetectedLanguageCode(aState: PWhisperState): string;
+    function    resolveDetectedLanguageCode(aContext: PWhisperContext): string;
     function    safeCString(const aValue: PChar): string;
   public
     constructor Create(aConnection: TWSConnection; const aModelName: string);
@@ -297,6 +296,18 @@ var
   gWhisperFullGetSegmentT1FromState: function(aState: PWhisperState; aSegmentIndex: LongInt): Int64; cdecl;
   gWhisperFullGetTokenTextFromState: function(aContext: PWhisperContext; aState: PWhisperState; aSegmentIndex: LongInt; aTokenIndex: LongInt): PChar; cdecl;
   gWhisperFullGetTokenDataFromState: function(aState: PWhisperState; aSegmentIndex: LongInt; aTokenIndex: LongInt): TWhisperTokenData; cdecl;
+  // Context (ctx->state) API — used so params.vad takes effect: whisper.cpp applies VAD
+  // (and remaps timestamps) only inside whisper_full, not whisper_full_with_state (WR-D6).
+  gWhisperInitFromFileWithParams: function(const aPathModel: PChar; var aParams: TWhisperContextParams): PWhisperContext; cdecl;
+  gWhisperFull: function(aContext: PWhisperContext; var aParams: TWhisperFullParams; const aSamples: PSingle; aSampleCount: LongInt): LongInt; cdecl;
+  gWhisperFullNSegments: function(aContext: PWhisperContext): LongInt; cdecl;
+  gWhisperFullNTokens: function(aContext: PWhisperContext; aSegmentIndex: LongInt): LongInt; cdecl;
+  gWhisperFullLangId: function(aContext: PWhisperContext): LongInt; cdecl;
+  gWhisperFullGetSegmentText: function(aContext: PWhisperContext; aSegmentIndex: LongInt): PChar; cdecl;
+  gWhisperFullGetSegmentT0: function(aContext: PWhisperContext; aSegmentIndex: LongInt): Int64; cdecl;
+  gWhisperFullGetSegmentT1: function(aContext: PWhisperContext; aSegmentIndex: LongInt): Int64; cdecl;
+  gWhisperFullGetTokenText: function(aContext: PWhisperContext; aSegmentIndex: LongInt; aTokenIndex: LongInt): PChar; cdecl;
+  gWhisperFullGetTokenData: function(aContext: PWhisperContext; aSegmentIndex: LongInt; aTokenIndex: LongInt): TWhisperTokenData; cdecl;
 
 procedure requireArgValue(aIndex: Integer; const aName: string; out aValue: string);
 begin
@@ -564,6 +575,21 @@ begin
     Result := IncludeTrailingPathDelimiter(resolveWhisperModelsRoot) + 'ggml-' + fileName + '.bin';
 end;
 
+function resolveVadModelPath: string;
+begin
+  Result := IncludeTrailingPathDelimiter(resolveWhisperModelsRoot) + 'ggml-silero-v5.1.2.bin';
+end;
+
+// VAD is enabled when the Silero model is staged and not force-disabled via WHISPER_VAD=0.
+// Removing non-speech before inference is the fix for whisper's repetition loop on
+// music/silence (WR-D5); if the model is missing we degrade gracefully (VAD off).
+function vadModelAvailable: Boolean;
+begin
+  if SameText(Trim(SysUtils.GetEnvironmentVariable('WHISPER_VAD')), '0') then
+    Exit(False);
+  Result := FileExists(resolveVadModelPath);
+end;
+
 function resolveDaemonDescriptorPath: string;
 begin
   Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
@@ -679,6 +705,16 @@ begin
   Pointer(gWhisperFullGetSegmentT1FromState) := nil;
   Pointer(gWhisperFullGetTokenTextFromState) := nil;
   Pointer(gWhisperFullGetTokenDataFromState) := nil;
+  Pointer(gWhisperInitFromFileWithParams) := nil;
+  Pointer(gWhisperFull) := nil;
+  Pointer(gWhisperFullNSegments) := nil;
+  Pointer(gWhisperFullNTokens) := nil;
+  Pointer(gWhisperFullLangId) := nil;
+  Pointer(gWhisperFullGetSegmentText) := nil;
+  Pointer(gWhisperFullGetSegmentT0) := nil;
+  Pointer(gWhisperFullGetSegmentT1) := nil;
+  Pointer(gWhisperFullGetTokenText) := nil;
+  Pointer(gWhisperFullGetTokenData) := nil;
 end;
 
 procedure loadWhisperLibrary; forward;
@@ -778,6 +814,16 @@ begin
   Pointer(gWhisperFullGetSegmentT1FromState) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_segment_t1_from_state');
   Pointer(gWhisperFullGetTokenTextFromState) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_token_text_from_state');
   Pointer(gWhisperFullGetTokenDataFromState) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_token_data_from_state');
+  Pointer(gWhisperInitFromFileWithParams) := GetProcedureAddress(gWhisperHandle, 'whisper_init_from_file_with_params');
+  Pointer(gWhisperFull) := GetProcedureAddress(gWhisperHandle, 'whisper_full');
+  Pointer(gWhisperFullNSegments) := GetProcedureAddress(gWhisperHandle, 'whisper_full_n_segments');
+  Pointer(gWhisperFullNTokens) := GetProcedureAddress(gWhisperHandle, 'whisper_full_n_tokens');
+  Pointer(gWhisperFullLangId) := GetProcedureAddress(gWhisperHandle, 'whisper_full_lang_id');
+  Pointer(gWhisperFullGetSegmentText) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_segment_text');
+  Pointer(gWhisperFullGetSegmentT0) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_segment_t0');
+  Pointer(gWhisperFullGetSegmentT1) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_segment_t1');
+  Pointer(gWhisperFullGetTokenText) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_token_text');
+  Pointer(gWhisperFullGetTokenData) := GetProcedureAddress(gWhisperHandle, 'whisper_full_get_token_data');
 
   requireAssigned(Pointer(gWhisperContextDefaultParams), 'whisper_context_default_params');
   requireAssigned(Pointer(gWhisperInitState), 'whisper_init_state');
@@ -794,6 +840,16 @@ begin
   requireAssigned(Pointer(gWhisperFullGetSegmentT1FromState), 'whisper_full_get_segment_t1_from_state');
   requireAssigned(Pointer(gWhisperFullGetTokenTextFromState), 'whisper_full_get_token_text_from_state');
   requireAssigned(Pointer(gWhisperFullGetTokenDataFromState), 'whisper_full_get_token_data_from_state');
+  requireAssigned(Pointer(gWhisperInitFromFileWithParams), 'whisper_init_from_file_with_params');
+  requireAssigned(Pointer(gWhisperFull), 'whisper_full');
+  requireAssigned(Pointer(gWhisperFullNSegments), 'whisper_full_n_segments');
+  requireAssigned(Pointer(gWhisperFullNTokens), 'whisper_full_n_tokens');
+  requireAssigned(Pointer(gWhisperFullLangId), 'whisper_full_lang_id');
+  requireAssigned(Pointer(gWhisperFullGetSegmentText), 'whisper_full_get_segment_text');
+  requireAssigned(Pointer(gWhisperFullGetSegmentT0), 'whisper_full_get_segment_t0');
+  requireAssigned(Pointer(gWhisperFullGetSegmentT1), 'whisper_full_get_segment_t1');
+  requireAssigned(Pointer(gWhisperFullGetTokenText), 'whisper_full_get_token_text');
+  requireAssigned(Pointer(gWhisperFullGetTokenData), 'whisper_full_get_token_data');
 
   versionText := '<unknown>';
   if Assigned(gWhisperVersion) then
@@ -890,7 +946,7 @@ begin
   initError := '';
   gCachedContext := nil;
   try
-    gCachedContext := gWhisperInitFromFileWithParamsNoState(PChar(modelPath), params);
+    gCachedContext := gWhisperInitFromFileWithParams(PChar(modelPath), params);
   except
     on E: Exception do
     begin
@@ -918,7 +974,7 @@ begin
 
     initError := '';
     try
-      gCachedContext := gWhisperInitFromFileWithParamsNoState(PChar(modelPath), retryParams);
+      gCachedContext := gWhisperInitFromFileWithParams(PChar(modelPath), retryParams);
     except
       on E: Exception do
       begin
@@ -1171,7 +1227,6 @@ end;
 
 procedure TWhisperDaemonSession.collectSegmentWords(
   aContext: PWhisperContext;
-  aState: PWhisperState;
   aWhisperSegmentIndex: LongInt;
   aOutputSegmentIndex: Integer;
   var aWordEvents: TWhisperWordEvents;
@@ -1256,9 +1311,9 @@ var
   end;
 
 begin
-  tokenCount := gWhisperFullNTokensFromState(aState, aWhisperSegmentIndex);
-  segmentStartMs := gWhisperFullGetSegmentT0FromState(aState, aWhisperSegmentIndex) * 10;
-  segmentEndMs := gWhisperFullGetSegmentT1FromState(aState, aWhisperSegmentIndex) * 10;
+  tokenCount := gWhisperFullNTokens(aContext, aWhisperSegmentIndex);
+  segmentStartMs := gWhisperFullGetSegmentT0(aContext, aWhisperSegmentIndex) * 10;
+  segmentEndMs := gWhisperFullGetSegmentT1(aContext, aWhisperSegmentIndex) * 10;
   if segmentEndMs < segmentStartMs then
     segmentEndMs := segmentStartMs;
   wordText := '';
@@ -1271,8 +1326,8 @@ begin
 
   for tokenIndex := 0 to tokenCount - 1 do
   begin
-    tokenText := safeCString(gWhisperFullGetTokenTextFromState(aContext, aState, aWhisperSegmentIndex, tokenIndex));
-    tokenData := gWhisperFullGetTokenDataFromState(aState, aWhisperSegmentIndex, tokenIndex);
+    tokenText := safeCString(gWhisperFullGetTokenText(aContext, aWhisperSegmentIndex, tokenIndex));
+    tokenData := gWhisperFullGetTokenData(aContext, aWhisperSegmentIndex, tokenIndex);
     if isSpecialTokenText(tokenText) then
       Continue;
 
@@ -1379,6 +1434,8 @@ var
   segmentIndex: LongInt;
   languageCode: string;
   languageUtf8: UTF8String;
+  vadEnabled: Boolean;
+  vadPathUtf8: UTF8String;
 begin
   aBatchText := '';
   aCollectedCount := 0;
@@ -1410,12 +1467,10 @@ begin
     while not inferOk do
     begin
       retryNeeded := False;
+      // No explicit state: whisper_full uses the context's own state (ctx->state), which is
+      // required for params.vad to take effect (WR-D6). The outer finally is now a no-op.
       state := nil;
       try
-        state := gWhisperInitState(ctx);
-        if state = nil then
-          raise Exception.Create('whisper_init_state failed');
-
         try
           if safeMode then
           begin
@@ -1449,33 +1504,55 @@ begin
           ctxParams.language := PChar(languageUtf8);
           ctxParams.progressCallback := @whisperProgressCallback;
           ctxParams.progressCallbackUserData := Self;
+
+          // Voice-activity detection (WR-D5): strip non-speech (music/silence) before
+          // transcription so whisper does not loop/hallucinate on it. Disabled in safeMode
+          // (the post-failure retry runs a clean fallback). Conservative params: slightly
+          // permissive threshold + generous speech padding so quiet real speech is kept.
+          vadEnabled := (not safeMode) and vadModelAvailable;
+          ctxParams.vad := vadEnabled;
+          if vadEnabled then
+          begin
+            vadPathUtf8 := UTF8String(resolveVadModelPath);
+            ctxParams.vadModelPath := PChar(vadPathUtf8);
+            ctxParams.vadParams.threshold := 0.4;
+            ctxParams.vadParams.minSpeechDurationMs := 100;
+            ctxParams.vadParams.minSilenceDurationMs := 100;
+            ctxParams.vadParams.maxSpeechDurationS := 3600.0;
+            ctxParams.vadParams.speechPadMs := 200;
+            ctxParams.vadParams.samplesOverlap := 0.1;
+          end;
+          WriteLn('[whisperdaemon] inference vad=', BoolToStr(vadEnabled, True), ' model=', FmodelName);
+
           FlastKeepaliveTick := 0;
 
-          ack := gWhisperFullWithState(ctx, state, ctxParams, @pcm[0], Length(pcm));
+          // whisper_full (not _with_state): applies params.vad (strips non-speech and remaps
+          // timestamps for us) and writes results into the context's own state (WR-D6).
+          ack := gWhisperFull(ctx, ctxParams, @pcm[0], Length(pcm));
           if ack <> 0 then
-            raise Exception.CreateFmt('whisper_full_with_state failed: %d', [ack]);
+            raise Exception.CreateFmt('whisper_full failed: %d', [ack]);
 
           if SameText(Flanguage, 'auto') then
-            languageCode := resolveDetectedLanguageCode(state)
+            languageCode := resolveDetectedLanguageCode(ctx)
           else
             languageCode := LowerCase(Trim(Flanguage));
           if languageCode <> '' then
             FresolvedLanguage := languageCode;
 
-          segmentCount := gWhisperFullNSegmentsFromState(state);
+          segmentCount := gWhisperFullNSegments(ctx);
           SetLength(aSegmentTexts, segmentCount);
           SetLength(aSegmentT0s, segmentCount);
           SetLength(aSegmentT1s, segmentCount);
           for segmentIndex := 0 to segmentCount - 1 do
           begin
-            text := Trim(safeCString(gWhisperFullGetSegmentTextFromState(state, segmentIndex)));
+            text := Trim(safeCString(gWhisperFullGetSegmentText(ctx, segmentIndex)));
             if text = '' then
               Continue;
 
             aSegmentTexts[aCollectedCount] := text;
-            aSegmentT0s[aCollectedCount] := gWhisperFullGetSegmentT0FromState(state, segmentIndex) * 10;
-            aSegmentT1s[aCollectedCount] := gWhisperFullGetSegmentT1FromState(state, segmentIndex) * 10;
-            collectSegmentWords(ctx, state, segmentIndex, aCollectedCount, aWordEvents, aWordEventCount);
+            aSegmentT0s[aCollectedCount] := gWhisperFullGetSegmentT0(ctx, segmentIndex) * 10;
+            aSegmentT1s[aCollectedCount] := gWhisperFullGetSegmentT1(ctx, segmentIndex) * 10;
+            collectSegmentWords(ctx, segmentIndex, aCollectedCount, aWordEvents, aWordEventCount);
             appendTextWithSpace(aBatchText, text);
             Inc(aCollectedCount);
           end;
@@ -1659,15 +1736,15 @@ begin
     Result := data.AsString;
 end;
 
-function TWhisperDaemonSession.resolveDetectedLanguageCode(aState: PWhisperState): string;
+function TWhisperDaemonSession.resolveDetectedLanguageCode(aContext: PWhisperContext): string;
 var
   langId: LongInt;
 begin
   Result := '';
-  if (aState = nil) or (not Assigned(gWhisperFullLangIdFromState)) or (not Assigned(gWhisperLangStr)) then
+  if (aContext = nil) or (not Assigned(gWhisperFullLangId)) or (not Assigned(gWhisperLangStr)) then
     Exit;
 
-  langId := gWhisperFullLangIdFromState(aState);
+  langId := gWhisperFullLangId(aContext);
   if langId < 0 then
     Exit;
 
