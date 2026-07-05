@@ -4,6 +4,9 @@ import { join, resolve } from "node:path"
 
 import { configJsonPath, publicDir, resolveServerPort, SERVER_HOST } from "./config"
 import { readDaemonStatuses } from "./status"
+import { applyConfig } from "./settings"
+import { ORCHESTRATOR_FIELDS, WS_DAEMON_FIELDS } from "./settings-schema"
+import { restartOrchestrator } from "./orchestrator-control"
 
 const port = resolveServerPort()
 
@@ -39,7 +42,6 @@ const readConfig = async (): Promise<unknown> => {
 }
 
 const handleApi = async (request: Request, pathname: string): Promise<Response> => {
-  // P1 is read-only; PUT/POST land in P2.
   if (pathname === "/api/health" && request.method === "GET") {
     return json({ ok: true, service: "echoscript-control-panel", port })
   }
@@ -50,8 +52,31 @@ const handleApi = async (request: Request, pathname: string): Promise<Response> 
     }
     return json({ path: configJsonPath, config })
   }
+  if (pathname === "/api/config" && request.method === "PUT") {
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return json({ error: "invalid JSON body" }, 400)
+    }
+    try {
+      const result = await applyConfig(body)
+      return json({ path: configJsonPath, config: result.config, restartRequired: result.restartRequired })
+    } catch (error) {
+      const code = (error as Error & { code?: string }).code
+      const message = error instanceof Error ? error.message : String(error)
+      return json({ error: message }, code === "VALIDATION" ? 400 : 500)
+    }
+  }
+  if (pathname === "/api/schema" && request.method === "GET") {
+    return json({ orchestrator: ORCHESTRATOR_FIELDS, wsDaemon: WS_DAEMON_FIELDS })
+  }
   if (pathname === "/api/daemons" && request.method === "GET") {
     return json({ daemons: await readDaemonStatuses() })
+  }
+  if (pathname === "/api/orchestrator/restart" && request.method === "POST") {
+    const result = await restartOrchestrator()
+    return json(result, result.ok ? 200 : 500)
   }
   return json({ error: "not found" }, 404)
 }

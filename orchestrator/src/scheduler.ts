@@ -150,6 +150,32 @@ export class Scheduler {
     }
   }
 
+  /**
+   * Re-apply startup-captured settings after a live config reload (CP-D3): the shared
+   * config object is already mutated in place, so per-operation reads (dropStableMs,
+   * wsDaemons routing, requeue cap, stream window/chunk) are picked up automatically —
+   * here we reset the things bound once at start (reconcile timer interval, input
+   * watchers for possibly-new engine/model dirs) and kick a sweep+dispatch.
+   */
+  public applyConfigReload(): void {
+    if (this.reconcileTimer !== null) {
+      clearInterval(this.reconcileTimer);
+    }
+    this.reconcileTimer = setInterval(() => {
+      void this.triggerSweep();
+      this.triggerDispatch();
+    }, Math.max(this.config.pollIntervalMs, MIN_RECONCILE_INTERVAL_MS));
+
+    for (const watcher of this.inputWatchers) {
+      watcher.close();
+    }
+    this.inputWatchers = [];
+    this.startInputWatchers();
+
+    void this.triggerSweep();
+    this.triggerDispatch();
+  }
+
   private startInputWatchers(): void {
     const watchDir = (dir: string, options?: { recursive: boolean }): void => {
       try {

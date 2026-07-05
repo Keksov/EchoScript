@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import process from "node:process";
 
-import { loadConfig } from "./config";
+import { loadConfig, watchConfigForReload } from "./config";
 import { DaemonRegistry } from "./daemon-registry";
 import { startRegistryWatcher } from "./daemon-registry-watcher";
 import {
@@ -150,6 +150,17 @@ const daemonRegistry = new DaemonRegistry(config.daemonRegistryTtlMs);
 await startRegistryWatcher(config.jobsRoot, daemonRegistry);
 const scheduler = new Scheduler(config, jobManager, processManager, daemonRegistry);
 await scheduler.start();
+
+// Hot-reload config edited by the control panel (CP-D3): mutate the shared config object
+// in place so per-operation reads pick up new values; restart-class fields (jobsRoot,
+// maxWorkers) keep their startup values until an orchestrator restart.
+watchConfigForReload((next) => {
+  Object.assign(config, next, { jobsRoot: config.jobsRoot, maxWorkers: config.maxWorkers });
+  daemonRegistry.setTtlMs(config.daemonRegistryTtlMs);
+  scheduler.applyConfigReload();
+  console.log("[orchestrator] config hot-reloaded");
+});
+
 const maxAddBodyBytes = resolveAddBodyLimitBytes();
 
 let isShuttingDown = false;

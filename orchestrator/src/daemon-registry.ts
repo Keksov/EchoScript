@@ -118,9 +118,14 @@ export class DaemonRegistry {
   private readonly invalidatedAt = new Map<string, number>();
 
   public constructor(
-    private readonly ttlMs: number = DEFAULT_REGISTRY_TTL_MS,
+    private ttlMs: number = DEFAULT_REGISTRY_TTL_MS,
     private readonly clock: Clock = systemClock,
   ) {}
+
+  /** Update the freshness TTL live (config hot-reload). */
+  public setTtlMs(ttlMs: number): void {
+    this.ttlMs = Math.max(1000, ttlMs);
+  }
 
   public upsert(registration: DaemonRegistration): void {
     const invalidated = this.invalidatedAt.get(registration.name);

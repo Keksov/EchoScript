@@ -1,3 +1,4 @@
+import { watch } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -302,5 +303,48 @@ export const loadConfig = async (): Promise<AppConfig> => {
     speech: resolveSpeechConfig(isRecord(rawConfig.speech) ? (rawConfig.speech as RawSpeechConfig) : null),
     models,
     wsDaemons: resolveWsDaemons(rawConfig.ws_daemons),
+  };
+};
+
+/**
+ * Watch config.json and invoke `onReload` with the freshly parsed config (debounced) so
+ * the orchestrator can hot-apply settings edited by the control panel (CP-D3). The file is
+ * replaced atomically (temp + rename), so we watch the containing dir and filter by name.
+ * An invalid reload (bad JSON / validation) is logged and skipped — the running config stays.
+ * Returns a stop function.
+ */
+export const watchConfigForReload = (
+  onReload: (next: AppConfig) => void,
+  debounceMs = 250,
+): (() => void) => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const trigger = (): void => {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(() => {
+      timer = null;
+      loadConfig()
+        .then((next) => onReload(next))
+        .catch((error) =>
+          console.error(
+            "[orchestrator] config reload skipped (invalid):",
+            error instanceof Error ? error.message : error,
+          ),
+        );
+    }, debounceMs);
+  };
+
+  const watcher = watch(PROJECT_ROOT, (_event, filename) => {
+    if (filename === null || filename === "config.json") {
+      trigger();
+    }
+  });
+
+  return () => {
+    watcher.close();
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
   };
 };
