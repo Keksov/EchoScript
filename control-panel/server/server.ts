@@ -6,7 +6,7 @@ import { configJsonPath, publicDir, resolveServerPort, SERVER_HOST } from "./con
 import { readDaemonStatuses } from "./status"
 import { applyConfig } from "./settings"
 import { ORCHESTRATOR_FIELDS, WS_DAEMON_FIELDS } from "./settings-schema"
-import { restartOrchestrator } from "./orchestrator-control"
+import { controlService, serviceNames, type ServiceAction } from "./services-control"
 
 const port = resolveServerPort()
 
@@ -72,10 +72,18 @@ const handleApi = async (request: Request, pathname: string): Promise<Response> 
     return json({ orchestrator: ORCHESTRATOR_FIELDS, wsDaemon: WS_DAEMON_FIELDS })
   }
   if (pathname === "/api/daemons" && request.method === "GET") {
-    return json({ daemons: await readDaemonStatuses() })
+    const controllable = new Set(serviceNames())
+    const daemons = (await readDaemonStatuses()).map((d) => ({ ...d, controllable: controllable.has(d.name) }))
+    return json({ daemons })
   }
   if (pathname === "/api/orchestrator/restart" && request.method === "POST") {
-    const result = await restartOrchestrator()
+    const result = await controlService("orchestrator", "restart")
+    return json(result, result.ok ? 200 : 500)
+  }
+  // /api/services/<name>/<start|stop|restart>
+  const serviceMatch = /^\/api\/services\/([^/]+)\/(start|stop|restart)$/u.exec(pathname)
+  if (serviceMatch !== null && request.method === "POST") {
+    const result = await controlService(decodeURIComponent(serviceMatch[1]!), serviceMatch[2] as ServiceAction)
     return json(result, result.ok ? 200 : 500)
   }
   return json({ error: "not found" }, 404)

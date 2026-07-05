@@ -45,6 +45,7 @@
               <th class="text-left">{{ t("daemons.state") }}</th>
               <th class="text-right">{{ t("daemons.pid") }}</th>
               <th class="text-right">{{ t("daemons.age") }}</th>
+              <th class="text-right">{{ t("daemons.actions") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -66,9 +67,32 @@
               </td>
               <td class="text-right">{{ d.pid ?? "—" }}</td>
               <td class="text-right">{{ ageText(d.ageMs) }}</td>
+              <td class="text-right" style="white-space: nowrap">
+                <q-spinner v-if="busyService === d.name" size="18px" color="cyan-3" />
+                <template v-else-if="d.controllable">
+                  <q-btn
+                    flat dense round size="sm" icon="play_arrow" color="green-5"
+                    :disable="busyService !== null" @click="doAction(d.name, 'start')"
+                  >
+                    <q-tooltip>{{ t("daemons.start") }}</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    flat dense round size="sm" icon="stop" color="red-5"
+                    :disable="busyService !== null" @click="doAction(d.name, 'stop')"
+                  >
+                    <q-tooltip>{{ t("daemons.stop") }}</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    flat dense round size="sm" icon="restart_alt" color="amber-5"
+                    :disable="busyService !== null" @click="doAction(d.name, 'restart')"
+                  >
+                    <q-tooltip>{{ t("daemons.restart") }}</q-tooltip>
+                  </q-btn>
+                </template>
+              </td>
             </tr>
             <tr v-if="daemons.length === 0">
-              <td colspan="9" class="text-center text-grey-5">{{ t("daemons.empty") }}</td>
+              <td colspan="10" class="text-center text-grey-5">{{ t("daemons.empty") }}</td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -107,8 +131,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 import { useI18n } from "vue-i18n"
-import { fetchConfig, fetchDaemons } from "src/services/api"
-import type { DaemonStatus } from "src/types"
+import { controlService, fetchConfig, fetchDaemons } from "src/services/api"
+import type { DaemonStatus, ServiceAction } from "src/types"
 import SettingsForm from "components/SettingsForm.vue"
 
 const { t } = useI18n()
@@ -139,6 +163,8 @@ const ageText = (ageMs: number | null): string => {
   return seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m`
 }
 
+const busyService = ref<string | null>(null)
+
 const reload = async (): Promise<void> => {
   loading.value = true
   error.value = null
@@ -150,6 +176,22 @@ const reload = async (): Promise<void> => {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
     loading.value = false
+  }
+}
+
+const doAction = async (name: string, action: ServiceAction): Promise<void> => {
+  busyService.value = name
+  error.value = null
+  try {
+    const result = await controlService(name, action)
+    if (!result.ok) {
+      error.value = `${t("daemons.actionFailed")}: ${result.output}`
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    busyService.value = null
+    await reload()
   }
 }
 

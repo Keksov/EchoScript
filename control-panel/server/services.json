@@ -1,0 +1,17 @@
+{
+  "note": "Control-panel service lifecycle inventory (CP3.1). Maps a service name (orchestrator + ws_daemons keys from config.json) to its start/stop scripts, relative to the repo root. Host/port/engine/language live in config.json; status comes from the registry / port probe. The native Monitor keeps its own orchestrator/monitor/daemons.json (CP-D4).",
+  "services": {
+    "orchestrator": {
+      "start_script": "orchestrator/scripts/start_orchestrator.bat",
+      "stop_script": "orchestrator/scripts/stop_orchestrator.bat"
+    },
+    "whisperdaemon": {
+      "start_script": "services/whisperdaemon/scripts/start_whisperdaemon_podlodka.bat",
+      "stop_script": "services/whisperdaemon/scripts/stop_whisperdaemon_podlodka.bat"
+    },
+    "whisperdaemon_en": {
+      "start_script": "services/whisperdaemon/scripts/start_whisperdaemon_en.bat",
+      "stop_script": "services/whisperdaemon/scripts/stop_whisperdaemon_en.bat"
+    }
+  }
+}

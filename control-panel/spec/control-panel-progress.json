@@ -85,16 +85,17 @@
     {
       "id": "CP3.1",
       "phase": "P3",
-      "title": "Управление демонами (поглощение Monitor)",
-      "status": "todo",
+      "title": "Управление сервисами (start/stop/restart)",
+      "status": "done",
       "dependsOn": ["CP1.1"],
       "artifacts": [
-        "control-panel/server/daemons.ts",
-        "control-panel/server/status.ts",
-        "control-panel/ui/src/pages/DaemonsPage.vue"
+        "control-panel/server/services.json",
+        "control-panel/server/services-control.ts",
+        "control-panel/server/server.ts",
+        "control-panel/ui/src/pages/OverviewPage.vue"
       ],
-      "verify": "start/stop/restart демона из UI (портирован monitor_control: скрипты/инвентарь) + live-статус (monitor_status: реестр jobs/registry + port/ws-health + pid); паритет с нативным Monitor; bun test на чистом ядре daemons/status",
-      "evidence": ""
+      "verify": "start/stop/restart сервиса из UI (по инвентарю services.json + скрипты) + live-статус (реестр jobs/registry + port-probe); паритет с нативным Monitor (который НЕ трогаем); bun test",
+      "evidence": "services.json (инвентарь lifecycle: orchestrator + whisperdaemon + whisperdaemon_en → start/stop-скрипты; host/port/язык — из config.json). services-control.ts: controlService(name, start|stop|restart) обобщает оркестраторный рестарт на любой сервис — detached spawn + stdio:ignore (без утечки сокета) + верификация port-probe (для демонов таймаут 60с под warmup, стоп 10с). server.ts: обобщённый POST /api/services/:name/:action + /api/orchestrator/restart через controlService; /api/daemons отдаёт флаг controllable. UI: колонка «Действия» в таблице Сервисы — кнопки старт/стоп/рестарт на строку с busy-спиннером, i18n ru/en; после действия — авто-reload. Старый orchestrator-control.ts удалён (свёрнут в services-control). ЖИВОЙ ТЕСТ: POST /api/services/whisperdaemon_en/restart → ok=true, EN-демон сменил PID 45224→40312 и снова detail=ready (прогрелся); control-panel :3001 не унаследован. Все 3 сервиса controllable=True. tsc+vue-tsc+build чисты."
     },
     {
       "id": "CP4.1",

@@ -17,7 +17,10 @@ export interface DaemonStatus {
   readonly pid: number | null
   readonly updatedAt: string | null
   readonly ageMs: number | null
+  readonly controllable?: boolean
 }
+
+export type ServiceAction = "start" | "stop" | "restart"
 
 export interface ConfigResponse {
   readonly path: string

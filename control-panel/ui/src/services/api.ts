@@ -5,6 +5,7 @@ import type {
   RestartResult,
   SaveResult,
   SchemaResponse,
+  ServiceAction,
 } from "src/types"
 
 const jsonHeaders = { "content-type": "application/json" }
@@ -43,5 +44,10 @@ export const saveConfig = async (patch: Record<string, unknown>): Promise<SaveRe
 
 export const restartOrchestrator = async (): Promise<RestartResult> => {
   const response = await fetch("/api/orchestrator/restart", { method: "POST" })
+  return (await response.json()) as RestartResult
+}
+
+export const controlService = async (name: string, action: ServiceAction): Promise<RestartResult> => {
+  const response = await fetch(`/api/services/${encodeURIComponent(name)}/${action}`, { method: "POST" })
   return (await response.json()) as RestartResult
 }

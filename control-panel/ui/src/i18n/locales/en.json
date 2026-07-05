@@ -34,7 +34,13 @@
     "stale": "stale",
     "down": "down",
     "orphan": "not in config",
-    "empty": "No services found"
+    "empty": "No services found",
+    "actions": "Actions",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "working": "Working…",
+    "actionFailed": "Action failed"
   },
   "config": {
     "title": "Configuration (read-only)",
