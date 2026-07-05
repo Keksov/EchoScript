@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
@@ -76,22 +75,22 @@ const daemonEnvFromConfig = (name: string): Record<string, string> => {
 }
 
 /**
- * Run a repo-relative .bat detached with no inherited handles (stdio "ignore" — piping
- * hands the child our listening socket on Windows, see CP2.1). Verified via port probe.
+ * Launch a repo-relative .bat via Bun.spawn with ignored stdio.
+ *
+ * Known limitation (Windows): Bun.serve's listening socket is inheritable, and a launched
+ * daemon (via the start script's `Start-Process -RedirectStandardOutput`) inherits it, so it
+ * keeps :3001 bound after the control-server exits. This only surfaces if the control-server
+ * is restarted while daemons it launched are still running — free :3001 (stop those daemons,
+ * or start the control-server before the daemons) in that case. Normal operation is fine.
  */
-const runScriptDetached = (relScript: string, extraEnv?: Record<string, string>): Promise<number> =>
-  new Promise((resolve) => {
-    const child = spawn("cmd", ["/c", join(repoRoot, relScript)], {
-      cwd: repoRoot,
-      windowsHide: true,
-      stdio: "ignore",
-      detached: true,
-      env: extraEnv === undefined ? process.env : { ...process.env, ...extraEnv },
-    })
-    child.once("close", (code) => resolve(code ?? -1))
-    child.once("error", () => resolve(-1))
-    child.unref()
+const runScriptDetached = async (relScript: string, extraEnv?: Record<string, string>): Promise<number> => {
+  const proc = Bun.spawn(["cmd", "/c", join(repoRoot, relScript)], {
+    cwd: repoRoot,
+    env: (extraEnv === undefined ? process.env : { ...process.env, ...extraEnv }) as Record<string, string>,
+    stdio: ["ignore", "ignore", "ignore"],
   })
+  return proc.exited
+}
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 

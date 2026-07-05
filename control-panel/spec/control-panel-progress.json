@@ -117,15 +117,16 @@
       "id": "CP5.1",
       "phase": "P5",
       "title": "Провижининг моделей + полнота i18n + docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["CP2.1", "CP3.1", "CP4.1"],
       "artifacts": [
-        "control-panel/server/models.ts",
-        "control-panel/ui/src/pages/ModelsPage.vue",
+        "control-panel/server/models-provision.ts",
+        "control-panel/ui/src/components/ModelsTab.vue",
+        "control-panel/README.md",
         "EchoRecorder/docs/ARCHITECTURE.md"
       ],
       "verify": "скачивание модели из UI (запуск download_whisper_models.bat + прогресс/лог); каждая настройка двуязычна ru/en (label+описание, проверка полноты локалей); bun test (control-server) + vue-tsc зелёные; ARCHITECTURE.md описывает control-plane :3001",
-      "evidence": ""
+      "evidence": "models-provision.ts: манифест (en/vad) + listModels (файл+размер+downloading, самозаживление флага), startDownload (Bun.spawn download_whisper_models.bat, idempotent). server.ts: GET /api/models, POST /api/models/:id/download. UI: вкладка Модели (ModelsTab — статус downloaded/размер/downloading + кнопка Скачать, авто-поллинг 3с), i18n. ЖИВОЙ ТЕСТ: GET /api/models → en(1549.3MB)/vad(0.8MB) downloaded; POST vad/download → 202 started; unknown → 409. i18n: ru/en СБАЛАНСИРОВАНЫ (106/106 ключей). Docs: control-panel/README.md + ARCHITECTURE.md §6 подсекция control-plane. Тесты 14; tsc+vue-tsc+build чисты. НАХОДКА (задокументирована): Bun.serve сокет наследуется — демон, запущенный панелью, держит :3001 после смерти панели (node-spawn/start/Bun.spawn не лечат — сокет inheritable на уровне Bun.serve). Митигация: демоны напрямую скриптами / освобождать :3001 при рестарте панели. Штатная работа не затронута."
     }
   ]
 }

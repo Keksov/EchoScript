@@ -63,3 +63,18 @@ export interface RestartResult {
   readonly ok: boolean
   readonly output: string
 }
+
+export interface ModelStatus {
+  readonly id: string
+  readonly model: string
+  readonly file: string
+  readonly kind: "language" | "vad"
+  readonly downloaded: boolean
+  readonly sizeMb: number | null
+  readonly downloading: boolean
+}
+
+export interface DownloadResult {
+  readonly started: boolean
+  readonly reason?: string
+}

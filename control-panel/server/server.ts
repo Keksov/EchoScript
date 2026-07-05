@@ -7,6 +7,7 @@ import { readDaemonStatuses } from "./status"
 import { applyConfig } from "./settings"
 import { ORCHESTRATOR_FIELDS, WS_DAEMON_FIELDS } from "./settings-schema"
 import { controlService, serviceNames, type ServiceAction } from "./services-control"
+import { listModels, startDownload } from "./models-provision"
 
 const port = resolveServerPort()
 
@@ -85,6 +86,14 @@ const handleApi = async (request: Request, pathname: string): Promise<Response> 
   if (serviceMatch !== null && request.method === "POST") {
     const result = await controlService(decodeURIComponent(serviceMatch[1]!), serviceMatch[2] as ServiceAction)
     return json(result, result.ok ? 200 : 500)
+  }
+  if (pathname === "/api/models" && request.method === "GET") {
+    return json({ models: listModels() })
+  }
+  const modelMatch = /^\/api\/models\/([^/]+)\/download$/u.exec(pathname)
+  if (modelMatch !== null && request.method === "POST") {
+    const result = startDownload(decodeURIComponent(modelMatch[1]!))
+    return json(result, result.started ? 202 : 409)
   }
   return json({ error: "not found" }, 404)
 }

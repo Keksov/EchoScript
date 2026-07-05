@@ -1,7 +1,9 @@
 import type {
   ConfigResponse,
   DaemonStatus,
+  DownloadResult,
   HealthResponse,
+  ModelStatus,
   RestartResult,
   SaveResult,
   SchemaResponse,
@@ -50,4 +52,14 @@ export const restartOrchestrator = async (): Promise<RestartResult> => {
 export const controlService = async (name: string, action: ServiceAction): Promise<RestartResult> => {
   const response = await fetch(`/api/services/${encodeURIComponent(name)}/${action}`, { method: "POST" })
   return (await response.json()) as RestartResult
+}
+
+export const fetchModels = async (): Promise<ModelStatus[]> => {
+  const payload = await getJson<{ models: ModelStatus[] }>("/api/models")
+  return payload.models
+}
+
+export const downloadModel = async (id: string): Promise<DownloadResult> => {
+  const response = await fetch(`/api/models/${encodeURIComponent(id)}/download`, { method: "POST" })
+  return (await response.json()) as DownloadResult
 }

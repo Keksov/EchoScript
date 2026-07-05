@@ -87,5 +87,18 @@
     "engine": { "label": "Engine", "desc": "Engine family for language routing (e.g. whisper)." },
     "language": { "label": "Language", "desc": "Language this daemon serves (ru/en/…)." },
     "model_name": { "label": "Model", "desc": "Model name this daemon is bound to (ggml-<model>.bin file)." }
+  },
+  "models": {
+    "title": "Models",
+    "hint": "Download recognition models from HuggingFace. The script is idempotent — already-downloaded files are skipped.",
+    "model": "Model",
+    "file": "File",
+    "status": "Status",
+    "actions": "Actions",
+    "download": "Download",
+    "downloading": "downloading…",
+    "downloaded": "downloaded",
+    "missing": "missing",
+    "pollNote": "Status refreshes automatically every few seconds."
   }
 }

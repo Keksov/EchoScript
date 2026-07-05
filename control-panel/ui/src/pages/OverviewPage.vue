@@ -11,6 +11,7 @@
       >
         <q-tab name="daemons" icon="dns" :label="t('tabs.services')" />
         <q-tab name="settings" icon="tune" :label="t('settings.title')" />
+        <q-tab name="models" icon="model_training" :label="t('models.title')" />
         <q-tab name="config" icon="data_object" :label="t('tabs.config')" />
       </q-tabs>
       <q-space />
@@ -103,6 +104,11 @@
         <SettingsForm />
       </q-tab-panel>
 
+      <!-- Models (provisioning) -->
+      <q-tab-panel name="models" class="q-pa-none">
+        <ModelsTab />
+      </q-tab-panel>
+
       <!-- Config (read-only) -->
       <q-tab-panel name="config" class="q-pa-none">
         <div class="text-subtitle1">{{ t("config.title") }}</div>
@@ -134,6 +140,7 @@ import { useI18n } from "vue-i18n"
 import { controlService, fetchConfig, fetchDaemons } from "src/services/api"
 import type { DaemonStatus, ServiceAction } from "src/types"
 import SettingsForm from "components/SettingsForm.vue"
+import ModelsTab from "components/ModelsTab.vue"
 
 const { t } = useI18n()
 
