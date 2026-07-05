@@ -61,9 +61,17 @@
     "restartBtn": "Restart orchestrator",
     "restarting": "Restarting…",
     "restarted": "Orchestrator restarted",
-    "restartFailed": "Failed to restart the orchestrator"
+    "restartFailed": "Failed to restart the orchestrator",
+    "daemonRestartNote": "Fields with a \"restart\" badge take effect after the daemon is restarted (Services tab)."
   },
   "fields": {
+    "vad": { "label": "VAD (strip non-speech)", "desc": "Silero VAD removes music/silence before recognition — fixes whisper's looping. Off → the whole audio is transcribed." },
+    "vad_threshold": { "label": "VAD threshold", "desc": "Speech-detection threshold (0–1). Lower keeps more audio as speech (safer for quiet speech); higher trims more aggressively." },
+    "vad_speech_pad_ms": { "label": "VAD speech pad (ms)", "desc": "Silence padding kept around speech segments so word edges aren't clipped." },
+    "no_speech_thold": { "label": "No-speech threshold", "desc": "Drop a segment when the no-speech probability exceeds this (0–1). Higher = stricter against silence hallucinations." },
+    "entropy_thold": { "label": "Entropy threshold", "desc": "Repetition detection via text compressibility; triggers temperature fallback. whisper.cpp default is 2.4." },
+    "gpu": { "label": "GPU", "desc": "Use the GPU for inference (if the build/drivers support it)." },
+    "gpu_device": { "label": "GPU device", "desc": "GPU device index (0 = first)." },
     "max_workers": { "label": "Workers", "desc": "How many python model workers run in parallel (ws-daemons don't count)." },
     "poll_interval_ms": { "label": "Poll interval (ms)", "desc": "How often the orchestrator re-scans the queue and drop folders." },
     "stream_window_ms": { "label": "Stream window (ms)", "desc": "Size of the audio window sent to the daemon per binary frame." },

@@ -4,6 +4,7 @@ import { join } from "node:path"
 
 import { configJsonPath, orchestratorEndpoint, repoRoot, serverDir } from "./config"
 import { isPortOpen } from "./status"
+import { DAEMON_ENV_MAP } from "./settings-schema"
 
 export type ServiceAction = "start" | "stop" | "restart"
 
@@ -50,16 +51,42 @@ const resolveEndpoint = (name: string): { host: string; port: number } | null =>
 }
 
 /**
+ * Daemon launch env from config (CP4.1): the daemon reads VAD/decode/GPU tuning from env,
+ * which we set here from ws_daemons.<name> before starting it (the start script + Start-Process
+ * inherit this environment). Absent/blank config values are skipped (daemon keeps its default).
+ */
+const daemonEnvFromConfig = (name: string): Record<string, string> => {
+  const env: Record<string, string> = {}
+  try {
+    const cfg: unknown = JSON.parse(readFileSync(configJsonPath, "utf-8"))
+    if (isRecord(cfg) && isRecord(cfg.ws_daemons) && isRecord(cfg.ws_daemons[name])) {
+      const daemon = cfg.ws_daemons[name] as Record<string, unknown>
+      for (const [key, envVar] of Object.entries(DAEMON_ENV_MAP)) {
+        const value = daemon[key]
+        if (value === undefined || value === null || value === "") {
+          continue
+        }
+        env[envVar] = typeof value === "boolean" ? (value ? "1" : "0") : String(value)
+      }
+    }
+  } catch {
+    // fall through — no overrides
+  }
+  return env
+}
+
+/**
  * Run a repo-relative .bat detached with no inherited handles (stdio "ignore" — piping
  * hands the child our listening socket on Windows, see CP2.1). Verified via port probe.
  */
-const runScriptDetached = (relScript: string): Promise<number> =>
+const runScriptDetached = (relScript: string, extraEnv?: Record<string, string>): Promise<number> =>
   new Promise((resolve) => {
     const child = spawn("cmd", ["/c", join(repoRoot, relScript)], {
       cwd: repoRoot,
       windowsHide: true,
       stdio: "ignore",
       detached: true,
+      env: extraEnv === undefined ? process.env : { ...process.env, ...extraEnv },
     })
     child.once("close", (code) => resolve(code ?? -1))
     child.once("error", () => resolve(-1))
@@ -104,6 +131,7 @@ export const controlService = async (
     return { ok: false, output: `unknown service: ${name}` }
   }
   const endpoint = resolveEndpoint(name)
+  const startEnv = daemonEnvFromConfig(name)
   const verify = async (wantOpen: boolean, timeoutMs: number): Promise<boolean> =>
     endpoint === null ? true : waitForPort(endpoint.host, endpoint.port, wantOpen, timeoutMs)
 
@@ -114,7 +142,7 @@ export const controlService = async (
   }
 
   if (action === "start") {
-    await runScriptDetached(scripts.start_script)
+    await runScriptDetached(scripts.start_script, startEnv)
     const up = await verify(true, START_TIMEOUT_MS)
     return { ok: up, output: up ? `${name} started` : `${name} did not come up within timeout` }
   }
@@ -122,7 +150,7 @@ export const controlService = async (
   // restart
   await runScriptDetached(scripts.stop_script)
   await verify(false, STOP_TIMEOUT_MS)
-  await runScriptDetached(scripts.start_script)
+  await runScriptDetached(scripts.start_script, startEnv)
   const up = await verify(true, START_TIMEOUT_MS)
   return { ok: up, output: up ? `${name} restarted` : `${name} did not come back up within timeout` }
 }

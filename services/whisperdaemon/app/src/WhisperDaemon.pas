@@ -590,6 +590,32 @@ begin
   Result := FileExists(resolveVadModelPath);
 end;
 
+// Tunable VAD/decode params come from env (set by the control panel from config.json at
+// launch, CP4.1); each falls back to the conservative default when unset. Floats parse
+// with a '.' separator regardless of locale (see PASCAL_RULES.md §7).
+function whisperEnvFloat(const aName: string; aDefault: Single): Single;
+var
+  raw: string;
+  fs: TFormatSettings;
+begin
+  raw := Trim(SysUtils.GetEnvironmentVariable(aName));
+  if raw = '' then
+    Exit(aDefault);
+  fs := DefaultFormatSettings;
+  fs.DecimalSeparator := '.';
+  Result := StrToFloatDef(raw, aDefault, fs);
+end;
+
+function whisperEnvInt(const aName: string; aDefault: LongInt): LongInt;
+var
+  raw: string;
+begin
+  raw := Trim(SysUtils.GetEnvironmentVariable(aName));
+  if raw = '' then
+    Exit(aDefault);
+  Result := StrToIntDef(raw, aDefault);
+end;
+
 function resolveDaemonDescriptorPath: string;
 begin
   Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
@@ -1515,14 +1541,21 @@ begin
           begin
             vadPathUtf8 := UTF8String(resolveVadModelPath);
             ctxParams.vadModelPath := PChar(vadPathUtf8);
-            ctxParams.vadParams.threshold := 0.4;
-            ctxParams.vadParams.minSpeechDurationMs := 100;
-            ctxParams.vadParams.minSilenceDurationMs := 100;
+            ctxParams.vadParams.threshold := whisperEnvFloat('WHISPER_VAD_THRESHOLD', 0.4);
+            ctxParams.vadParams.minSpeechDurationMs := whisperEnvInt('WHISPER_VAD_MIN_SPEECH_MS', 100);
+            ctxParams.vadParams.minSilenceDurationMs := whisperEnvInt('WHISPER_VAD_MIN_SILENCE_MS', 100);
             ctxParams.vadParams.maxSpeechDurationS := 3600.0;
-            ctxParams.vadParams.speechPadMs := 200;
+            ctxParams.vadParams.speechPadMs := whisperEnvInt('WHISPER_VAD_SPEECH_PAD_MS', 200);
             ctxParams.vadParams.samplesOverlap := 0.1;
           end;
-          WriteLn('[whisperdaemon] inference vad=', BoolToStr(vadEnabled, True), ' model=', FmodelName);
+          // Decode anti-hallucination thresholds — tunable from config; unset keeps the
+          // whisper.cpp default already in ctxParams (CP4.1).
+          ctxParams.noSpeechThold := whisperEnvFloat('WHISPER_NO_SPEECH_THOLD', ctxParams.noSpeechThold);
+          ctxParams.entropyThold := whisperEnvFloat('WHISPER_ENTROPY_THOLD', ctxParams.entropyThold);
+          WriteLn('[whisperdaemon] inference vad=', BoolToStr(vadEnabled, True),
+            ' vad_thold=', FormatFloat('0.00', ctxParams.vadParams.threshold),
+            ' no_speech=', FormatFloat('0.00', ctxParams.noSpeechThold),
+            ' model=', FmodelName);
 
           FlastKeepaliveTick := 0;
 

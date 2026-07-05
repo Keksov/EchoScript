@@ -34,15 +34,18 @@ export interface HealthResponse {
 }
 
 export type ReloadClass = "hot" | "restart"
-export type FieldType = "int" | "string" | "select"
+export type FieldType = "int" | "float" | "string" | "select" | "bool"
+export type FieldTarget = "orchestrator" | "daemon"
 
 export interface FieldSpec {
   readonly key: string
   readonly type: FieldType
   readonly reload: ReloadClass
+  readonly target?: FieldTarget
   readonly min?: number
   readonly max?: number
   readonly optionsFrom?: "models"
+  readonly default?: string | number | boolean
 }
 
 export interface SchemaResponse {

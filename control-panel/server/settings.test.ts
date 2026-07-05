@@ -64,3 +64,17 @@ test("changedReloadClasses flags restart for jobs_root and hot for intervals", (
   expect(changedReloadClasses(base, { ...base, poll_interval_ms: 750 }).has("hot")).toBe(true)
   expect([...changedReloadClasses(base, base)]).toEqual([])
 })
+
+test("daemon launch fields validate as float/bool and don't affect orchestrator reload", () => {
+  const withVad = mergeConfig(base, { ws_daemons: { whisperdaemon: { vad: true, vad_threshold: 0.4, no_speech_thold: 0.6 } } })
+  expect(validateConfig(withVad)).toEqual({ ok: true })
+  expect(validateConfig(mergeConfig(base, { ws_daemons: { whisperdaemon: { vad_threshold: 1.5 } } })).ok).toBe(false)
+  expect(validateConfig(mergeConfig(base, { ws_daemons: { whisperdaemon: { vad: "yes" } } })).ok).toBe(false)
+
+  // changing a daemon launch field is a daemon-restart concern, not an orchestrator one
+  const changed = mergeConfig(base, { ws_daemons: { whisperdaemon: { vad_threshold: 0.7 } } })
+  expect([...changedReloadClasses(base, changed)]).toEqual([])
+  // but a routing field (port) still flags hot for the orchestrator
+  const routed = mergeConfig(base, { ws_daemons: { whisperdaemon: { port: 7999 } } })
+  expect(changedReloadClasses(base, routed).has("hot")).toBe(true)
+})

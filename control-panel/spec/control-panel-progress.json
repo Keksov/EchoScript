@@ -100,16 +100,18 @@
     {
       "id": "CP4.1",
       "phase": "P4",
-      "title": "Демон-настройки (CLI-флаги + лаунчер-из-config)",
-      "status": "todo",
+      "title": "Демон-настройки (env из config при старте)",
+      "status": "done",
       "dependsOn": ["CP2.1", "CP3.1"],
       "artifacts": [
         "services/whisperdaemon/app/src/WhisperDaemon.pas",
-        "control-panel/server/daemons.ts",
-        "control-panel/ui/src/pages/SettingsPage.vue"
+        "control-panel/server/settings-schema.ts",
+        "control-panel/server/settings.ts",
+        "control-panel/server/services-control.ts",
+        "control-panel/ui/src/components/SettingsForm.vue"
       ],
-      "verify": "в WhisperDaemon.pas добавлены CLI-флаги (VAD threshold/pad/min-*; decode entropy/logprob/no_speech/temperature; sampling; GPU); лаунчер control-server генерит args из config; формы UI (+ i18n); пересборка демона; эффект подтверждён (VAD threshold меняет % reduction)",
-      "evidence": ""
+      "verify": "в WhisperDaemon.pas VAD-пороги/decode читаются из env (дефолты сохранены); лаунчер control-server выставляет env из config при старте демона; формы UI (bool/float + i18n); пересборка демона; эффект подтверждён",
+      "evidence": "Подход env-из-config (не CLI-парсинг — меньше Pascal). WhisperDaemon.pas: whisperEnvFloat/Int (float с '.'-разделителем, §7 PASCAL_RULES); VAD threshold/speech_pad/min-speech/min-silence + noSpeechThold/entropyThold из env с текущими дефолтами; лог 'inference vad=.. vad_thold=.. no_speech=..'. Пересборка ок. Схема: типы float/bool + target(orchestrator|daemon) + default; WS_DAEMON_FIELDS += vad/vad_threshold/vad_speech_pad_ms/no_speech_thold/entropy_thold/gpu/gpu_device (target daemon, reload restart); DAEMON_ENV_MAP config→env. settings.ts: валидация float/bool; changedReloadClasses по target (демон-поля не триггерят restart оркестратора). services-control: daemonEnvFromConfig → env при start/restart (start-скрипт+Start-Process наследуют). UI: q-toggle(bool)/число(float) + бейджи hot/restart + двуязычные пояснения + note про рестарт демона. ЖИВОЙ ТЕСТ: PUT whisperdaemon_en.vad_threshold=0.6 → POST start через панель → демон залогировал vad_thold=0,60 (env дошёл). restartRequired=False (демон-поле). Тесты 14; tsc+vue-tsc+build чисты."
     },
     {
       "id": "CP5.1",

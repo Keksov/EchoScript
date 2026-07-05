@@ -16,13 +16,17 @@ const isRecord = (value: unknown): value is ConfigObject =>
 
 const validateField = (spec: FieldSpec, value: unknown, config: ConfigObject, path: string): string[] => {
   const errors: string[] = []
-  if (spec.type === "int") {
-    if (typeof value !== "number" || !Number.isInteger(value)) {
-      errors.push(`${path}: expected an integer`)
+  if (spec.type === "int" || spec.type === "float") {
+    if (typeof value !== "number" || !Number.isFinite(value) || (spec.type === "int" && !Number.isInteger(value))) {
+      errors.push(`${path}: expected ${spec.type === "int" ? "an integer" : "a number"}`)
       return errors
     }
     if (spec.min !== undefined && value < spec.min) errors.push(`${path}: must be >= ${spec.min}`)
     if (spec.max !== undefined && value > spec.max) errors.push(`${path}: must be <= ${spec.max}`)
+  } else if (spec.type === "bool") {
+    if (typeof value !== "boolean") {
+      errors.push(`${path}: expected true or false`)
+    }
   } else if (spec.type === "string") {
     if (typeof value !== "string" || value.trim().length === 0) {
       errors.push(`${path}: expected a non-empty string`)
@@ -63,7 +67,7 @@ export const validateConfig = (config: unknown): { ok: true } | { ok: false; err
           continue
         }
         for (const spec of WS_DAEMON_FIELDS) {
-          if (spec.key in daemon) {
+          if (spec.key in daemon && daemon[spec.key] !== null && daemon[spec.key] !== "") {
             errors.push(...validateField(spec, daemon[spec.key], config, `ws_daemons.${name}.${spec.key}`))
           }
         }
@@ -103,8 +107,19 @@ export const changedReloadClasses = (current: ConfigObject, next: ConfigObject):
       classes.add(spec.reload)
     }
   }
-  if (JSON.stringify(current.ws_daemons) !== JSON.stringify(next.ws_daemons)) {
-    classes.add("hot") // ws_daemons routing is read per-dispatch
+  // ws_daemons: only routing fields (target orchestrator) affect the orchestrator; daemon
+  // launch fields (vad/decode/gpu) take effect on a daemon restart, not here.
+  const curWs = isRecord(current.ws_daemons) ? current.ws_daemons : {}
+  const nextWs = isRecord(next.ws_daemons) ? next.ws_daemons : {}
+  for (const name of new Set([...Object.keys(curWs), ...Object.keys(nextWs)])) {
+    const cur = isRecord(curWs[name]) ? curWs[name] : {}
+    const nx = isRecord(nextWs[name]) ? nextWs[name] : {}
+    for (const spec of WS_DAEMON_FIELDS) {
+      if ((spec.target ?? "orchestrator") === "daemon") continue
+      if (JSON.stringify(cur[spec.key]) !== JSON.stringify(nx[spec.key])) {
+        classes.add(spec.reload)
+      }
+    }
   }
   return classes
 }

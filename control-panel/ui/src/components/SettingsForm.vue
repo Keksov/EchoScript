@@ -55,18 +55,34 @@
 
       <!-- ws_daemons -->
       <div class="text-subtitle1 q-mb-xs">{{ t("settings.wsDaemons") }}</div>
+      <div class="text-caption text-grey-5 q-mb-sm">{{ t("settings.daemonRestartNote") }}</div>
       <q-list bordered class="rounded-borders q-mb-lg">
         <template v-for="(fields, name) in ws" :key="name">
           <q-item-label header class="text-cyan-3">{{ name }}</q-item-label>
           <q-item v-for="spec in schema.wsDaemon" :key="`${name}.${spec.key}`">
             <q-item-section>
-              <q-item-label>{{ t(`fields.${spec.key}.label`) }}</q-item-label>
+              <q-item-label>
+                {{ t(`fields.${spec.key}.label`) }}
+                <q-badge
+                  :color="spec.reload === 'restart' ? 'amber-8' : 'blue-grey-7'"
+                  class="q-ml-sm"
+                  :label="spec.reload === 'restart' ? t('settings.restartBadge') : t('settings.hotBadge')"
+                />
+              </q-item-label>
               <q-item-label caption class="text-grey-5">{{ t(`fields.${spec.key}.desc`) }}</q-item-label>
             </q-item-section>
             <q-item-section side style="min-width: 260px">
+              <q-toggle
+                v-if="spec.type === 'bool'"
+                :model-value="fields[spec.key] === '1'"
+                dense
+                @update:model-value="(v) => (fields[spec.key] = v ? '1' : '0')"
+              />
               <q-input
+                v-else
                 v-model="fields[spec.key]"
-                :type="spec.type === 'int' ? 'number' : 'text'"
+                :type="spec.type === 'int' || spec.type === 'float' ? 'number' : 'text'"
+                :step="spec.type === 'float' ? '0.05' : undefined"
                 dense
                 outlined
               />
@@ -103,13 +119,29 @@ const savedFlash = ref(false)
 const restartNeeded = ref(false)
 const restarting = ref(false)
 
-// Form values are held as strings (q-input friendly); int fields are coerced on save.
+// Form values are held as strings (q-input friendly; bool as "1"/"0"); coerced on save.
 const coerce = (spec: FieldSpec, value: string): unknown => {
+  if (spec.type === "bool") {
+    return value === "1"
+  }
   if (spec.type === "int") {
     const n = Number(value)
     return Number.isFinite(n) ? Math.trunc(n) : value
   }
+  if (spec.type === "float") {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : value
+  }
   return value
+}
+
+// Load a config value into the string form model, falling back to the schema default.
+const loadValue = (spec: FieldSpec, raw: unknown): string => {
+  const value = raw === undefined || raw === null || raw === "" ? spec.default : raw
+  if (spec.type === "bool") {
+    return value === true || value === "1" || value === "true" ? "1" : "0"
+  }
+  return value === undefined || value === null ? "" : String(value)
 }
 
 const reload = async (): Promise<void> => {
@@ -118,9 +150,8 @@ const reload = async (): Promise<void> => {
     const [sc, cfg] = await Promise.all([fetchSchema(), fetchConfig()])
     schema.value = sc
     const config = cfg.config
-    const asStr = (value: unknown): string => (value === undefined || value === null ? "" : String(value))
     for (const spec of sc.orchestrator) {
-      orch[spec.key] = asStr(config[spec.key])
+      orch[spec.key] = loadValue(spec, config[spec.key])
     }
     modelOptions.value =
       typeof config.models === "object" && config.models !== null
@@ -131,7 +162,7 @@ const reload = async (): Promise<void> => {
     for (const [name, daemon] of Object.entries(wsDaemons)) {
       ws[name] = {}
       for (const spec of sc.wsDaemon) {
-        ws[name]![spec.key] = asStr(daemon[spec.key])
+        ws[name]![spec.key] = loadValue(spec, daemon[spec.key])
       }
     }
   } catch (e) {
