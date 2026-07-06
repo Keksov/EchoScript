@@ -1,0 +1,63 @@
+{
+  "comment": "Каталог моделей/ассетов для echoctl models. Портирован из control-panel/server/models-provision.ts. files — repo-relative (все должны существовать = downloaded); external_dir — внешний каталог (vosk, read-only, downloaded = каталог существует); model_name связывает с ws_daemons.model_name для проверки ссылок при удалении.",
+  "models": [
+    {
+      "id": "podlodka",
+      "model": "whisper_podlodka (ru)",
+      "kind": "language",
+      "model_name": "whisper_podlodka",
+      "files": ["services/whisperdaemon/models/ggml-whisper_podlodka.bin"],
+      "note": "convert_whisper_podlodka_hf_to_ggml.bat + stage_whisperdaemon_model.bat"
+    },
+    {
+      "id": "en",
+      "model": "whisper_en_turbo (en)",
+      "kind": "language",
+      "model_name": "whisper_en_turbo",
+      "files": ["services/whisperdaemon/models/ggml-whisper_en_turbo.bin"],
+      "download": { "script": "services/whisperdaemon/scripts/download_whisper_models.bat", "args": ["en"] }
+    },
+    {
+      "id": "vad",
+      "model": "silero-v5.1.2 (VAD)",
+      "kind": "vad",
+      "files": ["services/whisperdaemon/models/ggml-silero-v5.1.2.bin"],
+      "download": { "script": "services/whisperdaemon/scripts/download_whisper_models.bat", "args": ["vad"] }
+    },
+    {
+      "id": "diarization",
+      "model": "diarizationdaemon (sherpa)",
+      "kind": "diarization",
+      "files": [
+        "services/whisperdaemon/models/diarization/segmentation.onnx",
+        "services/whisperdaemon/models/diarization/embedding.onnx",
+        "services/whisperdaemon/vendors/sherpa-onnx/sherpa-onnx.dll"
+      ],
+      "download": { "script": "services/whisperdaemon/scripts/download_diarize_models.bat", "args": [] }
+    },
+    {
+      "id": "vosk_ru",
+      "model": "vosk-model-ru-0.42 (ru)",
+      "kind": "language",
+      "model_name": "vosk_ru",
+      "external_dir": "C:/var/vosk/vosk-model-ru-0.42",
+      "note": "внешний каталог VOSK_MODELS_ROOT (по умолчанию C:/var/vosk); не качается нашими скриптами"
+    },
+    {
+      "id": "vosk_ru_cmd",
+      "model": "vosk-model-small-ru-0.22 (ru, команды)",
+      "kind": "language",
+      "model_name": "vosk_ru_cmd",
+      "external_dir": "C:/var/vosk/vosk-model-small-ru-0.22",
+      "note": "внешний каталог VOSK_MODELS_ROOT (по умолчанию C:/var/vosk); не качается нашими скриптами"
+    },
+    {
+      "id": "vosk_en",
+      "model": "vosk-model-en-us-0.42-gigaspeech (en)",
+      "kind": "language",
+      "model_name": "vosk_en",
+      "external_dir": "C:/var/vosk/vosk-model-en-us-0.42-gigaspeech",
+      "note": "внешний каталог VOSK_MODELS_ROOT (по умолчанию C:/var/vosk); не качается нашими скриптами"
+    }
+  ]
+}

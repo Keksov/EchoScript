@@ -18,9 +18,15 @@ function loadConfigObject(const aPath: string): TJSONObject;
 { Атомарная запись объекта в aPath (форматированный JSON, 2-space). }
 procedure saveConfigAtomic(const aPath: string; aRoot: TJSONObject);
 
+{ Поиск файла вверх от каталога exe (до 6 уровней); '' если не найден. }
+function findFileUpwards(const aFileName: string): string;
+
 { Путь к config.json по расположению exe (echoctl/build/x64/echoctl.exe → корень
   репозитория), с фолбэком на текущий каталог. }
 function resolveDefaultConfigPath: string;
+
+{ Корень репозитория (каталог с config.json), независимо от --config. }
+function resolveRepoRoot: string;
 
 implementation
 
@@ -90,17 +96,15 @@ begin
   end;
 end;
 
-function resolveDefaultConfigPath: string;
+function findFileUpwards(const aFileName: string): string;
 var
-  dir: string;
-  parent: string;
-  candidate: string;
+  dir, parent, candidate: string;
   depth: Integer;
 begin
   dir := ExtractFileDir(ExpandFileName(ParamStr(0)));
-  for depth := 0 to 5 do
+  for depth := 0 to 6 do
   begin
-    candidate := IncludeTrailingPathDelimiter(dir) + 'config.json';
+    candidate := IncludeTrailingPathDelimiter(dir) + aFileName;
     if FileExists(candidate) then
       Exit(candidate);
     parent := ExtractFileDir(dir);
@@ -108,7 +112,25 @@ begin
       Break;
     dir := parent;
   end;
-  Result := IncludeTrailingPathDelimiter(GetCurrentDir) + 'config.json';
+  Result := '';
+end;
+
+function resolveDefaultConfigPath: string;
+begin
+  Result := findFileUpwards('config.json');
+  if Result = '' then
+    Result := IncludeTrailingPathDelimiter(GetCurrentDir) + 'config.json';
+end;
+
+function resolveRepoRoot: string;
+var
+  configPath: string;
+begin
+  configPath := findFileUpwards('config.json');
+  if configPath <> '' then
+    Result := ExtractFileDir(configPath)
+  else
+    Result := GetCurrentDir;
 end;
 
 end.

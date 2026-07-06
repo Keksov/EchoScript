@@ -112,11 +112,11 @@
       "id": "DF2.1",
       "phase": "P2",
       "title": "models-manifest.json + models list [--json]",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.3"],
-      "artifacts": ["echoctl/models-manifest.json", "echoctl/src/echoctl_models.pas"],
+      "artifacts": ["echoctl/models-manifest.json", "echoctl/src/echoctl_models.pas", "echoctl/src/echoctl_config.pas", "echoctl/src/echoctl.pas", "echoctl/scripts/smoke_models_x64.bat"],
       "verify": "манифест портирован из models-provision.ts (whisper podlodka/en/large/turbo, vad, diarization); list показывает downloaded-state/размеры/пути; vosk-модели (C:\\var\\vosk) помечены как внешние read-only",
-      "evidence": ""
+      "evidence": "models-manifest.json портирован из models-provision.ts: podlodka(no-dl, note conversion), en/vad/diarization(download bat), + добавлены vosk_ru/vosk_ru_cmd/vosk_en как external_dir (C:/var/vosk, read-only), у каждого model_name для связи с ws_daemons (DF2.3). echoctl_config: findFileUpwards (обобщённый поиск от exe) + resolveRepoRoot. echoctl_models: computeInfo (file-based: FindFirst размер, downloaded=все файлы есть; external_dir: DirectoryExists, size null), stateText downloaded/missing/absent, JSON {id,model,kind,model_name,downloadable,downloaded,size_mb,note,paths} + таблица. Живо: podlodka/en 1549.3MB, vad 0.8MB, diarization 51MB — downloaded; vosk — external downloaded size null. Размеры сверены с ls (podlodka==en==1624555275, оба turbo-база). smoke_models зелёный."
     },
     {
       "id": "DF2.2",

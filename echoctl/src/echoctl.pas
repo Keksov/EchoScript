@@ -18,7 +18,8 @@ uses
   Types,
   echoctl_common,
   echoctl_config,
-  echoctl_daemons;
+  echoctl_daemons,
+  echoctl_models;
 
 const
   ECHOCTL_VERSION = '0.1.0';
@@ -173,7 +174,9 @@ end;
 
 function dispatchModels(const aCommand: string): Integer;
 begin
-  if isKnown(aCommand, ['list', 'download', 'delete']) then
+  if SameText(aCommand, 'list') then
+    Result := runModelsList(hasFlag('--json'))
+  else if isKnown(aCommand, ['download', 'delete']) then
     Result := notImplemented('models', aCommand)
   else
   begin
