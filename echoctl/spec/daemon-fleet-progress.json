@@ -1,0 +1,232 @@
+{
+  "initiative": "daemon-fleet",
+  "title": "Динамический флот демонов: разные модели на разных портах + удаление моделей; движок — FPC CLI echoctl, UI/Bun — обёртка",
+  "plan": "daemon-fleet-plan.md",
+  "branch": "feature/daemon-fleet",
+  "baseBranch": "feature/control-panel",
+  "created": "2026-07-06",
+  "updated": "2026-07-06",
+  "conventions": "FPC CLI по лекалу EchoRecorder/cli: program {$mode objfpc}{$H+}, ручной парсинг аргументов, scripts/{build,run,smoke,clean}_x64.bat; каждая команда с --json для UI/сервера; config.json — atomic temp+rename, read-modify-write с сохранением неизвестных ключей; PASCAL_RULES соблюдаем.",
+  "decisions": [
+    "DF-D1 (big-bang): echoctl — единственный движок управления и единственный писатель config.json; TS-логика (settings/services-control/models-provision) переносится в CLI; Bun control-server → чистый прокси.",
+    "DF-D2 (JSON-контракт): каждая команда поддерживает --json (машинный вывод); человекочитаемый по умолчанию.",
+    "DF-D3 (охват v1): whisper + vosk (ws-демоны); python-модели config.models (gemma/vibevoice/borealis) вне v1.",
+    "DF-D4 (удаление): по умолчанию отказ, если модель ссылается инстанс (показать кто); --force каскадит инстансы; всегда --dry-run preview → подтверждение в UI.",
+    "DF-D5 (per-instance настройки): запись ws_daemons расширяется полем settings{} (зеркало DAEMON_ENV_MAP); лаунчер генерит env/флаги из settings.",
+    "DF-D6 (порты): авто-аллокация per-engine (whisper 78xx, vosk 77xx) + ручной override; валидация коллизий.",
+    "DF-D7 (spawn + фикс сокета): демоны через CreateProcess(bInheritHandles=FALSE) → детач + устранение утечки слушающего сокета :3001.",
+    "DF-D8 (vosk generic): vosk-демон — резолвинг путь-или-имя + VOSK_MODELS_ROOT, back-compat со старыми именами.",
+    "DF-D9: config.json — единый источник истины (как CP-D2), единственный писатель теперь echoctl; оркестратор по-прежнему hot-reload'ит ws_daemons."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + скелет echoctl + config I/O", "gate": "pause: обзор плана владельцем; build зелёный; daemons list --json читает ws_daemons" },
+    { "id": "P1", "title": "CRUD инстансов + per-instance settings + аллокация портов", "gate": "pause: add/remove/edit атомарно пишут config; валидация; unit-смоки" },
+    { "id": "P2", "title": "Жизненный цикл моделей (manifest/list/download/delete)", "gate": "pause: список/скачивание/удаление из CLI; safety (refuse/force/dry-run) подтверждён" },
+    { "id": "P3", "title": "Обобщение демонов (vosk generic; whisper + settings pass-through)", "gate": "pause: произвольная модель движка на произвольном порту стартует прямым запуском exe" },
+    { "id": "P4", "title": "spawn/stop в echoctl (no-inherit) + config get/set/schema", "gate": "pause: start/stop/restart из CLI с ожиданием реального warmup + port-verify; утечка :3001 устранена" },
+    { "id": "P5", "title": "Bun → прокси + UI (create/delete/settings/model-delete) + i18n", "gate": "pause: UI = обёртка; мутации через echoctl; ru/en полны; тесты зелёные" },
+    { "id": "P6", "title": "Оркестратор dynamic pickup + E2E", "gate": "pause: job на новой модели/порту проходит; удаление модели refuse→force; docs" }
+  ],
+  "steps": [
+    {
+      "id": "DF0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echoctl/spec/daemon-fleet-plan.md", "echoctl/spec/daemon-fleet-progress.json"],
+      "verify": "план описывает архитектуру (echoctl-движок, Bun-прокси), командный интерфейс, модель данных, фазы; решения DF-D1..D9 зафиксированы; DAG ацикличен (python-проверка)",
+      "evidence": "Создан после обсуждения с владельцем 2026-07-06. Развилки: big-bang (DF-D1), whisper+vosk (DF-D3), удаление refuse+--force+dry-run (DF-D4). Фундамент: ws_daemons уже keyed-инстансы с host/port/engine/language/model_name; whisper-демон уже generic (resolveWhisperModelPath путь-или-имя+WHISPER_MODELS_ROOT); vosk хардкодит 3 имени; CLI-паттерн EchoRecorder/cli."
+    },
+    {
+      "id": "DF0.2",
+      "phase": "P0",
+      "title": "Скелет echoctl (program + scripts + диспетчер аргументов)",
+      "status": "todo",
+      "dependsOn": ["DF0.1"],
+      "artifacts": ["echoctl/src/echoctl.pas", "echoctl/scripts/build_x64.bat", "echoctl/scripts/run_x64.bat", "echoctl/scripts/smoke_x64.bat", "echoctl/scripts/clean.bat"],
+      "verify": "build_x64.bat собирает без ошибок; echoctl version и echoctl help работают; диспетчер команд daemons/config/models с заглушками",
+      "evidence": ""
+    },
+    {
+      "id": "DF0.3",
+      "phase": "P0",
+      "title": "Модуль config I/O (fpjson load + atomic temp+rename write, сохранение неизвестных ключей)",
+      "status": "todo",
+      "dependsOn": ["DF0.2"],
+      "artifacts": ["echoctl/src/echoctl_config.pas"],
+      "verify": "round-trip config.json сохраняет ВСЕ ключи (speech/models/ws_daemons/…); запись атомарна (temp+rename); smoke: load→save без семантических потерь",
+      "evidence": ""
+    },
+    {
+      "id": "DF0.4",
+      "phase": "P0",
+      "title": "daemons list [--json] (чтение ws_daemons → JSON)",
+      "status": "todo",
+      "dependsOn": ["DF0.3"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl.pas"],
+      "verify": "echoctl daemons list --json выводит оба текущих инстанса с host/port/engine/language/model_name; человекочитаемый режим — таблица",
+      "evidence": ""
+    },
+    {
+      "id": "DF1.1",
+      "phase": "P1",
+      "title": "daemons add (валидация + append + atomic write + --json)",
+      "status": "todo",
+      "dependsOn": ["DF0.4"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "verify": "add --engine --model --port создаёт запись ws_daemons; отвергает неизвестный engine/модель, занятый порт, дублирующее имя; config записан атомарно",
+      "evidence": ""
+    },
+    {
+      "id": "DF1.2",
+      "phase": "P1",
+      "title": "daemons remove <name>",
+      "status": "todo",
+      "dependsOn": ["DF1.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "verify": "remove удаляет запись ws_daemons атомарно; отвергает несуществующее имя; --json результат",
+      "evidence": ""
+    },
+    {
+      "id": "DF1.3",
+      "phase": "P1",
+      "title": "per-instance settings{} + daemons edit --set k=v + движко-схема",
+      "status": "todo",
+      "dependsOn": ["DF1.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl_schema.pas"],
+      "verify": "edit --set vad_threshold=0.4 пишет settings в запись инстанса; схема per-engine (whisper: vad/vad_threshold/gpu/no_speech_thold/…, зеркало DAEMON_ENV_MAP); валидация типов/диапазонов",
+      "evidence": ""
+    },
+    {
+      "id": "DF1.4",
+      "phase": "P1",
+      "title": "Авто-аллокация портов per-engine + override + проверка коллизий",
+      "status": "todo",
+      "dependsOn": ["DF1.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "verify": "add без --port выдаёт свободный порт из диапазона движка (whisper 78xx, vosk 77xx); коллизия порта между инстансами отвергается",
+      "evidence": ""
+    },
+    {
+      "id": "DF2.1",
+      "phase": "P2",
+      "title": "models-manifest.json + models list [--json]",
+      "status": "todo",
+      "dependsOn": ["DF0.3"],
+      "artifacts": ["echoctl/models-manifest.json", "echoctl/src/echoctl_models.pas"],
+      "verify": "манифест портирован из models-provision.ts (whisper podlodka/en/large/turbo, vad, diarization); list показывает downloaded-state/размеры/пути; vosk-модели (C:\\var\\vosk) помечены как внешние read-only",
+      "evidence": ""
+    },
+    {
+      "id": "DF2.2",
+      "phase": "P2",
+      "title": "models download <id>",
+      "status": "todo",
+      "dependsOn": ["DF2.1"],
+      "artifacts": ["echoctl/src/echoctl_models.pas"],
+      "verify": "download <id> запускает download-скрипт из манифеста; идемпотентно (скачанное пропускается); --json со статусом старта",
+      "evidence": ""
+    },
+    {
+      "id": "DF2.3",
+      "phase": "P2",
+      "title": "models delete <id> (--dry-run / --force, refuse-if-referenced + каскад)",
+      "status": "todo",
+      "dependsOn": ["DF2.1", "DF1.2"],
+      "artifacts": ["echoctl/src/echoctl_models.pas"],
+      "verify": "delete без --force отвергает, если инстанс ссылается (показывает кто); --dry-run печатает файлы+конфиг-записи к удалению; --force удаляет файлы + каскадит инстансы; внешние vosk-каталоги — с предупреждением",
+      "evidence": ""
+    },
+    {
+      "id": "DF3.1",
+      "phase": "P3",
+      "title": "voskdaemon: generic-резолвинг модели (путь-или-имя + VOSK_MODELS_ROOT, back-compat)",
+      "status": "todo",
+      "dependsOn": ["DF0.2"],
+      "artifacts": ["services/voskdaemon/app/src/VoskDaemon.pas"],
+      "verify": "прямой запуск VoskDaemon.exe с произвольной моделью (путь ИЛИ имя-каталога под VOSK_MODELS_ROOT) на произвольном порту → warmup ready + describe; старые имена vosk_ru/vosk_ru_cmd/vosk_en работают",
+      "evidence": ""
+    },
+    {
+      "id": "DF3.2",
+      "phase": "P3",
+      "title": "whisper: подтвердить generic + settings→env pass-through (2-я модель на 2-м порту)",
+      "status": "todo",
+      "dependsOn": ["DF0.2"],
+      "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
+      "verify": "прямой запуск WhisperDaemon.exe со 2-й скачанной моделью на 2-м порту + env из settings (WHISPER_VAD_THRESHOLD и т.п.) → лог inference показывает применённые настройки; при необходимости мелкие правки",
+      "evidence": ""
+    },
+    {
+      "id": "DF4.1",
+      "phase": "P4",
+      "title": "daemons start/stop/restart через CreateProcess(bInheritHandles=FALSE) + ожидание warmup + port-verify",
+      "status": "todo",
+      "dependsOn": ["DF1.1", "DF3.1"],
+      "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas"],
+      "verify": "start поднимает демон детачем, ждёт РЕАЛЬНОГО warmup-ready (не только открытия порта) с таймаутом; stop/restart работают; демон НЕ наследует хендлы (проверка: рестарт панели/родителя не блокируется удержанием :3001)",
+      "evidence": ""
+    },
+    {
+      "id": "DF4.2",
+      "phase": "P4",
+      "title": "config get/set/schema (перенос settings.ts: validate/merge/atomic write)",
+      "status": "todo",
+      "dependsOn": ["DF0.3"],
+      "artifacts": ["echoctl/src/echoctl_config.pas", "echoctl/src/echoctl_schema.pas"],
+      "verify": "config get --json = текущие настройки оркестратора; config set валидирует (тип/диапазон/reload-класс) и атомарно пишет; config schema --json = поля с hot/restart и picker",
+      "evidence": ""
+    },
+    {
+      "id": "DF5.1",
+      "phase": "P5",
+      "title": "Bun control-server → прокси к echoctl (демонтаж TS-мутаций)",
+      "status": "todo",
+      "dependsOn": ["DF4.1", "DF4.2", "DF2.2", "DF2.3", "DF1.2", "DF1.3"],
+      "artifacts": ["control-panel/server/server.ts", "control-panel/server/echoctl.ts"],
+      "verify": "routes (PUT config, POST/DELETE daemons, models download/delete, services action) вызывают echoctl --json и прокидывают результат; settings.ts/services-control.ts/models-provision.ts удалены/сведены к шимам; server-тесты зелёные",
+      "evidence": ""
+    },
+    {
+      "id": "DF5.2",
+      "phase": "P5",
+      "title": "UI: создание/удаление инстансов + per-instance настройки + удаление моделей + i18n",
+      "status": "todo",
+      "dependsOn": ["DF5.1"],
+      "artifacts": ["control-panel/ui/src/pages/OverviewPage.vue", "control-panel/ui/src/components/DaemonForm.vue", "control-panel/ui/src/components/ModelsTab.vue", "control-panel/ui/src/i18n/locales/ru.json", "control-panel/ui/src/i18n/locales/en.json"],
+      "verify": "форма add (engine/model/port/name/settings), кнопка удаления инстанса, редактор per-instance настроек, удаление модели с dry-run preview + подтверждением; ru/en равны по ключам; vue-tsc + build зелёные",
+      "evidence": ""
+    },
+    {
+      "id": "DF5.3",
+      "phase": "P5",
+      "title": "pick-path/нативный диалог + полировка + docs",
+      "status": "todo",
+      "dependsOn": ["DF5.2"],
+      "artifacts": ["control-panel/README.md", "EchoRecorder/docs/ARCHITECTURE.md", "echoctl/README.md"],
+      "verify": "нативный выбор пути сохранён; README echoctl (командный интерфейс); ARCHITECTURE обновлён (echoctl-движок + Bun-прокси); краткий how-to",
+      "evidence": ""
+    },
+    {
+      "id": "DF6.1",
+      "phase": "P6",
+      "title": "Оркестратор: динамический pickup add/remove инстансов (hot-reload reconcile)",
+      "status": "todo",
+      "dependsOn": ["DF1.1", "DF1.2"],
+      "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/index.ts"],
+      "verify": "добавленный через echoctl инстанс появляется в роутинге без рестарта оркестратора; удалённый — исчезает; при необходимости правка reconcile add/remove ws_daemons",
+      "evidence": ""
+    },
+    {
+      "id": "DF6.2",
+      "phase": "P6",
+      "title": "E2E: 2-я whisper-модель на новом порту → job; удаление модели refuse→force; фикс сокета",
+      "status": "todo",
+      "dependsOn": ["DF5.3", "DF4.1", "DF6.1"],
+      "artifacts": ["echoctl/spec/daemon-fleet-progress.json"],
+      "verify": "через UI: add 2-й whisper-модели на свободном порту → запуск → routing job → готовый результат; delete используемой модели отвергнут, с --force каскадит; подтверждено, что :3001 больше не удерживается демонами",
+      "evidence": ""
+    }
+  ]
+}
