@@ -42,11 +42,11 @@
       "id": "DF0.2",
       "phase": "P0",
       "title": "Скелет echoctl (program + scripts + диспетчер аргументов)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.1"],
-      "artifacts": ["echoctl/src/echoctl.pas", "echoctl/scripts/build_x64.bat", "echoctl/scripts/run_x64.bat", "echoctl/scripts/smoke_x64.bat", "echoctl/scripts/clean.bat"],
+      "artifacts": ["echoctl/src/echoctl.pas", "echoctl/scripts/fpc-x64.cfg", "echoctl/scripts/build_x64.bat", "echoctl/scripts/run_x64.bat", "echoctl/scripts/smoke_x64.bat", "echoctl/scripts/clean.bat"],
       "verify": "build_x64.bat собирает без ошибок; echoctl version и echoctl help работают; диспетчер команд daemons/config/models с заглушками",
-      "evidence": ""
+      "evidence": "FPC-тулчейн EchoRecorder/VendorsCore/fpc (образец orchestrator/monitor/cli; top-level cfg с путём ..\\EchoRecorder\\VendorsCore). echoctl.pas: {$mode objfpc}{$H+}, ручной разбор аргументов, диспетчер daemons/models/config + version/help, коды возврата 0/1/2/3 (OK/runtime/usage/notimpl), DecimalSeparator='.' (PASCAL_RULES §7). Скрипты build/run/smoke/clean_x64 (CRLF). smoke зелёный: build→echoctl.exe; version→'echoctl 0.1.0' exit0; help/no-args→usage exit0; unknown group→exit!=0; 'daemons list'→not implemented exit3. build/ в .gitignore."
     },
     {
       "id": "DF0.3",
