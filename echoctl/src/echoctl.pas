@@ -104,6 +104,12 @@ begin
   Result := optionValue('--manifest', findFileUpwards('models-manifest.json'));
 end;
 
+{ Таймаут ожидания warmup при start/restart, секунды → мс (по умолчанию 180с). }
+function activeTimeoutMs: Integer;
+begin
+  Result := StrToIntDef(optionValue('--timeout', '180'), 180) * 1000;
+end;
+
 function doDaemonsList: Integer;
 begin
   Result := runDaemonsList(activeConfigPath, hasFlag('--json'));
@@ -170,8 +176,12 @@ begin
     Result := doDaemonsRemove
   else if SameText(aCommand, 'edit') then
     Result := doDaemonsEdit
-  else if isKnown(aCommand, ['start', 'stop', 'restart']) then
-    Result := notImplemented('daemons', aCommand)
+  else if SameText(aCommand, 'start') then
+    Result := runDaemonsStart(activeConfigPath, targetName, activeTimeoutMs, hasFlag('--json'))
+  else if SameText(aCommand, 'stop') then
+    Result := runDaemonsStop(activeConfigPath, targetName, hasFlag('--json'))
+  else if SameText(aCommand, 'restart') then
+    Result := runDaemonsRestart(activeConfigPath, targetName, activeTimeoutMs, hasFlag('--json'))
   else
   begin
     writeErr('echoctl: unknown daemons command: ' + aCommand);

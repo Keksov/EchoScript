@@ -162,11 +162,11 @@
       "id": "DF4.1",
       "phase": "P4",
       "title": "daemons start/stop/restart через CreateProcess(bInheritHandles=FALSE) + ожидание warmup + port-verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF1.1", "DF3.1"],
-      "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas"],
+      "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl.pas", "echoctl/scripts/smoke_lifecycle_x64.bat"],
       "verify": "start поднимает демон детачем, ждёт РЕАЛЬНОГО warmup-ready (не только открытия порта) с таймаутом; stop/restart работают; демон НЕ наследует хендлы (проверка: рестарт панели/родителя не блокируется удержанием :3001)",
-      "evidence": ""
+      "evidence": "echoctl_launch: spawnDaemon через CreateProcess(cmd.exe /c \"\"exe\" args > log 2>&1\", bInheritHandles=FALSE, CREATE_NO_WINDOW) — редирект делает cmd (открывает лог сам), поэтому наследование хендлов НЕ нужно, ставим FALSE → демон не наследует ни один хендл echoctl (вкл. :3001 от Bun) = фикс DF-D7. waitWarmup поллит лог на 'warmup ready'/'warmup failed'/timeout (реальный прогрев). isPortOpen/waitPortClosed через ssockets. FPC-версия Windows-юнита без STARTUPINFOEX, поэтому whitelist-хендлов недоступен — cmd-редирект был единственным чистым путём совместить логи и no-inherit. echoctl_daemons: daemonExePath (engine→exe), buildDaemonEnv (whisper WHISPER_MODELS_ROOT + settings→WHISPER_VAD/THRESHOLD/… ; vosk дефолт), buildDaemonArgs (--model-name/host/port + --gpu/--gpu-device), stopDaemonByPort (powershell Get-NetTCPConnection LocalPort→Stop-Process), start/stop/restart. CLI: --timeout (180с деф). ПРОВЕРЕНО на vosk_ru_cmd (:7786/:7785): start→'started' после реального warmup, повторный start→'already-running', describe_ack {model:vosk_ru_cmd}, restart=stop+start, stop→порт down; start/stop nope→exit2. smoke_lifecycle (guarded happy-path + error-пути) зелёный; base/crud/models/delete без регрессий. E2E-проверка фикса :3001 (Bun→echoctl→демон) — в P6 через панель."
     },
     {
       "id": "DF4.2",

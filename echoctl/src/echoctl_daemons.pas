@@ -23,11 +23,14 @@ function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: 
 function runDaemonsRemove(const aConfigPath, aName: string; aJson: Boolean): Integer;
 function runDaemonsEdit(const aConfigPath, aName, aNewModel: string; aNewPort: Integer;
   const aSets: array of string; aJson: Boolean): Integer;
+function runDaemonsStart(const aConfigPath, aName: string; aTimeoutMs: Integer; aJson: Boolean): Integer;
+function runDaemonsStop(const aConfigPath, aName: string; aJson: Boolean): Integer;
+function runDaemonsRestart(const aConfigPath, aName: string; aTimeoutMs: Integer; aJson: Boolean): Integer;
 
 implementation
 
 uses
-  SysUtils, fpjson, echoctl_config, echoctl_common, echoctl_schema;
+  SysUtils, Classes, fpjson, echoctl_config, echoctl_common, echoctl_schema, echoctl_launch;
 
 function daemonsObject(aConfig: TJSONObject): TJSONObject;
 var
@@ -422,6 +425,277 @@ begin
   finally
     config.Free;
   end;
+end;
+
+{ ---- lifecycle (start/stop/restart) ---- }
+
+function daemonExePath(const aRepoRoot, aEngine: string): string;
+begin
+  if SameText(aEngine, 'whisper') then
+    Result := IncludeTrailingPathDelimiter(aRepoRoot) +
+      'services' + PathDelim + 'whisperdaemon' + PathDelim + 'build' + PathDelim + 'x64' +
+      PathDelim + 'WhisperDaemon.exe'
+  else if SameText(aEngine, 'vosk') then
+    Result := IncludeTrailingPathDelimiter(aRepoRoot) +
+      'services' + PathDelim + 'voskdaemon' + PathDelim + 'build' + PathDelim + 'x64' +
+      PathDelim + 'VoskDaemon.exe'
+  else
+    Result := '';
+end;
+
+function daemonLogDir(const aRepoRoot, aEngine: string): string;
+var
+  svc: string;
+begin
+  if SameText(aEngine, 'vosk') then
+    svc := 'voskdaemon'
+  else
+    svc := 'whisperdaemon';
+  Result := IncludeTrailingPathDelimiter(aRepoRoot) + 'services' + PathDelim + svc + PathDelim + 'logs';
+end;
+
+function boolEnv(aValue: Boolean): string;
+begin
+  if aValue then
+    Result := '1'
+  else
+    Result := '0';
+end;
+
+function floatEnv(aValue: Double): string;
+var
+  fs: TFormatSettings;
+begin
+  fs := DefaultFormatSettings;
+  fs.DecimalSeparator := '.';
+  Result := FloatToStr(aValue, fs);
+end;
+
+procedure buildDaemonEnv(const aRepoRoot, aEngine: string; aSettings: TJSONObject; aEnv: TStringList);
+begin
+  if SameText(aEngine, 'whisper') then
+  begin
+    aEnv.Values['WHISPER_MODELS_ROOT'] := IncludeTrailingPathDelimiter(aRepoRoot) +
+      'services' + PathDelim + 'whisperdaemon' + PathDelim + 'models';
+    if aSettings <> nil then
+    begin
+      if aSettings.Find('vad') <> nil then
+        aEnv.Values['WHISPER_VAD'] := boolEnv(aSettings.Get('vad', True));
+      if aSettings.Find('vad_threshold') <> nil then
+        aEnv.Values['WHISPER_VAD_THRESHOLD'] := floatEnv(aSettings.Get('vad_threshold', 0.4));
+      if aSettings.Find('vad_speech_pad_ms') <> nil then
+        aEnv.Values['WHISPER_VAD_SPEECH_PAD_MS'] := IntToStr(aSettings.Get('vad_speech_pad_ms', 200));
+      if aSettings.Find('no_speech_thold') <> nil then
+        aEnv.Values['WHISPER_NO_SPEECH_THOLD'] := floatEnv(aSettings.Get('no_speech_thold', 0.6));
+      if aSettings.Find('entropy_thold') <> nil then
+        aEnv.Values['WHISPER_ENTROPY_THOLD'] := floatEnv(aSettings.Get('entropy_thold', 2.4));
+    end;
+  end;
+  { vosk: VOSK_MODELS_ROOT — оставляем дефолт демона (C:\var\vosk), если не задан в окружении. }
+end;
+
+function buildDaemonArgs(const aModel, aHost: string; aPort: Integer;
+  const aEngine: string; aSettings: TJSONObject): string;
+begin
+  Result := '--model-name "' + aModel + '" --host ' + aHost + ' --port ' + IntToStr(aPort);
+  if SameText(aEngine, 'whisper') and (aSettings <> nil) then
+  begin
+    if aSettings.Find('gpu') <> nil then
+    begin
+      if aSettings.Get('gpu', False) then
+        Result := Result + ' --gpu'
+      else
+        Result := Result + ' --no-gpu';
+    end;
+    if aSettings.Find('gpu_device') <> nil then
+      Result := Result + ' --gpu-device ' + IntToStr(aSettings.Get('gpu_device', 0));
+  end;
+end;
+
+{ Убить <Engine>Daemon.exe, слушающий aPort (владелец listening-сокета = сам демон). }
+function stopDaemonByPort(aPort: Integer): Boolean;
+var
+  comLine: string;
+begin
+  comLine := '-NoProfile -Command "Get-NetTCPConnection -LocalPort ' + IntToStr(aPort) +
+    ' -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"';
+  Result := ExecuteProcess('powershell.exe', comLine) = 0;
+end;
+
+procedure reportStart(aJson: Boolean; const aName, aStatus, aHost: string; aPort: Integer);
+var
+  o: TJSONObject;
+begin
+  if aJson then
+  begin
+    o := TJSONObject.Create;
+    try
+      o.Add('name', aName);
+      o.Add('status', aStatus);
+      o.Add('host', aHost);
+      o.Add('port', aPort);
+      WriteLn(o.FormatJSON());
+    finally
+      o.Free;
+    end;
+  end
+  else
+    WriteLn(Format('%s %s (%s:%d)', [aStatus, aName, aHost, aPort]));
+end;
+
+procedure reportStop(aJson: Boolean; const aName, aStatus: string; aPort: Integer);
+var
+  o: TJSONObject;
+begin
+  if aJson then
+  begin
+    o := TJSONObject.Create;
+    try
+      o.Add('name', aName);
+      o.Add('status', aStatus);
+      o.Add('port', aPort);
+      WriteLn(o.FormatJSON());
+    finally
+      o.Free;
+    end;
+  end
+  else
+    WriteLn(Format('%s %s (:%d)', [aStatus, aName, aPort]));
+end;
+
+function findInstance(aConfig: TJSONObject; const aName: string): TJSONObject;
+var
+  ws: TJSONObject;
+begin
+  ws := daemonsObject(aConfig);
+  if (ws <> nil) and (ws.IndexOfName(aName) >= 0) then
+    Result := ws.Objects[aName]
+  else
+    Result := nil;
+end;
+
+function runDaemonsStart(const aConfigPath, aName: string; aTimeoutMs: Integer; aJson: Boolean): Integer;
+var
+  config, inst, settings: TJSONObject;
+  node: TJSONData;
+  repoRoot, engine, host, model, exePath, logDir, logPath, args, err, detail: string;
+  port, pid: Integer;
+  env: TStringList;
+  outcome: TWarmupOutcome;
+begin
+  config := loadConfigObject(aConfigPath);
+  env := TStringList.Create;
+  try
+    inst := findInstance(config, aName);
+    if inst = nil then
+      Exit(fail('no such instance: ' + aName));
+    engine := inst.Get('engine', '');
+    host := inst.Get('host', '127.0.0.1');
+    port := inst.Get('port', 0);
+    model := inst.Get('model_name', '');
+    node := inst.Find('settings');
+    if (node <> nil) and (node is TJSONObject) then
+      settings := TJSONObject(node)
+    else
+      settings := nil;
+
+    repoRoot := resolveRepoRoot;
+    exePath := daemonExePath(repoRoot, engine);
+    if exePath = '' then
+      Exit(fail('unknown engine: ' + engine));
+    if not FileExists(exePath) then
+      Exit(fail('daemon exe not built: ' + exePath));
+
+    if isPortOpen(host, port) then
+    begin
+      reportStart(aJson, aName, 'already-running', host, port);
+      Exit(EXIT_OK);
+    end;
+
+    logDir := daemonLogDir(repoRoot, engine);
+    ForceDirectories(logDir);
+    logPath := IncludeTrailingPathDelimiter(logDir) + aName + '.log';
+    SysUtils.DeleteFile(logPath);
+
+    buildDaemonEnv(repoRoot, engine, settings, env);
+    args := buildDaemonArgs(model, host, port, engine, settings);
+
+    if not spawnDaemon(exePath, args, repoRoot, logPath, env, pid, err) then
+      Exit(fail('spawn failed: ' + err));
+
+    outcome := waitWarmup(logPath, aTimeoutMs, detail);
+    if outcome = woReady then
+    begin
+      waitPortOpen(host, port, 5000);
+      reportStart(aJson, aName, 'started', host, port);
+      Result := EXIT_OK;
+    end
+    else
+    begin
+      writeErr(Format('echoctl: %s did not become ready (%s). Log tail:', [aName, detail]));
+      writeErr(logTail(logPath, 700));
+      Result := EXIT_RUNTIME;
+    end;
+  finally
+    env.Free;
+    config.Free;
+  end;
+end;
+
+function runDaemonsStop(const aConfigPath, aName: string; aJson: Boolean): Integer;
+var
+  config, inst: TJSONObject;
+  host: string;
+  port: Integer;
+begin
+  config := loadConfigObject(aConfigPath);
+  try
+    inst := findInstance(config, aName);
+    if inst = nil then
+      Exit(fail('no such instance: ' + aName));
+    host := inst.Get('host', '127.0.0.1');
+    port := inst.Get('port', 0);
+
+    stopDaemonByPort(port);
+    if waitPortClosed(host, port, 10000) then
+    begin
+      reportStop(aJson, aName, 'stopped', port);
+      Result := EXIT_OK;
+    end
+    else
+    begin
+      writeErr(Format('echoctl: %s still listening on :%d after stop', [aName, port]));
+      Result := EXIT_RUNTIME;
+    end;
+  finally
+    config.Free;
+  end;
+end;
+
+function runDaemonsRestart(const aConfigPath, aName: string; aTimeoutMs: Integer; aJson: Boolean): Integer;
+var
+  config, inst: TJSONObject;
+  host: string;
+  port: Integer;
+begin
+  { Лучший-эффорт стоп (если инстанс есть и слушает), затем старт (он и отчитается). }
+  config := loadConfigObject(aConfigPath);
+  try
+    inst := findInstance(config, aName);
+    if inst <> nil then
+    begin
+      host := inst.Get('host', '127.0.0.1');
+      port := inst.Get('port', 0);
+      if isPortOpen(host, port) then
+      begin
+        stopDaemonByPort(port);
+        waitPortClosed(host, port, 10000);
+      end;
+    end;
+  finally
+    config.Free;
+  end;
+  Result := runDaemonsStart(aConfigPath, aName, aTimeoutMs, aJson);
 end;
 
 end.
