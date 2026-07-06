@@ -52,11 +52,11 @@
       "id": "DF0.3",
       "phase": "P0",
       "title": "Модуль config I/O (fpjson load + atomic temp+rename write, сохранение неизвестных ключей)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.2"],
-      "artifacts": ["echoctl/src/echoctl_config.pas"],
+      "artifacts": ["echoctl/src/echoctl_config.pas", "echoctl/tests/test_config.pas", "echoctl/scripts/test_x64.bat"],
       "verify": "round-trip config.json сохраняет ВСЕ ключи (speech/models/ws_daemons/…); запись атомарна (temp+rename); smoke: load→save без семантических потерь",
-      "evidence": ""
+      "evidence": "echoctl_config.pas: loadConfigObject (fpjson GetJSON → TJSONObject, владелец вызывающий), saveConfigAtomic (FormatJSON → temp + Windows.MoveFileEx MOVEFILE_REPLACE_EXISTING — истинная атомарная замена на NTFS), resolveDefaultConfigPath (поиск config.json вверх от exe + фолбэк CWD). DeleteFile квалифицирован SysUtils.DeleteFile (Windows-юнит тоже экспортирует). Тест test_config.pas (PASCAL_RULES §8, Ok/ExitCode): load→saveAtomic→reload — 9/9 passed: топ-уровень count+names, ws_daemons count+names, jobs_root/max_workers сохранены. test_x64.bat собирает и гоняет тест (exit 0)."
     },
     {
       "id": "DF0.4",
