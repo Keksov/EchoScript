@@ -15,6 +15,7 @@ program echoctl;
 
 uses
   SysUtils,
+  Types,
   echoctl_common,
   echoctl_config,
   echoctl_daemons;
@@ -128,6 +129,29 @@ begin
   Result := runDaemonsRemove(activeConfigPath, targetName, hasFlag('--json'));
 end;
 
+{ Все значения повторяющегося флага --set key=value. }
+function collectSets: TStringDynArray;
+var
+  i, n: Integer;
+begin
+  SetLength(Result, 0);
+  n := 0;
+  for i := 1 to ParamCount - 1 do
+    if ParamStr(i) = '--set' then
+    begin
+      SetLength(Result, n + 1);
+      Result[n] := ParamStr(i + 1);
+      Inc(n);
+    end;
+end;
+
+function doDaemonsEdit: Integer;
+begin
+  Result := runDaemonsEdit(activeConfigPath, targetName,
+    optionValue('--model', ''), StrToIntDef(optionValue('--port', ''), -1),
+    collectSets, hasFlag('--json'));
+end;
+
 function dispatchDaemons(const aCommand: string): Integer;
 begin
   if SameText(aCommand, 'list') then
@@ -136,7 +160,9 @@ begin
     Result := doDaemonsAdd
   else if SameText(aCommand, 'remove') then
     Result := doDaemonsRemove
-  else if isKnown(aCommand, ['edit', 'start', 'stop', 'restart']) then
+  else if SameText(aCommand, 'edit') then
+    Result := doDaemonsEdit
+  else if isKnown(aCommand, ['start', 'stop', 'restart']) then
     Result := notImplemented('daemons', aCommand)
   else
   begin

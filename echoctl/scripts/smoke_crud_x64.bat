@@ -35,6 +35,27 @@ echo [crud] bad port rejected
 echo [crud] missing engine rejected
 "%CLI%" daemons add --model whisper_en_turbo --port 7896 --config "%TMP%" && goto :fail
 
+echo [crud] edit set settings
+"%CLI%" daemons edit test_whisper --set vad_threshold=0.4 --set gpu=true --config "%TMP%" || goto :fail
+
+echo [crud] settings appear in list
+"%CLI%" daemons list --json --config "%TMP%" | findstr /C:"vad_threshold" >nul || goto :fail
+
+echo [crud] edit change port
+"%CLI%" daemons edit test_whisper --port 7888 --config "%TMP%" || goto :fail
+
+echo [crud] edit unknown setting rejected
+"%CLI%" daemons edit test_whisper --set bogus=1 --config "%TMP%" && goto :fail
+
+echo [crud] edit out-of-range value rejected
+"%CLI%" daemons edit test_whisper --set vad_threshold=2 --config "%TMP%" && goto :fail
+
+echo [crud] edit port collision rejected
+"%CLI%" daemons edit test_whisper --port 7801 --config "%TMP%" && goto :fail
+
+echo [crud] edit non-existent rejected
+"%CLI%" daemons edit nope --set gpu=true --config "%TMP%" && goto :fail
+
 echo [crud] remove instance
 "%CLI%" daemons remove test_whisper --config "%TMP%" || goto :fail
 

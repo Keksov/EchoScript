@@ -21,11 +21,13 @@ type
 function runDaemonsList(const aConfigPath: string; aJson: Boolean): Integer;
 function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
 function runDaemonsRemove(const aConfigPath, aName: string; aJson: Boolean): Integer;
+function runDaemonsEdit(const aConfigPath, aName, aNewModel: string; aNewPort: Integer;
+  const aSets: array of string; aJson: Boolean): Integer;
 
 implementation
 
 uses
-  SysUtils, fpjson, echoctl_config, echoctl_common;
+  SysUtils, fpjson, echoctl_config, echoctl_common, echoctl_schema;
 
 function daemonsObject(aConfig: TJSONObject): TJSONObject;
 var
@@ -255,6 +257,124 @@ begin
     end
     else
       WriteLn('removed daemon ', aName);
+    Result := EXIT_OK;
+  finally
+    config.Free;
+  end;
+end;
+
+function ensureSettings(aInst: TJSONObject): TJSONObject;
+var
+  node: TJSONData;
+begin
+  node := aInst.Find('settings');
+  if (node <> nil) and (node is TJSONObject) then
+    Result := TJSONObject(node)
+  else
+  begin
+    Result := TJSONObject.Create;
+    aInst.Add('settings', Result);
+  end;
+end;
+
+{ Применяет один "key=value" к settings инстанса с валидацией по схеме движка. }
+function applySet(aInst: TJSONObject; const aEngine, aPair: string; out aError: string): Boolean;
+var
+  eqPos, idx: Integer;
+  key, rawVal: string;
+  spec: TSettingSpec;
+  jval: TJSONData;
+  settings: TJSONObject;
+begin
+  eqPos := Pos('=', aPair);
+  if eqPos < 1 then
+  begin
+    aError := 'bad --set (expected key=value): ' + aPair;
+    Exit(False);
+  end;
+  key := Trim(Copy(aPair, 1, eqPos - 1));
+  rawVal := Copy(aPair, eqPos + 1, MaxInt);
+  if not findSettingSpec(aEngine, key, spec) then
+  begin
+    aError := 'unknown setting "' + key + '" for engine ' + aEngine +
+      ' (allowed: ' + engineKeyList(aEngine) + ')';
+    Exit(False);
+  end;
+  if not parseSettingValue(spec, rawVal, jval, aError) then
+    Exit(False);
+  settings := ensureSettings(aInst);
+  idx := settings.IndexOfName(key);
+  if idx >= 0 then
+    settings.Delete(idx);
+  settings.Add(key, jval);
+  Result := True;
+end;
+
+function runDaemonsEdit(const aConfigPath, aName, aNewModel: string; aNewPort: Integer;
+  const aSets: array of string; aJson: Boolean): Integer;
+var
+  config, ws, inst, created: TJSONObject;
+  engine, err: string;
+  i, idx: Integer;
+  changed: Boolean;
+begin
+  if aName = '' then
+    Exit(fail('instance name required (positional or --name)'));
+  config := loadConfigObject(aConfigPath);
+  try
+    ws := daemonsObject(config);
+    if ws <> nil then
+      idx := ws.IndexOfName(aName)
+    else
+      idx := -1;
+    if idx < 0 then
+      Exit(fail('no such instance: ' + aName));
+
+    inst := ws.Objects[aName];
+    engine := inst.Get('engine', '');
+    changed := False;
+
+    if aNewModel <> '' then
+    begin
+      if not modelKnown(config, aNewModel) then
+        Exit(fail('unknown model: ' + aNewModel + ' (not a key in config.models)'));
+      inst.Strings['model_name'] := aNewModel;
+      changed := True;
+    end;
+
+    if aNewPort >= 1 then
+    begin
+      if aNewPort > 65535 then
+        Exit(fail('--port must be 1..65535'));
+      if portInUse(ws, aNewPort, aName) then
+        Exit(fail('port already in use: ' + IntToStr(aNewPort)));
+      inst.Integers['port'] := aNewPort;
+      changed := True;
+    end;
+
+    for i := 0 to High(aSets) do
+    begin
+      if not applySet(inst, engine, aSets[i], err) then
+        Exit(fail(err));
+      changed := True;
+    end;
+
+    if not changed then
+      Exit(fail('nothing to edit; use --port/--model/--set key=value'));
+
+    saveConfigAtomic(aConfigPath, config);
+
+    if aJson then
+    begin
+      created := instanceToJson(aName, inst);
+      try
+        WriteLn(created.FormatJSON());
+      finally
+        created.Free;
+      end;
+    end
+    else
+      WriteLn('edited daemon ', aName);
     Result := EXIT_OK;
   finally
     config.Free;

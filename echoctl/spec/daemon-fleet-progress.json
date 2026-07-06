@@ -92,11 +92,11 @@
       "id": "DF1.3",
       "phase": "P1",
       "title": "per-instance settings{} + daemons edit --set k=v + движко-схема",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF1.1"],
-      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl_schema.pas"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl_schema.pas", "echoctl/src/echoctl.pas"],
       "verify": "edit --set vad_threshold=0.4 пишет settings в запись инстанса; схема per-engine (whisper: vad/vad_threshold/gpu/no_speech_thold/…, зеркало DAEMON_ENV_MAP); валидация типов/диапазонов",
-      "evidence": ""
+      "evidence": "echoctl_schema: TSettingSpec (bool/int/float + min/max), findSettingSpec (whisper: vad, vad_threshold[0..1], vad_speech_pad_ms[0..5000], no_speech_thold[0..1], entropy_thold[>=0], gpu, gpu_device[0..16]; vosk — нет в v1), parseSettingValue (в TJSONBoolean/Integer/Float, float с fs.DecimalSeparator='.'). runDaemonsEdit: --model (modelKnown), --port (диапазон+коллизия excl. self, in-place через .Integers), несколько --set key=value (applySet: findSettingSpec+parse+settings.set), 'nothing to edit' если пусто; in-place .Strings сохраняет порядок ключей. CLI: collectSets (все --set), doDaemonsEdit, Types.TStringDynArray. smoke_crud +7 проверок edit — все ОК. Проверка типов записи: vad→bool, vad_threshold→0.35(float), gpu_device→1(int)."
     },
     {
       "id": "DF1.4",
