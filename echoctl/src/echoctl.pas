@@ -14,7 +14,10 @@ program echoctl;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils;
+  SysUtils,
+  fpjson,
+  echoctl_config,
+  echoctl_daemons;
 
 const
   ECHOCTL_VERSION = '0.1.0';
@@ -72,9 +75,51 @@ begin
   Result := False;
 end;
 
+{ Наличие флага (напр. --json) в любой позиции. }
+function hasFlag(const aName: string): Boolean;
+var
+  i: Integer;
+begin
+  for i := 1 to ParamCount do
+    if ParamStr(i) = aName then
+      Exit(True);
+  Result := False;
+end;
+
+{ Значение опции "--name value"; aDefault, если опция не задана. }
+function optionValue(const aName, aDefault: string): string;
+var
+  i: Integer;
+begin
+  for i := 1 to ParamCount - 1 do
+    if ParamStr(i) = aName then
+      Exit(ParamStr(i + 1));
+  Result := aDefault;
+end;
+
+{ Загрузка активного config.json (--config override или поиск от exe). Владелец — вызывающий. }
+function loadActiveConfig: TJSONObject;
+begin
+  Result := loadConfigObject(optionValue('--config', resolveDefaultConfigPath));
+end;
+
+function doDaemonsList: Integer;
+var
+  config: TJSONObject;
+begin
+  config := loadActiveConfig;
+  try
+    Result := runDaemonsList(config, hasFlag('--json'));
+  finally
+    config.Free;
+  end;
+end;
+
 function dispatchDaemons(const aCommand: string): Integer;
 begin
-  if isKnown(aCommand, ['list', 'add', 'remove', 'edit', 'start', 'stop', 'restart']) then
+  if SameText(aCommand, 'list') then
+    Result := doDaemonsList
+  else if isKnown(aCommand, ['add', 'remove', 'edit', 'start', 'stop', 'restart']) then
     Result := notImplemented('daemons', aCommand)
   else
   begin

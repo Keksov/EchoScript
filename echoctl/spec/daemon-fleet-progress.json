@@ -62,11 +62,11 @@
       "id": "DF0.4",
       "phase": "P0",
       "title": "daemons list [--json] (чтение ws_daemons → JSON)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.3"],
       "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl.pas"],
       "verify": "echoctl daemons list --json выводит оба текущих инстанса с host/port/engine/language/model_name; человекочитаемый режим — таблица",
-      "evidence": ""
+      "evidence": "echoctl_daemons.runDaemonsList: JSON-массив (name/engine/language/host/port/model_name/settings, settings клонируется или пустой объект) или таблица NAME/ENGINE/LANG/ENDPOINT/MODEL. CLI: добавлены hasFlag/optionValue/loadActiveConfig (--config override + resolveDefaultConfigPath), dispatchDaemons.list→doDaemonsList, остальные daemons-команды всё ещё заглушки. Живой вывод: оба инстанса whisperdaemon(:7801 ru podlodka)/whisperdaemon_en(:7802 en turbo). smoke зелёный: list→exit0, list --json содержит инстансы, daemons add→exit3 (заглушка)."
     },
     {
       "id": "DF1.1",
