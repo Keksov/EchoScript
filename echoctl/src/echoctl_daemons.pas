@@ -101,6 +101,37 @@ begin
   Result := False;
 end;
 
+{ Диапазон портов движка для авто-аллокации (совпадает с текущими: whisper 78xx, vosk 77xx). }
+function enginePortRange(const aEngine: string; out aLo, aHi: Integer): Boolean;
+begin
+  Result := True;
+  if SameText(aEngine, 'whisper') then
+  begin
+    aLo := 7801;
+    aHi := 7899;
+  end
+  else if SameText(aEngine, 'vosk') then
+  begin
+    aLo := 7701;
+    aHi := 7799;
+  end
+  else
+    Result := False;
+end;
+
+{ Первый свободный порт в диапазоне движка; -1, если диапазон исчерпан/движок неизвестен. }
+function allocatePort(aWs: TJSONObject; const aEngine: string): Integer;
+var
+  lo, hi, p: Integer;
+begin
+  if not enginePortRange(aEngine, lo, hi) then
+    Exit(-1);
+  for p := lo to hi do
+    if not portInUse(aWs, p, '') then
+      Exit(p);
+  Result := -1;
+end;
+
 function listJson(aWs: TJSONObject): Integer;
 var
   arr: TJSONArray;
@@ -171,6 +202,7 @@ function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: 
 var
   config, ws, inst, created: TJSONObject;
   name, host: string;
+  port: Integer;
 begin
   config := loadConfigObject(aConfigPath);
   try
@@ -182,15 +214,26 @@ begin
       Exit(fail('--model is required'));
     if not modelKnown(config, aSpec.ModelName) then
       Exit(fail('unknown model: ' + aSpec.ModelName + ' (not a key in config.models)'));
-    if (aSpec.Port < 1) or (aSpec.Port > 65535) then
-      Exit(fail('--port must be 1..65535'));
 
     ws := ensureDaemonsObject(config);
     name := defaultName(aSpec);
     if ws.Find(name) <> nil then
       Exit(fail('instance already exists: ' + name + ' (use --name)'));
-    if portInUse(ws, aSpec.Port, '') then
-      Exit(fail('port already in use: ' + IntToStr(aSpec.Port)));
+
+    port := aSpec.Port;
+    if port <= 0 then
+    begin
+      port := allocatePort(ws, aSpec.Engine);
+      if port < 0 then
+        Exit(fail('no free port in range for engine ' + aSpec.Engine));
+    end
+    else
+    begin
+      if port > 65535 then
+        Exit(fail('--port must be 1..65535'));
+      if portInUse(ws, port, '') then
+        Exit(fail('port already in use: ' + IntToStr(port)));
+    end;
 
     if aSpec.Host <> '' then
       host := aSpec.Host
@@ -199,7 +242,7 @@ begin
 
     inst := TJSONObject.Create;
     inst.Add('host', host);
-    inst.Add('port', aSpec.Port);
+    inst.Add('port', port);
     inst.Add('engine', aSpec.Engine);
     inst.Add('language', aSpec.Language);
     inst.Add('model_name', aSpec.ModelName);
@@ -218,7 +261,7 @@ begin
     end
     else
       WriteLn(Format('added daemon %s (%s %s %s:%d %s)',
-        [name, aSpec.Engine, aSpec.Language, host, aSpec.Port, aSpec.ModelName]));
+        [name, aSpec.Engine, aSpec.Language, host, port, aSpec.ModelName]));
     Result := EXIT_OK;
   finally
     config.Free;

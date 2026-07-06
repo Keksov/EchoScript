@@ -102,11 +102,11 @@
       "id": "DF1.4",
       "phase": "P1",
       "title": "Авто-аллокация портов per-engine + override + проверка коллизий",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF1.1"],
-      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/scripts/smoke_crud_x64.bat"],
       "verify": "add без --port выдаёт свободный порт из диапазона движка (whisper 78xx, vosk 77xx); коллизия порта между инстансами отвергается",
-      "evidence": ""
+      "evidence": "enginePortRange (whisper 7801-7899, vosk 7701-7799) + allocatePort (первый свободный, -1 при исчерпании). runDaemonsAdd: если --port не задан (<=0) → авто-аллокация из диапазона движка, иначе валидация диапазона+коллизии. smoke: add whisper без порта → auto_w на 7803 (7801/7802 заняты whisperdaemon/_en), add vosk без порта → auto_v на 7701. Коллизия/дубли по-прежнему отвергаются. base+crud+roundtrip зелёные."
     },
     {
       "id": "DF2.1",

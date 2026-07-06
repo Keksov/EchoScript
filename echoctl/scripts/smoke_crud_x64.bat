@@ -56,6 +56,14 @@ echo [crud] edit port collision rejected
 echo [crud] edit non-existent rejected
 "%CLI%" daemons edit nope --set gpu=true --config "%TMP%" && goto :fail
 
+echo [crud] add whisper without port auto-allocates 7803
+"%CLI%" daemons add --engine whisper --model whisper_en_turbo --lang en --name auto_w --config "%TMP%" || goto :fail
+"%CLI%" daemons list --json --config "%TMP%" | findstr /C:"7803" >nul || goto :fail
+
+echo [crud] add vosk without port auto-allocates 7701
+"%CLI%" daemons add --engine vosk --model vosk_ru --lang ru --name auto_v --config "%TMP%" || goto :fail
+"%CLI%" daemons list --json --config "%TMP%" | findstr /C:"7701" >nul || goto :fail
+
 echo [crud] remove instance
 "%CLI%" daemons remove test_whisper --config "%TMP%" || goto :fail
 
