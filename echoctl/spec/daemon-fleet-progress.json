@@ -132,11 +132,11 @@
       "id": "DF2.3",
       "phase": "P2",
       "title": "models delete <id> (--dry-run / --force, refuse-if-referenced + каскад)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF2.1", "DF1.2"],
-      "artifacts": ["echoctl/src/echoctl_models.pas"],
+      "artifacts": ["echoctl/src/echoctl_models.pas", "echoctl/src/echoctl.pas", "echoctl/scripts/smoke_delete_x64.bat", "echoctl/tests/fixtures/delete-manifest.json", "echoctl/tests/fixtures/delete-config.json"],
       "verify": "delete без --force отвергает, если инстанс ссылается (показывает кто); --dry-run печатает файлы+конфиг-записи к удалению; --force удаляет файлы + каскадит инстансы; внешние vosk-каталоги — с предупреждением",
-      "evidence": ""
+      "evidence": "runModelsDelete: собирает существующие файлы (file-based) + ссылающиеся инстансы (ws_daemons.model_name==entry.model_name). --dry-run: превью (files+external_dir+referencing_instances+would_cascade), 0 изменений. Блоки без --force: referenced → отказ (перечисляет кто); external → отказ (каталог не трогается). --force: DeleteFile файлов + каскад-удаление инстансов + saveConfigAtomic; внешний каталог НЕ удаляется (предупреждение 'left in place'). Добавлен override --manifest (+ рефактор runModelsList/Download на путь манифеста от CLI) для безопасных тестов. smoke_delete на ФЕЙКОВОЙ модели (fixtures/delete-*.json + build/x64/fake-model.bin): refuse→файл цел; dry-run --force→файл цел; --force→файл удалён + fake_inst убран из конфига; bogus→отказ. smoke_models: delete en --dry-run (боевой манифест, без удаления) + bogus. Регрессий нет (base/crud/roundtrip зелёные)."
     },
     {
       "id": "DF3.1",

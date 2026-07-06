@@ -1,0 +1,12 @@
+{
+  "ws_daemons": {
+    "fake_inst": {
+      "host": "127.0.0.1",
+      "port": 7850,
+      "engine": "whisper",
+      "language": "en",
+      "model_name": "faketest_model"
+    }
+  },
+  "models": {}
+}

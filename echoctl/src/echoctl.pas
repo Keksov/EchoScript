@@ -42,6 +42,7 @@ begin
   WriteLn('  config    get | set | schema');
   WriteLn;
   WriteLn('daemons add --engine <e> --model <m> --port <n> [--host H] [--lang L] [--name NM]');
+  WriteLn('models delete <id> [--dry-run] [--force]   (refuses if an instance references the model)');
   WriteLn;
   WriteLn('Other:');
   WriteLn('  echoctl version    print version and exit');
@@ -50,6 +51,7 @@ begin
   WriteLn('Notes:');
   WriteLn('  --json            emit machine-readable JSON (for the control-panel wrapper)');
   WriteLn('  --config <path>   use a specific config.json (default: found near the exe)');
+  WriteLn('  --manifest <path> use a specific models-manifest.json (default: found near the exe)');
 end;
 
 { Заглушка для распознанной, но ещё не реализованной подкоманды. }
@@ -95,6 +97,11 @@ end;
 function activeConfigPath: string;
 begin
   Result := optionValue('--config', resolveDefaultConfigPath);
+end;
+
+function activeManifestPath: string;
+begin
+  Result := optionValue('--manifest', findFileUpwards('models-manifest.json'));
 end;
 
 function doDaemonsList: Integer;
@@ -175,11 +182,12 @@ end;
 function dispatchModels(const aCommand: string): Integer;
 begin
   if SameText(aCommand, 'list') then
-    Result := runModelsList(hasFlag('--json'))
+    Result := runModelsList(activeManifestPath, hasFlag('--json'))
   else if SameText(aCommand, 'download') then
-    Result := runModelsDownload(targetName, hasFlag('--json'))
-  else if isKnown(aCommand, ['delete']) then
-    Result := notImplemented('models', aCommand)
+    Result := runModelsDownload(activeManifestPath, targetName, hasFlag('--json'))
+  else if SameText(aCommand, 'delete') then
+    Result := runModelsDelete(activeManifestPath, activeConfigPath, targetName,
+      hasFlag('--dry-run'), hasFlag('--force'), hasFlag('--json'))
   else
   begin
     writeErr('echoctl: unknown models command: ' + aCommand);

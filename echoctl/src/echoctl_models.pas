@@ -7,8 +7,10 @@ unit echoctl_models;
 
 interface
 
-function runModelsList(aJson: Boolean): Integer;
-function runModelsDownload(const aId: string; aJson: Boolean): Integer;
+function runModelsList(const aManifestPath: string; aJson: Boolean): Integer;
+function runModelsDownload(const aManifestPath, aId: string; aJson: Boolean): Integer;
+function runModelsDelete(const aManifestPath, aConfigPath, aId: string;
+  aDryRun, aForce, aJson: Boolean): Integer;
 
 implementation
 
@@ -146,22 +148,21 @@ begin
   Result.Add('paths', pathsArr);
 end;
 
-function runModelsList(aJson: Boolean): Integer;
+function runModelsList(const aManifestPath: string; aJson: Boolean): Integer;
 const
   ROW = '%-13s %-42s %-11s %-11s %s';
 var
-  manifestPath, repoRoot: string;
+  repoRoot: string;
   manifest: TJSONObject;
   models: TJSONArray;
   arr: TJSONArray;
   info: TModelInfo;
   i: Integer;
 begin
-  manifestPath := findFileUpwards('models-manifest.json');
-  if manifestPath = '' then
+  if aManifestPath = '' then
     Exit(fail('models-manifest.json not found'));
   repoRoot := resolveRepoRoot;
-  manifest := loadConfigObject(manifestPath);
+  manifest := loadConfigObject(aManifestPath);
   try
     models := manifestModels(manifest);
     if models = nil then
@@ -249,9 +250,9 @@ begin
   info.Paths.Free;
 end;
 
-function runModelsDownload(const aId: string; aJson: Boolean): Integer;
+function runModelsDownload(const aManifestPath, aId: string; aJson: Boolean): Integer;
 var
-  manifestPath, repoRoot, scriptPath, comSpec, comLine, savedCwd, detail: string;
+  repoRoot, scriptPath, comSpec, comLine, savedCwd, detail: string;
   manifest: TJSONObject;
   models: TJSONArray;
   entry, dlObj: TJSONObject;
@@ -259,11 +260,10 @@ var
   args: TJSONArray;
   i, exitCode: Integer;
 begin
-  manifestPath := findFileUpwards('models-manifest.json');
-  if manifestPath = '' then
+  if aManifestPath = '' then
     Exit(fail('models-manifest.json not found'));
   repoRoot := resolveRepoRoot;
-  manifest := loadConfigObject(manifestPath);
+  manifest := loadConfigObject(aManifestPath);
   try
     models := manifestModels(manifest);
     if models = nil then
@@ -326,6 +326,180 @@ begin
       Result := EXIT_RUNTIME;
     end;
   finally
+    manifest.Free;
+  end;
+end;
+
+function slToJsonArray(aList: TStringList): TJSONArray;
+var
+  i: Integer;
+begin
+  Result := TJSONArray.Create;
+  for i := 0 to aList.Count - 1 do
+    Result.Add(aList[i]);
+end;
+
+function runModelsDelete(const aManifestPath, aConfigPath, aId: string;
+  aDryRun, aForce, aJson: Boolean): Integer;
+var
+  repoRoot, modelName, externalDir, abs: string;
+  manifest, config, ws, entry, res: TJSONObject;
+  models, files: TJSONArray;
+  filesArr, wsNode: TJSONData;
+  toDelete, refs, removedInstances, deletedFiles: TStringList;
+  i, idx: Integer;
+begin
+  if aManifestPath = '' then
+    Exit(fail('models-manifest.json not found'));
+  repoRoot := resolveRepoRoot;
+
+  manifest := loadConfigObject(aManifestPath);
+  config := nil;
+  toDelete := TStringList.Create;
+  refs := TStringList.Create;
+  removedInstances := TStringList.Create;
+  deletedFiles := TStringList.Create;
+  try
+    models := manifestModels(manifest);
+    if models = nil then
+      Exit(fail('manifest has no "models" array'));
+    entry := findEntryById(models, aId);
+    if entry = nil then
+      Exit(fail('unknown model id: ' + aId));
+    modelName := entry.Get('model_name', '');
+    externalDir := entry.Get('external_dir', '');
+
+    { существующие файлы (file-based) }
+    if externalDir = '' then
+    begin
+      filesArr := entry.Find('files');
+      if (filesArr <> nil) and (filesArr is TJSONArray) then
+      begin
+        files := TJSONArray(filesArr);
+        for i := 0 to files.Count - 1 do
+        begin
+          abs := IncludeTrailingPathDelimiter(repoRoot) +
+            StringReplace(files.Strings[i], '/', PathDelim, [rfReplaceAll]);
+          if FileExists(abs) then
+            toDelete.Add(abs);
+        end;
+      end;
+    end;
+
+    { ссылающиеся инстансы ws_daemons (по model_name) }
+    config := loadConfigObject(aConfigPath);
+    wsNode := config.Find('ws_daemons');
+    if (wsNode <> nil) and (wsNode is TJSONObject) then
+      ws := TJSONObject(wsNode)
+    else
+      ws := nil;
+    if (ws <> nil) and (modelName <> '') then
+      for i := 0 to ws.Count - 1 do
+        if SameText(ws.Objects[ws.Names[i]].Get('model_name', ''), modelName) then
+          refs.Add(ws.Names[i]);
+
+    { dry-run: превью, без изменений }
+    if aDryRun then
+    begin
+      if aJson then
+      begin
+        res := TJSONObject.Create;
+        try
+          res.Add('id', aId);
+          res.Add('dry_run', True);
+          res.Add('files', slToJsonArray(toDelete));
+          if externalDir <> '' then
+            res.Add('external_dir', externalDir)
+          else
+            res.Add('external_dir', TJSONNull.Create);
+          res.Add('referencing_instances', slToJsonArray(refs));
+          res.Add('would_cascade', aForce);
+          WriteLn(res.FormatJSON());
+        finally
+          res.Free;
+        end;
+      end
+      else
+      begin
+        WriteLn('models delete ', aId, ' (dry-run): nothing will be changed');
+        WriteLn('  files to delete: ', toDelete.Count);
+        for i := 0 to toDelete.Count - 1 do
+          WriteLn('    ', toDelete[i]);
+        if externalDir <> '' then
+          WriteLn('  external dir (kept): ', externalDir);
+        if refs.Count > 0 then
+        begin
+          WriteLn('  referencing instances: ', refs.CommaText);
+          if aForce then
+            WriteLn('    -> would be removed (--force)')
+          else
+            WriteLn('    -> blocks delete (use --force to cascade)');
+        end;
+      end;
+      Exit(EXIT_OK);
+    end;
+
+    { блокировки }
+    if (externalDir <> '') and not aForce then
+      Exit(fail(aId + ' is external (shared dir ' + externalDir +
+        '); use --force to remove config refs (directory left in place)'));
+    if (refs.Count > 0) and not aForce then
+      Exit(fail(aId + ' is referenced by instances: ' + refs.CommaText +
+        '; use --force to remove them too'));
+
+    { удаление файлов }
+    for i := 0 to toDelete.Count - 1 do
+      if SysUtils.DeleteFile(toDelete[i]) then
+        deletedFiles.Add(toDelete[i]);
+
+    { каскадное удаление инстансов }
+    if aForce and (refs.Count > 0) and (ws <> nil) then
+    begin
+      for i := 0 to refs.Count - 1 do
+      begin
+        idx := ws.IndexOfName(refs[i]);
+        if idx >= 0 then
+        begin
+          ws.Delete(idx);
+          removedInstances.Add(refs[i]);
+        end;
+      end;
+      saveConfigAtomic(aConfigPath, config);
+    end;
+
+    if aJson then
+    begin
+      res := TJSONObject.Create;
+      try
+        res.Add('id', aId);
+        res.Add('deleted_files', slToJsonArray(deletedFiles));
+        res.Add('removed_instances', slToJsonArray(removedInstances));
+        if externalDir <> '' then
+          res.Add('external_dir_kept', externalDir)
+        else
+          res.Add('external_dir_kept', TJSONNull.Create);
+        WriteLn(res.FormatJSON());
+      finally
+        res.Free;
+      end;
+    end
+    else
+    begin
+      WriteLn(Format('deleted model %s: %d file(s) removed', [aId, deletedFiles.Count]));
+      if removedInstances.Count > 0 then
+        WriteLn('  removed instances: ', removedInstances.CommaText);
+      if externalDir <> '' then
+        WriteLn('  note: external directory ', externalDir,
+          ' left in place (remove manually if desired)');
+    end;
+    Result := EXIT_OK;
+  finally
+    deletedFiles.Free;
+    removedInstances.Free;
+    refs.Free;
+    toDelete.Free;
+    if config <> nil then
+      config.Free;
     manifest.Free;
   end;
 end;

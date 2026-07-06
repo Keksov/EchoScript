@@ -1,5 +1,5 @@
 @echo off
-REM Smoke: models list + download validation (no real network downloads).
+REM Smoke: models list + download/delete validation (no real downloads or deletions).
 setlocal
 
 call "%~dp0build_x64.bat"
@@ -25,6 +25,12 @@ echo [models] download external (vosk_ru) rejected
 
 echo [models] download unknown id rejected
 "%CLI%" models download bogus && goto :fail
+
+echo [models] delete --dry-run previews without deleting
+"%CLI%" models delete en --dry-run || goto :fail
+
+echo [models] delete unknown id rejected
+"%CLI%" models delete bogus && goto :fail
 
 popd
 echo MODELS SMOKE OK

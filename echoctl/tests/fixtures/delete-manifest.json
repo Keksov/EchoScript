@@ -1,0 +1,12 @@
+{
+  "comment": "Фикстура для smoke_delete: фейковая file-based модель, чтобы безопасно проверить реальное удаление файла и каскад инстансов (не трогая боевые модели). Файл создаётся смоуком в build/x64.",
+  "models": [
+    {
+      "id": "faketest",
+      "model": "fake test model",
+      "kind": "language",
+      "model_name": "faketest_model",
+      "files": ["echoctl/build/x64/fake-model.bin"]
+    }
+  ]
+}
