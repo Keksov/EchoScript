@@ -176,7 +176,9 @@ function dispatchModels(const aCommand: string): Integer;
 begin
   if SameText(aCommand, 'list') then
     Result := runModelsList(hasFlag('--json'))
-  else if isKnown(aCommand, ['download', 'delete']) then
+  else if SameText(aCommand, 'download') then
+    Result := runModelsDownload(targetName, hasFlag('--json'))
+  else if isKnown(aCommand, ['delete']) then
     Result := notImplemented('models', aCommand)
   else
   begin

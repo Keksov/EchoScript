@@ -8,6 +8,7 @@ unit echoctl_models;
 interface
 
 function runModelsList(aJson: Boolean): Integer;
+function runModelsDownload(const aId: string; aJson: Boolean): Integer;
 
 implementation
 
@@ -198,6 +199,132 @@ begin
       end;
     end;
     Result := EXIT_OK;
+  finally
+    manifest.Free;
+  end;
+end;
+
+function findEntryById(aModels: TJSONArray; const aId: string): TJSONObject;
+var
+  i: Integer;
+  e: TJSONObject;
+begin
+  for i := 0 to aModels.Count - 1 do
+  begin
+    e := aModels.Objects[i];
+    if SameText(e.Get('id', ''), aId) then
+      Exit(e);
+  end;
+  Result := nil;
+end;
+
+procedure reportDownload(aJson: Boolean; const aId, aStatus, aDetail: string; aExitCode: Integer);
+var
+  o: TJSONObject;
+begin
+  if aJson then
+  begin
+    o := TJSONObject.Create;
+    try
+      o.Add('id', aId);
+      o.Add('status', aStatus);
+      o.Add('detail', aDetail);
+      o.Add('exit_code', aExitCode);
+      WriteLn(o.FormatJSON());
+    finally
+      o.Free;
+    end;
+  end
+  else
+    WriteLn(Format('models download %s: %s (%s)', [aId, aStatus, aDetail]));
+end;
+
+{ Скачан ли уже (все файлы/каталог на месте). }
+function entryDownloaded(aEntry: TJSONObject; const aRepoRoot: string): Boolean;
+var
+  info: TModelInfo;
+begin
+  info := computeInfo(aEntry, aRepoRoot);
+  Result := info.Downloaded;
+  info.Paths.Free;
+end;
+
+function runModelsDownload(const aId: string; aJson: Boolean): Integer;
+var
+  manifestPath, repoRoot, scriptPath, comSpec, comLine, savedCwd, detail: string;
+  manifest: TJSONObject;
+  models: TJSONArray;
+  entry, dlObj: TJSONObject;
+  dl, argsNode: TJSONData;
+  args: TJSONArray;
+  i, exitCode: Integer;
+begin
+  manifestPath := findFileUpwards('models-manifest.json');
+  if manifestPath = '' then
+    Exit(fail('models-manifest.json not found'));
+  repoRoot := resolveRepoRoot;
+  manifest := loadConfigObject(manifestPath);
+  try
+    models := manifestModels(manifest);
+    if models = nil then
+      Exit(fail('manifest has no "models" array'));
+    entry := findEntryById(models, aId);
+    if entry = nil then
+      Exit(fail('unknown model id: ' + aId));
+    if entry.Get('external_dir', '') <> '' then
+      Exit(fail(aId + ' is an external model (not script-downloadable)'));
+    dl := entry.Find('download');
+    if (dl = nil) or not (dl is TJSONObject) then
+      Exit(fail(aId + ' is not script-downloadable (staged via a conversion script)'));
+    dlObj := TJSONObject(dl);
+
+    if entryDownloaded(entry, repoRoot) then
+    begin
+      reportDownload(aJson, aId, 'skipped', 'already downloaded', 0);
+      Exit(EXIT_OK);
+    end;
+
+    scriptPath := IncludeTrailingPathDelimiter(repoRoot) +
+      StringReplace(dlObj.Get('script', ''), '/', PathDelim, [rfReplaceAll]);
+    comSpec := GetEnvironmentVariable('ComSpec');
+    if comSpec = '' then
+      comSpec := 'cmd.exe';
+    comLine := '/c "' + scriptPath + '"';
+    argsNode := dlObj.Find('args');
+    if (argsNode <> nil) and (argsNode is TJSONArray) then
+    begin
+      args := TJSONArray(argsNode);
+      for i := 0 to args.Count - 1 do
+        comLine := comLine + ' ' + args.Strings[i];
+    end;
+    if aJson then
+      comLine := comLine + ' 1>&2'; { держим stdout чистым под JSON-результат }
+
+    if not aJson then
+      WriteLn('models download ', aId, ': running ', scriptPath, ' ...');
+
+    savedCwd := GetCurrentDir;
+    SetCurrentDir(repoRoot);
+    try
+      exitCode := ExecuteProcess(comSpec, comLine);
+    finally
+      SetCurrentDir(savedCwd);
+    end;
+
+    if exitCode = 0 then
+    begin
+      if entryDownloaded(entry, repoRoot) then
+        detail := 'downloaded'
+      else
+        detail := 'script ran but files still missing';
+      reportDownload(aJson, aId, 'completed', detail, 0);
+      Result := EXIT_OK;
+    end
+    else
+    begin
+      reportDownload(aJson, aId, 'failed', 'download script exit ' + IntToStr(exitCode), exitCode);
+      Result := EXIT_RUNTIME;
+    end;
   finally
     manifest.Free;
   end;

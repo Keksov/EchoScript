@@ -122,11 +122,11 @@
       "id": "DF2.2",
       "phase": "P2",
       "title": "models download <id>",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF2.1"],
-      "artifacts": ["echoctl/src/echoctl_models.pas"],
+      "artifacts": ["echoctl/src/echoctl_models.pas", "echoctl/src/echoctl.pas", "echoctl/scripts/smoke_models_x64.bat"],
       "verify": "download <id> запускает download-скрипт из манифеста; идемпотентно (скачанное пропускается); --json со статусом старта",
-      "evidence": ""
+      "evidence": "runModelsDownload: находит запись, отвергает external_dir (vosk) и no-download (podlodka), unknown id; идемпотентность — короткое замыкание: если entryDownloaded → status 'skipped' без запуска. Иначе строит 'cmd /c \"<repoRoot+script>\" <args>' (+ '1>&2' в --json, чтобы stdout остался чистым JSON), cwd=repoRoot, ExecuteProcess, по exit-коду completed/failed + перепроверка downloaded. Проверено: download en --json → skipped(exit0, без сети), download podlodka → отказ (staged via conversion), vosk_ru → отказ (external), bogus → unknown id. smoke_models: 3 reject-пути (podlodka/vosk_ru/bogus). Реальная сетевая загрузка в смоуке не гоняется намеренно; путь ExecuteProcess срабатывает для реально отсутствующей скачиваемой модели."
     },
     {
       "id": "DF2.3",

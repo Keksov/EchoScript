@@ -1,5 +1,5 @@
 @echo off
-REM Smoke: models list against the real manifest + on-disk state.
+REM Smoke: models list + download validation (no real network downloads).
 setlocal
 
 call "%~dp0build_x64.bat"
@@ -16,6 +16,15 @@ echo [models] list --json includes whisper entry
 
 echo [models] list --json includes vosk external entry
 "%CLI%" models list --json | findstr /C:"vosk_ru" >nul || goto :fail
+
+echo [models] download non-downloadable (podlodka) rejected
+"%CLI%" models download podlodka && goto :fail
+
+echo [models] download external (vosk_ru) rejected
+"%CLI%" models download vosk_ru && goto :fail
+
+echo [models] download unknown id rejected
+"%CLI%" models download bogus && goto :fail
 
 popd
 echo MODELS SMOKE OK
