@@ -145,7 +145,8 @@ end;
 procedure writeUsage;
 begin
   WriteLn('Usage: ', ExtractFileName(ParamStr(0)), ' [options]');
-  WriteLn('  --model-name <value>    model runtime: vosk_ru|vosk_ru_cmd|vosk_en');
+  WriteLn('  --model-name <value>    vosk_ru|vosk_ru_cmd|vosk_en, a model dir name under');
+  WriteLn('                          VOSK_MODELS_ROOT, or an absolute path to a model dir');
   WriteLn('  --host <value>          listen host, default 127.0.0.1');
   WriteLn('  --port <value>          listen port, default 7701');
 end;
@@ -207,21 +208,39 @@ end;
 
 function resolveVoskModelName(const aModelName: string): string;
 begin
+  { Back-compat: символические имена → фактические каталоги моделей. }
   if SameText(aModelName, 'vosk_en') then
     Exit('vosk-model-en-us-0.42-gigaspeech');
-
   if SameText(aModelName, 'vosk_ru_cmd') then
     Exit('vosk-model-small-ru-0.22');
+  if SameText(aModelName, 'vosk_ru') then
+    Exit('vosk-model-ru-0.42');
+  { Обобщение: любое иное имя трактуется как имя каталога модели под VOSK_MODELS_ROOT. }
+  Result := aModelName;
+end;
 
-  Result := 'vosk-model-ru-0.42';
+function voskVenvDllPath(const aServiceName: string): string;
+begin
+  Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
+    'services' + PathDelim + aServiceName + PathDelim +
+    'venv' + PathDelim + 'Lib' + PathDelim + 'site-packages' +
+    PathDelim + 'vosk' + PathDelim + 'libvosk.dll';
 end;
 
 function resolveVoskDllPath(const aModelName: string): string;
+var
+  envDll, candidate: string;
 begin
-  Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
-    'services' + PathDelim + aModelName + PathDelim +
-    'venv' + PathDelim + 'Lib' + PathDelim + 'site-packages' +
-    PathDelim + 'vosk' + PathDelim + 'libvosk.dll';
+  { Явный override пути к libvosk.dll. }
+  envDll := Trim(SysUtils.GetEnvironmentVariable('VOSK_DLL_PATH'));
+  if envDll <> '' then
+    Exit(envDll);
+  { Back-compat: DLL из venv одноимённого python-сервиса (vosk_ru/vosk_ru_cmd/vosk_en). }
+  candidate := voskVenvDllPath(aModelName);
+  if FileExists(ExpandFileName(candidate)) then
+    Exit(candidate);
+  { Обобщение: libvosk.dll модель-независим — берём из канонического vosk_ru venv. }
+  Result := voskVenvDllPath('vosk_ru');
 end;
 
 function resolveVoskModelsRoot: string;
@@ -233,6 +252,9 @@ end;
 
 function resolveVoskModelPath(const aModelName: string): string;
 begin
+  { Абсолютный путь к существующему каталогу модели — используем как есть. }
+  if DirectoryExists(aModelName) then
+    Exit(ExpandFileName(aModelName));
   Result := IncludeTrailingPathDelimiter(resolveVoskModelsRoot) + resolveVoskModelName(aModelName);
 end;
 

@@ -142,11 +142,11 @@
       "id": "DF3.1",
       "phase": "P3",
       "title": "voskdaemon: generic-резолвинг модели (путь-или-имя + VOSK_MODELS_ROOT, back-compat)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.2"],
       "artifacts": ["services/voskdaemon/app/src/VoskDaemon.pas"],
       "verify": "прямой запуск VoskDaemon.exe с произвольной моделью (путь ИЛИ имя-каталога под VOSK_MODELS_ROOT) на произвольном порту → warmup ready + describe; старые имена vosk_ru/vosk_ru_cmd/vosk_en работают",
-      "evidence": ""
+      "evidence": "resolveVoskModelName: back-compat vosk_ru/vosk_ru_cmd/vosk_en→каталоги, иначе имя как есть (каталог под root). resolveVoskModelPath: если DirectoryExists(name) → абсолютный путь как есть, иначе root+name. resolveVoskDllPath (DLL модель-независим): VOSK_DLL_PATH override → venv одноимённого сервиса (back-compat) → fallback venv vosk_ru. Usage-строка обновлена. Пересобрано. ПРОВЕРЕНО (малая модель, 3 инстанса одновременно): generic-имя vosk-model-small-ru-0.22→:7788 warmup ready (загрузка из C:\\var\\vosk\\...); абсолютный путь C:\\var\\vosk\\vosk-model-small-ru-0.22→:7789 warmup ready; back-compat vosk_ru_cmd→:7787 warmup ready; describe_ack {model:vosk-model-small-ru-0.22, port:7788}. Разные модели на разных портах — работает."
     },
     {
       "id": "DF3.2",
