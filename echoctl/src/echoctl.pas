@@ -8,30 +8,19 @@ program echoctl;
   единственный писатель здесь (atomic temp+rename). UI/Bun — тонкая обёртка,
   вызывающая echoctl <cmd> --json.
 
-  Этот файл (DF0.2) — скелет: разбор аргументов и диспетчер групп/команд с
-  заглушками. Реальные команды подключаются по шагам DF0.3+. }
+  echoctl.pas — разбор аргументов и диспетчер групп/команд. Доменная логика — в
+  echoctl_daemons / echoctl_models / echoctl_config; общие мелочи — echoctl_common. }
 
 {$mode objfpc}{$H+}
 
 uses
   SysUtils,
-  fpjson,
+  echoctl_common,
   echoctl_config,
   echoctl_daemons;
 
 const
   ECHOCTL_VERSION = '0.1.0';
-
-  { Коды возврата — стабильный контракт для обёртки и смоков. }
-  EXIT_OK       = 0;
-  EXIT_RUNTIME  = 1;
-  EXIT_USAGE    = 2;
-  EXIT_NOTIMPL  = 3;
-
-procedure writeErr(const aMessage: string);
-begin
-  WriteLn(StdErr, aMessage);
-end;
 
 procedure printVersion;
 begin
@@ -50,12 +39,15 @@ begin
   WriteLn('  models    list | download | delete');
   WriteLn('  config    get | set | schema');
   WriteLn;
+  WriteLn('daemons add --engine <e> --model <m> --port <n> [--host H] [--lang L] [--name NM]');
+  WriteLn;
   WriteLn('Other:');
   WriteLn('  echoctl version    print version and exit');
   WriteLn('  echoctl help       print this help and exit');
   WriteLn;
   WriteLn('Notes:');
-  WriteLn('  --json   emit machine-readable JSON (for the control-panel wrapper)');
+  WriteLn('  --json            emit machine-readable JSON (for the control-panel wrapper)');
+  WriteLn('  --config <path>   use a specific config.json (default: found near the exe)');
 end;
 
 { Заглушка для распознанной, но ещё не реализованной подкоманды. }
@@ -97,29 +89,37 @@ begin
   Result := aDefault;
 end;
 
-{ Загрузка активного config.json (--config override или поиск от exe). Владелец — вызывающий. }
-function loadActiveConfig: TJSONObject;
+{ Путь к активному config.json: --config override или поиск от exe. }
+function activeConfigPath: string;
 begin
-  Result := loadConfigObject(optionValue('--config', resolveDefaultConfigPath));
+  Result := optionValue('--config', resolveDefaultConfigPath);
 end;
 
 function doDaemonsList: Integer;
-var
-  config: TJSONObject;
 begin
-  config := loadActiveConfig;
-  try
-    Result := runDaemonsList(config, hasFlag('--json'));
-  finally
-    config.Free;
-  end;
+  Result := runDaemonsList(activeConfigPath, hasFlag('--json'));
+end;
+
+function doDaemonsAdd: Integer;
+var
+  spec: TAddSpec;
+begin
+  spec.Engine := optionValue('--engine', '');
+  spec.ModelName := optionValue('--model', '');
+  spec.Host := optionValue('--host', '');
+  spec.Language := optionValue('--lang', '');
+  spec.Name := optionValue('--name', '');
+  spec.Port := StrToIntDef(optionValue('--port', ''), -1);
+  Result := runDaemonsAdd(activeConfigPath, spec, hasFlag('--json'));
 end;
 
 function dispatchDaemons(const aCommand: string): Integer;
 begin
   if SameText(aCommand, 'list') then
     Result := doDaemonsList
-  else if isKnown(aCommand, ['add', 'remove', 'edit', 'start', 'stop', 'restart']) then
+  else if SameText(aCommand, 'add') then
+    Result := doDaemonsAdd
+  else if isKnown(aCommand, ['remove', 'edit', 'start', 'stop', 'restart']) then
     Result := notImplemented('daemons', aCommand)
   else
   begin
@@ -194,7 +194,7 @@ begin
 end;
 
 begin
-  { PASCAL_RULES §7: стабильный десятичный разделитель для будущего JSON/числового I/O. }
+  { PASCAL_RULES §7: стабильный десятичный разделитель для JSON/числового I/O. }
   DefaultFormatSettings.DecimalSeparator := '.';
   try
     ExitCode := run;

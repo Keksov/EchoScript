@@ -57,7 +57,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo [smoke] recognized-but-stub command exits 3 (not implemented)
-"%CLI_EXE%" daemons add
+"%CLI_EXE%" config schema
 if %ERRORLEVEL% neq 3 (
     echo SMOKE FAILED: stub should exit 3
     popd

@@ -72,11 +72,11 @@
       "id": "DF1.1",
       "phase": "P1",
       "title": "daemons add (валидация + append + atomic write + --json)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.4"],
-      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl_common.pas", "echoctl/src/echoctl.pas", "echoctl/scripts/smoke_crud_x64.bat"],
       "verify": "add --engine --model --port создаёт запись ws_daemons; отвергает неизвестный engine/модель, занятый порт, дублирующее имя; config записан атомарно",
-      "evidence": ""
+      "evidence": "Введён echoctl_common (коды 0/1/2/3 + writeErr/fail). Daemons-команды рефакторнуты на путь: сами грузят config и (мутирующие) сохраняют атомарно. runDaemonsAdd: валидация engine∈{whisper,vosk}, model∈config.models (DF2.1 расширит манифестом), port 1..65535 + не занят, имя уникально (дефолт engine_lang); при успехе append в ws_daemons + saveConfigAtomic + вывод (json/human). Имя по умолчанию из engine+lang. smoke_crud_x64 на КОПИИ config (build/x64/test-config.json): add OK ('added daemon test_whisper …') + инстанс в list; отвергнуты дубль-имя/коллизия-порта/неизвестный engine/неизвестная модель/битый порт/без engine. Рабочий config.json не тронут (2 инстанса). base smoke: stub-проверка переведена на 'config schema'→exit3."
     },
     {
       "id": "DF1.2",

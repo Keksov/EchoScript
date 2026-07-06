@@ -1,19 +1,30 @@
 unit echoctl_daemons;
 
-{ Команды группы daemons. На шаге DF0.4 — только `list` (чтение ws_daemons из
-  config.json → JSON-массив или человекочитаемая таблица). CRUD/lifecycle — далее. }
+{ Команды группы daemons: list (DF0.4) и add (DF1.1). Каждая команда сама грузит
+  config.json по пути и, если мутирует, сохраняет атомарно (echoctl_config). }
 
 {$mode objfpc}{$H+}
 
 interface
 
-uses
-  SysUtils, fpjson;
+type
+  { Параметры создания инстанса (собираются CLI из аргументов). }
+  TAddSpec = record
+    Name: string;
+    Engine: string;
+    Language: string;
+    Host: string;
+    ModelName: string;
+    Port: Integer;
+  end;
 
-{ Печатает инстансы ws_daemons. aJson=True → JSON-массив, иначе таблица. Возврат 0. }
-function runDaemonsList(aConfig: TJSONObject; aJson: Boolean): Integer;
+function runDaemonsList(const aConfigPath: string; aJson: Boolean): Integer;
+function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
 
 implementation
+
+uses
+  SysUtils, fpjson, echoctl_config, echoctl_common;
 
 function daemonsObject(aConfig: TJSONObject): TJSONObject;
 var
@@ -24,6 +35,16 @@ begin
     Result := TJSONObject(node)
   else
     Result := nil;
+end;
+
+function ensureDaemonsObject(aConfig: TJSONObject): TJSONObject;
+begin
+  Result := daemonsObject(aConfig);
+  if Result = nil then
+  begin
+    Result := TJSONObject.Create;
+    aConfig.Add('ws_daemons', Result);
+  end;
 end;
 
 function instanceToJson(const aName: string; aInst: TJSONObject): TJSONObject;
@@ -44,6 +65,39 @@ begin
     Result.Add('settings', TJSONObject.Create);
 end;
 
+function isKnownEngine(const aEngine: string): Boolean;
+begin
+  Result := SameText(aEngine, 'whisper') or SameText(aEngine, 'vosk');
+end;
+
+{ Модель считается известной, если это ключ в config.models (источник идентичности
+  моделей в системе). DF2.1 расширит проверку манифестом/наличием на диске. }
+function modelKnown(aConfig: TJSONObject; const aModel: string): Boolean;
+var
+  node: TJSONData;
+begin
+  node := aConfig.Find('models');
+  Result := (node <> nil) and (node is TJSONObject) and
+            (TJSONObject(node).Find(aModel) <> nil);
+end;
+
+function portInUse(aWs: TJSONObject; aPort: Integer; const aExcept: string): Boolean;
+var
+  i: Integer;
+  nm: string;
+begin
+  if aWs <> nil then
+    for i := 0 to aWs.Count - 1 do
+    begin
+      nm := aWs.Names[i];
+      if SameText(nm, aExcept) then
+        Continue;
+      if aWs.Objects[nm].Get('port', -1) = aPort then
+        Exit(True);
+    end;
+  Result := False;
+end;
+
 function listJson(aWs: TJSONObject): Integer;
 var
   arr: TJSONArray;
@@ -58,7 +112,7 @@ begin
   finally
     arr.Free;
   end;
-  Result := 0;
+  Result := EXIT_OK;
 end;
 
 function listTable(aWs: TJSONObject): Integer;
@@ -82,18 +136,90 @@ begin
          inst.Get('host', '') + ':' + IntToStr(inst.Get('port', 0)),
          inst.Get('model_name', '')]));
     end;
-  Result := 0;
+  Result := EXIT_OK;
 end;
 
-function runDaemonsList(aConfig: TJSONObject; aJson: Boolean): Integer;
+function runDaemonsList(const aConfigPath: string; aJson: Boolean): Integer;
 var
-  ws: TJSONObject;
+  config: TJSONObject;
 begin
-  ws := daemonsObject(aConfig);
-  if aJson then
-    Result := listJson(ws)
+  config := loadConfigObject(aConfigPath);
+  try
+    if aJson then
+      Result := listJson(daemonsObject(config))
+    else
+      Result := listTable(daemonsObject(config));
+  finally
+    config.Free;
+  end;
+end;
+
+function defaultName(const aSpec: TAddSpec): string;
+begin
+  if aSpec.Name <> '' then
+    Result := aSpec.Name
+  else if aSpec.Language <> '' then
+    Result := aSpec.Engine + '_' + aSpec.Language
   else
-    Result := listTable(ws);
+    Result := aSpec.Engine;
+end;
+
+function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
+var
+  config, ws, inst, created: TJSONObject;
+  name, host: string;
+begin
+  config := loadConfigObject(aConfigPath);
+  try
+    if aSpec.Engine = '' then
+      Exit(fail('--engine is required'));
+    if not isKnownEngine(aSpec.Engine) then
+      Exit(fail('unknown engine: ' + aSpec.Engine + ' (known: whisper, vosk)'));
+    if aSpec.ModelName = '' then
+      Exit(fail('--model is required'));
+    if not modelKnown(config, aSpec.ModelName) then
+      Exit(fail('unknown model: ' + aSpec.ModelName + ' (not a key in config.models)'));
+    if (aSpec.Port < 1) or (aSpec.Port > 65535) then
+      Exit(fail('--port must be 1..65535'));
+
+    ws := ensureDaemonsObject(config);
+    name := defaultName(aSpec);
+    if ws.Find(name) <> nil then
+      Exit(fail('instance already exists: ' + name + ' (use --name)'));
+    if portInUse(ws, aSpec.Port, '') then
+      Exit(fail('port already in use: ' + IntToStr(aSpec.Port)));
+
+    if aSpec.Host <> '' then
+      host := aSpec.Host
+    else
+      host := '127.0.0.1';
+
+    inst := TJSONObject.Create;
+    inst.Add('host', host);
+    inst.Add('port', aSpec.Port);
+    inst.Add('engine', aSpec.Engine);
+    inst.Add('language', aSpec.Language);
+    inst.Add('model_name', aSpec.ModelName);
+    ws.Add(name, inst);
+
+    saveConfigAtomic(aConfigPath, config);
+
+    if aJson then
+    begin
+      created := instanceToJson(name, inst);
+      try
+        WriteLn(created.FormatJSON());
+      finally
+        created.Free;
+      end;
+    end
+    else
+      WriteLn(Format('added daemon %s (%s %s %s:%d %s)',
+        [name, aSpec.Engine, aSpec.Language, host, aSpec.Port, aSpec.ModelName]));
+    Result := EXIT_OK;
+  finally
+    config.Free;
+  end;
 end;
 
 end.
