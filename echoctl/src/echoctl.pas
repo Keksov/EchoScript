@@ -18,6 +18,7 @@ uses
   Types,
   echoctl_common,
   echoctl_config,
+  echoctl_schema,
   echoctl_daemons,
   echoctl_models;
 
@@ -52,23 +53,6 @@ begin
   WriteLn('  --json            emit machine-readable JSON (for the control-panel wrapper)');
   WriteLn('  --config <path>   use a specific config.json (default: found near the exe)');
   WriteLn('  --manifest <path> use a specific models-manifest.json (default: found near the exe)');
-end;
-
-{ Заглушка для распознанной, но ещё не реализованной подкоманды. }
-function notImplemented(const aGroup, aCommand: string): Integer;
-begin
-  writeErr(Format('echoctl: "%s %s" is not implemented yet', [aGroup, aCommand]));
-  Result := EXIT_NOTIMPL;
-end;
-
-function isKnown(const aValue: string; const aOptions: array of string): Boolean;
-var
-  option: string;
-begin
-  for option in aOptions do
-    if SameText(aValue, option) then
-      Exit(True);
-  Result := False;
 end;
 
 { Наличие флага (напр. --json) в любой позиции. }
@@ -207,8 +191,12 @@ end;
 
 function dispatchConfig(const aCommand: string): Integer;
 begin
-  if isKnown(aCommand, ['get', 'set', 'schema']) then
-    Result := notImplemented('config', aCommand)
+  if SameText(aCommand, 'get') then
+    Result := runConfigGet(activeConfigPath, hasFlag('--json'))
+  else if SameText(aCommand, 'set') then
+    Result := runConfigSet(activeConfigPath, ParamStr(3), ParamStr(4), hasFlag('--json'))
+  else if SameText(aCommand, 'schema') then
+    Result := runConfigSchema(hasFlag('--json'))
   else
   begin
     writeErr('echoctl: unknown config command: ' + aCommand);

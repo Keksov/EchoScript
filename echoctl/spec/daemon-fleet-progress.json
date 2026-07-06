@@ -172,11 +172,11 @@
       "id": "DF4.2",
       "phase": "P4",
       "title": "config get/set/schema (перенос settings.ts: validate/merge/atomic write)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.3"],
-      "artifacts": ["echoctl/src/echoctl_config.pas", "echoctl/src/echoctl_schema.pas"],
+      "artifacts": ["echoctl/src/echoctl_schema.pas", "echoctl/src/echoctl.pas", "echoctl/scripts/smoke_x64.bat"],
       "verify": "config get --json = текущие настройки оркестратора; config set валидирует (тип/диапазон/reload-класс) и атомарно пишет; config schema --json = поля с hot/restart и picker",
-      "evidence": ""
+      "evidence": "echoctl_schema: TOrchField + orchField (10 полей, порт ORCHESTRATOR_FIELDS: max_workers int restart 1-64, poll/stream/ttl/drop/requeue int hot, default_model select optionsFrom models, ffmpeg_path picker file, jobs_root picker directory restart). runConfigGet (значения из config.json, int/string), runConfigSet (findOrchField→валидация типа/диапазона→in-place .Integers/.Strings сохраняет порядок→saveConfigAtomic; вывод с reload-классом hot/restart), runConfigSchema (key/type/reload/min/max/picker/optionsFrom). CLI dispatchConfig get/set/schema; убран мёртвый notImplemented/isKnown (заглушек не осталось), базовый smoke переведён на 'config bogus'→exit2. ПРОВЕРЕНО: schema=10 полей (restart: max_workers/jobs_root); get max_workers=1; set max_workers 8→'(reload: restart)' записан как int 8; set poll_interval_ms 500→'(reload: hot)'; set max_workers 999→above max 64 exit2; set bogus→unknown exit2. base/crud/models/delete зелёные."
     },
     {
       "id": "DF5.1",

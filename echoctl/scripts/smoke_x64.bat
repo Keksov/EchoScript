@@ -56,10 +56,10 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-echo [smoke] recognized-but-stub command exits 3 (not implemented)
-"%CLI_EXE%" config schema
-if %ERRORLEVEL% neq 3 (
-    echo SMOKE FAILED: stub should exit 3
+echo [smoke] unknown subcommand exits 2 (usage)
+"%CLI_EXE%" config bogus
+if %ERRORLEVEL% neq 2 (
+    echo SMOKE FAILED: unknown subcommand should exit 2
     popd
     exit /b 1
 )
