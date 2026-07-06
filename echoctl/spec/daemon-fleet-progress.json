@@ -82,11 +82,11 @@
       "id": "DF1.2",
       "phase": "P1",
       "title": "daemons remove <name>",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF1.1"],
-      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl.pas"],
       "verify": "remove удаляет запись ws_daemons атомарно; отвергает несуществующее имя; --json результат",
-      "evidence": ""
+      "evidence": "runDaemonsRemove: IndexOfName→Delete(idx)+saveConfigAtomic; отсутствующее имя→fail('no such instance'); --json → {\"removed\":\"<name>\"}. CLI: хелпер targetName (позиционный аргумент после команды или --name), doDaemonsRemove, dispatch remove→реальный (edit/start/stop/restart ещё заглушки). smoke_crud расширен: remove test_whisper OK, инстанс исчез из list, remove nope→отказ. base smoke OK."
     },
     {
       "id": "DF1.3",

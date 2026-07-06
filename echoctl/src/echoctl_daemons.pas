@@ -20,6 +20,7 @@ type
 
 function runDaemonsList(const aConfigPath: string; aJson: Boolean): Integer;
 function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
+function runDaemonsRemove(const aConfigPath, aName: string; aJson: Boolean): Integer;
 
 implementation
 
@@ -216,6 +217,44 @@ begin
     else
       WriteLn(Format('added daemon %s (%s %s %s:%d %s)',
         [name, aSpec.Engine, aSpec.Language, host, aSpec.Port, aSpec.ModelName]));
+    Result := EXIT_OK;
+  finally
+    config.Free;
+  end;
+end;
+
+function runDaemonsRemove(const aConfigPath, aName: string; aJson: Boolean): Integer;
+var
+  config, ws, res: TJSONObject;
+  idx: Integer;
+begin
+  if aName = '' then
+    Exit(fail('instance name required (positional or --name)'));
+  config := loadConfigObject(aConfigPath);
+  try
+    ws := daemonsObject(config);
+    if ws <> nil then
+      idx := ws.IndexOfName(aName)
+    else
+      idx := -1;
+    if idx < 0 then
+      Exit(fail('no such instance: ' + aName));
+
+    ws.Delete(idx);
+    saveConfigAtomic(aConfigPath, config);
+
+    if aJson then
+    begin
+      res := TJSONObject.Create;
+      try
+        res.Add('removed', aName);
+        WriteLn(res.FormatJSON());
+      finally
+        res.Free;
+      end;
+    end
+    else
+      WriteLn('removed daemon ', aName);
     Result := EXIT_OK;
   finally
     config.Free;

@@ -113,13 +113,30 @@ begin
   Result := runDaemonsAdd(activeConfigPath, spec, hasFlag('--json'));
 end;
 
+{ Имя целевого инстанса для команд remove/edit/…: позиционный аргумент после
+  команды (если не начинается с --), иначе --name. }
+function targetName: string;
+begin
+  if (ParamCount >= 3) and (Copy(ParamStr(3), 1, 2) <> '--') then
+    Result := ParamStr(3)
+  else
+    Result := optionValue('--name', '');
+end;
+
+function doDaemonsRemove: Integer;
+begin
+  Result := runDaemonsRemove(activeConfigPath, targetName, hasFlag('--json'));
+end;
+
 function dispatchDaemons(const aCommand: string): Integer;
 begin
   if SameText(aCommand, 'list') then
     Result := doDaemonsList
   else if SameText(aCommand, 'add') then
     Result := doDaemonsAdd
-  else if isKnown(aCommand, ['remove', 'edit', 'start', 'stop', 'restart']) then
+  else if SameText(aCommand, 'remove') then
+    Result := doDaemonsRemove
+  else if isKnown(aCommand, ['edit', 'start', 'stop', 'restart']) then
     Result := notImplemented('daemons', aCommand)
   else
   begin

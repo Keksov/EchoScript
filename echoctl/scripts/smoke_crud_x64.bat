@@ -35,6 +35,15 @@ echo [crud] bad port rejected
 echo [crud] missing engine rejected
 "%CLI%" daemons add --model whisper_en_turbo --port 7896 --config "%TMP%" && goto :fail
 
+echo [crud] remove instance
+"%CLI%" daemons remove test_whisper --config "%TMP%" || goto :fail
+
+echo [crud] removed instance is gone
+"%CLI%" daemons list --json --config "%TMP%" | findstr /C:"test_whisper" >nul && goto :fail
+
+echo [crud] remove non-existent rejected
+"%CLI%" daemons remove nope --config "%TMP%" && goto :fail
+
 del /Q "%TMP%" 2>nul
 del /Q "%TMP%.tmp" 2>nul
 popd
