@@ -152,11 +152,11 @@
       "id": "DF3.2",
       "phase": "P3",
       "title": "whisper: подтвердить generic + settings→env pass-through (2-я модель на 2-м порту)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF0.2"],
       "artifacts": ["services/whisperdaemon/app/src/WhisperDaemon.pas"],
       "verify": "прямой запуск WhisperDaemon.exe со 2-й скачанной моделью на 2-м порту + env из settings (WHISPER_VAD_THRESHOLD и т.п.) → лог inference показывает применённые настройки; при необходимости мелкие правки",
-      "evidence": ""
+      "evidence": "ПОДТВЕРЖДЕНО generic: resolveWhisperModelPath уже принимает путь / .bin / имя→ggml-<name>.bin под WHISPER_MODELS_ROOT. ПОДТВЕРЖДЕНО settings→env: демон читает WHISPER_VAD_THRESHOLD/NO_SPEECH_THOLD/ENTROPY_THOLD/VAD_SPEECH_PAD_MS (строки ~1544) при инференсе. Правка: добавлен echo эффективных настроек на старте (после 'warmup ready') — наблюдаемость + дешёвая проверка без аудио; + fmtFloat2 (FormatFloat с fs.DecimalSeparator='.', §7) — иначе лог выдавал '0,55'. ПРОВЕРЕНО: запуск whisper_en_turbo на :7810 с env VAD_THRESHOLD=0.55/NO_SPEECH=0.7/ENTROPY=2.8/PAD=250 → загрузка ggml-whisper_en_turbo.bin (generic) + 'effective settings: vad=True vad_thold=0.55 vad_speech_pad_ms=250 no_speech_thold=0.70 entropy_thold=2.80' (точки, все значения применены). Пересобрано."
     },
     {
       "id": "DF4.1",

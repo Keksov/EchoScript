@@ -616,6 +616,16 @@ begin
   Result := StrToIntDef(raw, aDefault);
 end;
 
+// Форматирование float с '.' независимо от локали (PASCAL_RULES.md §7).
+function fmtFloat2(aValue: Single): string;
+var
+  fs: TFormatSettings;
+begin
+  fs := DefaultFormatSettings;
+  fs.DecimalSeparator := '.';
+  Result := FormatFloat('0.00', aValue, fs);
+end;
+
 function resolveDaemonDescriptorPath: string;
 begin
   Result := IncludeTrailingPathDelimiter(getWorkspaceRootDir) +
@@ -776,6 +786,13 @@ begin
 
     gWarmupState := mwsReady;
     WriteLn('[whisperdaemon] warmup ready model=', FmodelName);
+    { Echo эффективных настроек на старте (те же env, что применяет инференс —
+      см. ~1544): наблюдаемость + дешёвая проверка settings→env pass-through. }
+    WriteLn('[whisperdaemon] effective settings: vad=', BoolToStr(vadModelAvailable, True),
+      ' vad_thold=', fmtFloat2(whisperEnvFloat('WHISPER_VAD_THRESHOLD', 0.4)),
+      ' vad_speech_pad_ms=', whisperEnvInt('WHISPER_VAD_SPEECH_PAD_MS', 200),
+      ' no_speech_thold=', fmtFloat2(whisperEnvFloat('WHISPER_NO_SPEECH_THOLD', 0.6)),
+      ' entropy_thold=', fmtFloat2(whisperEnvFloat('WHISPER_ENTROPY_THOLD', 2.4)));
   except
     on E: Exception do
     begin
