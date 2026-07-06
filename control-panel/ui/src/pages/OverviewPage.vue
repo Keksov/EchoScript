@@ -33,7 +33,11 @@
     <q-tab-panels v-model="tab" animated class="bg-transparent">
       <!-- Daemons -->
       <q-tab-panel name="daemons" class="q-pa-none">
-        <div class="text-subtitle1 q-mb-sm">{{ t("daemons.title") }}</div>
+        <div class="row items-center q-mb-sm">
+          <div class="text-subtitle1">{{ t("daemons.title") }}</div>
+          <q-space />
+          <q-btn dense flat icon="add" :label="t('fleet.add')" color="cyan-3" @click="openAdd" />
+        </div>
         <q-markup-table flat bordered dense class="bg-dark">
           <thead>
             <tr>
@@ -89,6 +93,20 @@
                   >
                     <q-tooltip>{{ t("daemons.restart") }}</q-tooltip>
                   </q-btn>
+                  <q-btn
+                    v-if="d.kind === 'ws-daemon'"
+                    flat dense round size="sm" icon="tune" color="cyan-4"
+                    :disable="busyService !== null" @click="openEdit(d)"
+                  >
+                    <q-tooltip>{{ t("fleet.edit") }}</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    v-if="d.kind === 'ws-daemon'"
+                    flat dense round size="sm" icon="delete" color="red-5"
+                    :disable="busyService !== null" @click="doRemove(d.name)"
+                  >
+                    <q-tooltip>{{ t("fleet.remove") }}</q-tooltip>
+                  </q-btn>
                 </template>
               </td>
             </tr>
@@ -131,16 +149,33 @@
         </q-markup-table>
       </q-tab-panel>
     </q-tab-panels>
+
+    <DaemonForm
+      v-model:open="daemonFormOpen"
+      :mode="daemonFormMode"
+      :instance="daemonFormInstance"
+      :models="models"
+      :daemon-fields="daemonFields"
+      @saved="reload"
+    />
   </q-page>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 import { useI18n } from "vue-i18n"
-import { controlService, fetchConfig, fetchDaemons } from "src/services/api"
-import type { DaemonStatus, ServiceAction } from "src/types"
+import {
+  controlService,
+  fetchConfig,
+  fetchDaemons,
+  fetchModels,
+  fetchSchema,
+  removeDaemon,
+} from "src/services/api"
+import type { DaemonStatus, FieldSpec, ModelStatus, ServiceAction } from "src/types"
 import SettingsForm from "components/SettingsForm.vue"
 import ModelsTab from "components/ModelsTab.vue"
+import DaemonForm from "components/DaemonForm.vue"
 
 const { t } = useI18n()
 
@@ -149,6 +184,11 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const daemons = ref<DaemonStatus[]>([])
 const config = ref<Record<string, unknown>>({})
+const models = ref<ModelStatus[]>([])
+const daemonFields = ref<FieldSpec[]>([])
+const daemonFormOpen = ref(false)
+const daemonFormMode = ref<"add" | "edit">("add")
+const daemonFormInstance = ref<DaemonStatus | null>(null)
 
 const configRows = computed(() =>
   Object.entries(config.value).map(([key, value]) => ({
@@ -231,7 +271,46 @@ const doAction = async (name: string, action: ServiceAction): Promise<void> => {
   }
 }
 
-onMounted(reload)
+const openAdd = (): void => {
+  daemonFormMode.value = "add"
+  daemonFormInstance.value = null
+  daemonFormOpen.value = true
+}
+
+const openEdit = (d: DaemonStatus): void => {
+  daemonFormMode.value = "edit"
+  daemonFormInstance.value = d
+  daemonFormOpen.value = true
+}
+
+const doRemove = async (name: string): Promise<void> => {
+  if (!window.confirm(t("fleet.removeConfirm", { name }))) return
+  busyService.value = name
+  error.value = null
+  try {
+    await removeDaemon(name)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    busyService.value = null
+    await reload()
+  }
+}
+
+const loadAux = async (): Promise<void> => {
+  try {
+    const [ms, schema] = await Promise.all([fetchModels(), fetchSchema()])
+    models.value = ms
+    daemonFields.value = schema.wsDaemon.filter((f) => f.target === "daemon")
+  } catch {
+    // aux data is best-effort — the form still opens
+  }
+}
+
+onMounted(() => {
+  void reload()
+  void loadAux()
+})
 </script>
 
 <style scoped>

@@ -75,6 +75,7 @@ export interface ModelStatus {
   readonly id: string
   readonly model: string
   readonly kind: "language" | "vad" | "diarization"
+  readonly modelName: string
   readonly downloadable: boolean
   readonly downloaded: boolean
   readonly sizeMb: number | null

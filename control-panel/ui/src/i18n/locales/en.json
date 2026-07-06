@@ -103,6 +103,26 @@
     "downloading": "downloading…",
     "downloaded": "downloaded",
     "missing": "missing",
+    "present": "present",
+    "delete": "Delete",
+    "deleteTitle": "Delete model {id}?",
+    "filesToDelete": "Files to delete",
+    "referencingInstances": "Referenced by",
+    "cascadeNote": "These instances will be removed too (cascade).",
+    "externalKept": "External directory left in place: {dir}",
+    "cancel": "Cancel",
+    "confirmDelete": "Delete",
     "pollNote": "Status refreshes automatically every few seconds."
+  },
+  "fleet": {
+    "add": "Add daemon",
+    "edit": "Edit",
+    "remove": "Remove",
+    "addTitle": "Add a daemon instance",
+    "editTitle": "Edit {name}",
+    "nameHint": "optional — defaults to engine_language",
+    "portAuto": "leave blank to auto-allocate",
+    "settings": "Per-instance settings",
+    "removeConfirm": "Remove instance {name}? (its config entry is deleted)"
   }
 }

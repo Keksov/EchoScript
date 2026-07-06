@@ -192,11 +192,11 @@
       "id": "DF5.2",
       "phase": "P5",
       "title": "UI: создание/удаление инстансов + per-instance настройки + удаление моделей + i18n",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF5.1"],
-      "artifacts": ["control-panel/ui/src/pages/OverviewPage.vue", "control-panel/ui/src/components/DaemonForm.vue", "control-panel/ui/src/components/ModelsTab.vue", "control-panel/ui/src/i18n/locales/ru.json", "control-panel/ui/src/i18n/locales/en.json"],
+      "artifacts": ["control-panel/ui/src/pages/OverviewPage.vue", "control-panel/ui/src/components/DaemonForm.vue", "control-panel/ui/src/components/ModelsTab.vue", "control-panel/ui/src/services/api.ts", "control-panel/ui/src/i18n/locales/ru.json", "control-panel/ui/src/i18n/locales/en.json"],
       "verify": "форма add (engine/model/port/name/settings), кнопка удаления инстанса, редактор per-instance настроек, удаление модели с dry-run preview + подтверждением; ru/en равны по ключам; vue-tsc + build зелёные",
-      "evidence": ""
+      "evidence": "api.ts: addDaemon(POST /api/daemons), editDaemon(PATCH), removeDaemon(DELETE), deleteModel(id,{force,dryRun}). DaemonForm.vue (new): диалог add (engine-select whisper/vosk, model-select из models по modelName+эвристике движка, port авто/ручной, name/language, expansion per-instance settings из schema.wsDaemon target=daemon — toggle/number) и edit (model/port/settings, доп.-к-существующим). ModelsTab: кнопка delete (для скачанных) → openDelete делает dryRun → диалог с files/referencing_instances/external_dir → confirm делает force. OverviewPage Services: '+ Добавить' → openAdd; per-ws-daemon (kind==='ws-daemon') кнопки tune(edit)/delete(remove с window.confirm); загрузка models+schema (daemonFields=wsDaemon.filter target=daemon). server mapModels + modelName; тип ModelStatus + modelName. i18n: fleet.* + models.delete-группа, ru/en РАВНЫ (160==160). vue-tsc + tsc чисты; quasar build → server/public успешен; 18/18 server-тестов."
     },
     {
       "id": "DF5.3",

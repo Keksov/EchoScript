@@ -73,3 +73,39 @@ export const pickPath = async (kind: "directory" | "file", start: string): Promi
   })
   return (await response.json()) as PickPathResult
 }
+
+type JsonRecord = Record<string, unknown> & { error?: string }
+
+const sendJson = async (path: string, method: string, body?: unknown): Promise<JsonRecord> => {
+  const response = await fetch(path, {
+    method,
+    headers: jsonHeaders,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as JsonRecord
+  if (!response.ok) {
+    throw new Error(payload.error ?? `${method} ${path} failed: ${response.status}`)
+  }
+  return payload
+}
+
+/** Create a ws-daemon instance (engine/model required; port auto-allocated if omitted). */
+export const addDaemon = (body: Record<string, unknown>): Promise<JsonRecord> =>
+  sendJson("/api/daemons", "POST", body)
+
+/** Edit a ws-daemon instance (model/port/settings). */
+export const editDaemon = (name: string, body: Record<string, unknown>): Promise<JsonRecord> =>
+  sendJson(`/api/daemons/${encodeURIComponent(name)}`, "PATCH", body)
+
+/** Remove a ws-daemon instance. */
+export const removeDaemon = (name: string): Promise<JsonRecord> =>
+  sendJson(`/api/daemons/${encodeURIComponent(name)}`, "DELETE")
+
+/** Delete a model. dryRun previews; force cascades (removes referencing instances). */
+export const deleteModel = (id: string, opts: { force?: boolean; dryRun?: boolean }): Promise<JsonRecord> => {
+  const qs = new URLSearchParams()
+  if (opts.force === true) qs.set("force", "true")
+  if (opts.dryRun === true) qs.set("dryRun", "true")
+  const suffix = qs.toString() === "" ? "" : `?${qs.toString()}`
+  return sendJson(`/api/models/${encodeURIComponent(id)}${suffix}`, "DELETE")
+}

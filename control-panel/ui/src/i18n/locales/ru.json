@@ -103,6 +103,26 @@
     "downloading": "скачивается…",
     "downloaded": "скачана",
     "missing": "нет",
+    "present": "есть",
+    "delete": "Удалить",
+    "deleteTitle": "Удалить модель {id}?",
+    "filesToDelete": "Файлы к удалению",
+    "referencingInstances": "Ссылаются",
+    "cascadeNote": "Эти инстансы тоже будут удалены (каскад).",
+    "externalKept": "Внешний каталог не тронут: {dir}",
+    "cancel": "Отмена",
+    "confirmDelete": "Удалить",
     "pollNote": "Статус обновляется автоматически каждые несколько секунд."
+  },
+  "fleet": {
+    "add": "Добавить демон",
+    "edit": "Правка",
+    "remove": "Удалить",
+    "addTitle": "Добавить инстанс демона",
+    "editTitle": "Правка {name}",
+    "nameHint": "необязательно — по умолчанию engine_language",
+    "portAuto": "пусто — автовыбор порта",
+    "settings": "Настройки инстанса",
+    "removeConfirm": "Удалить инстанс {name}? (запись в конфиге будет удалена)"
   }
 }

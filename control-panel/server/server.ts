@@ -48,6 +48,7 @@ interface EchoctlModel {
   id: string
   model: string
   kind: string
+  model_name: string
   downloadable: boolean
   downloaded: boolean
   size_mb: number | null
@@ -59,6 +60,7 @@ const mapModels = (rows: EchoctlModel[]): unknown[] =>
     id: m.id,
     model: m.model,
     kind: m.kind,
+    modelName: m.model_name,
     downloadable: m.downloadable,
     downloaded: m.downloaded,
     sizeMb: m.size_mb,
