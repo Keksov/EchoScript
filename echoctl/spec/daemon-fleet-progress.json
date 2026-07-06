@@ -182,11 +182,11 @@
       "id": "DF5.1",
       "phase": "P5",
       "title": "Bun control-server → прокси к echoctl (демонтаж TS-мутаций)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF4.1", "DF4.2", "DF2.2", "DF2.3", "DF1.2", "DF1.3"],
-      "artifacts": ["control-panel/server/server.ts", "control-panel/server/echoctl.ts"],
+      "artifacts": ["control-panel/server/server.ts", "control-panel/server/echoctl.ts", "control-panel/server/echoctl.test.ts"],
       "verify": "routes (PUT config, POST/DELETE daemons, models download/delete, services action) вызывают echoctl --json и прокидывают результат; settings.ts/services-control.ts/models-provision.ts удалены/сведены к шимам; server-тесты зелёные",
-      "evidence": ""
+      "evidence": "echoctl.ts: runEchoctl/runEchoctlJson (Bun.spawn echoctl.exe) + echoctlDaemonNames. server.ts переведён на прокси: GET /api/models → echoctl models list (map size_mb→sizeMb); POST /api/models/:id/download → валидация через list + fire-and-forget echoctl download (async, UI поллит); DELETE /api/models/:id (?force/?dryRun) → echoctl models delete (НОВОЕ); POST /api/daemons (add), DELETE /api/daemons/:name (remove), PATCH /api/daemons/:name (edit) → echoctl (НОВОЕ); GET /api/schema orchestrator → echoctl config schema; POST /api/services/:name/:action диспетчеризуется: name∈ws_daemons → echoctl daemons <action> (socket-safe), иначе controlService (оркестратор/vosk-inventory). models-provision.ts УДАЛЁН. ГРАНИЦА (осознанно): PUT /api/config (bulk settings через applyConfig) и services-control (оркестратор+streaming-vosk, они НЕ ws_daemons) сохранены — bulk-форма мигрирует на гранулярные echoctl-вызовы в DF5.2 с редизайном UI. Тесты: +echoctl.test.ts (реальный shell-out: daemons list→whisperdaemon, models list→en/vosk_ru, config schema reload-классы). typecheck чист; 18/18 зелёных."
     },
     {
       "id": "DF5.2",
