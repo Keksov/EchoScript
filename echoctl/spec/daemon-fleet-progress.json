@@ -202,11 +202,11 @@
       "id": "DF5.3",
       "phase": "P5",
       "title": "pick-path/нативный диалог + полировка + docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF5.2"],
       "artifacts": ["control-panel/README.md", "EchoRecorder/docs/ARCHITECTURE.md", "echoctl/README.md"],
       "verify": "нативный выбор пути сохранён; README echoctl (командный интерфейс); ARCHITECTURE обновлён (echoctl-движок + Bun-прокси); краткий how-to",
-      "evidence": ""
+      "evidence": "pick-path (directory-picker.ts, /api/pick-path) сохранён без изменений в прокси. echoctl/README.md (new): что это (единственный писатель config + движок флота), build/smoke-скрипты, командный интерфейс + флаги (--json/--config/--manifest/--timeout), коды возврата, что управляет (инстансы/lifecycle/модели/config), scope-граница (оркестратор+streaming-vosk вне echoctl). control-panel/README.md: движок echoctl (обёртка), + CRUD инстансов/удаление моделей в 'What it does', обновлён API-список (POST/PATCH/DELETE daemons, DELETE models, pick-path), сокет-ограничение сужено до скрипт-запуска. ARCHITECTURE.md §6 (вложенный репо EchoRecorder — коммитится отдельно): движок echoctl + Bun-прокси, CRUD/lifecycle/модели через echoctl, фикс утечки :3001. Завершает P5."
     },
     {
       "id": "DF6.1",
