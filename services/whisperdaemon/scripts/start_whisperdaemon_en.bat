@@ -50,11 +50,18 @@ if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 if exist "%STDERR_LOG%" del /q "%STDERR_LOG%"
 
-pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\whisperdaemon\build\x64\WhisperDaemon.exe'; $out=Join-Path $wd 'services\whisperdaemon\logs\whisper_en_turbo.stdout.log'; $err=Join-Path $wd 'services\whisperdaemon\logs\whisper_en_turbo.stderr.log'; $modelsRoot=Join-Path $wd 'services\whisperdaemon\models'; $env:WHISPER_MODELS_ROOT = $modelsRoot; $argList=@('--model-name','whisper_en_turbo','--host',$env:WHISPER_DAEMON_HOST,'--port',$env:WHISPER_EN_DAEMON_PORT); if ($env:WHISPER_USE_GPU -match '^(?i:1|true|yes|on)$') { $argList += '--gpu' }; if ($env:WHISPER_GPU_DEVICE) { $argList += @('--gpu-device',$env:WHISPER_GPU_DEVICE) }; if ($env:WHISPER_DLL_PATH) { $argList += @('--whisper-dll',$env:WHISPER_DLL_PATH) }; if ($env:WHISPER_RELEASE_TAG) { $argList += @('--release-tag',$env:WHISPER_RELEASE_TAG) }; Write-Host ('whisperdaemon_en args: ' + ($argList -join ' ')); $proc = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $wd -WindowStyle Minimized -RedirectStandardOutput $out -RedirectStandardError $err -PassThru; if ($proc.WaitForExit(1500)) { Write-Host ('whisperdaemon_en exited with code ' + $proc.ExitCode); if (Test-Path $err) { Get-Content -Path $err | ForEach-Object { Write-Host $_ } }; exit $proc.ExitCode }; Write-Host ('Started whisperdaemon_en PID ' + $proc.Id); Write-Host ('stdout: ' + $out); Write-Host ('stderr: ' + $err)"
+REM Interactive Windows Terminal -> tab in the current window; else minimized window.
+pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\whisperdaemon\build\x64\WhisperDaemon.exe'; $out=Join-Path $wd 'services\whisperdaemon\logs\whisper_en_turbo.stdout.log'; $err=Join-Path $wd 'services\whisperdaemon\logs\whisper_en_turbo.stderr.log'; $modelsRoot=Join-Path $wd 'services\whisperdaemon\models'; $env:WHISPER_MODELS_ROOT = $modelsRoot; $argList=@('--model-name','whisper_en_turbo','--host',$env:WHISPER_DAEMON_HOST,'--port',$env:WHISPER_EN_DAEMON_PORT); if ($env:WHISPER_USE_GPU -match '^(?i:1|true|yes|on)$') { $argList += '--gpu' }; if ($env:WHISPER_GPU_DEVICE) { $argList += @('--gpu-device',$env:WHISPER_GPU_DEVICE) }; if ($env:WHISPER_DLL_PATH) { $argList += @('--whisper-dll',$env:WHISPER_DLL_PATH) }; if ($env:WHISPER_RELEASE_TAG) { $argList += @('--release-tag',$env:WHISPER_RELEASE_TAG) }; Write-Host ('whisperdaemon_en args: ' + ($argList -join ' ')); & (Join-Path $wd 'scripts\launch_tab.ps1') -Title 'whisperdaemon_en' -Exe $exe -ArgList $argList -WorkDir $wd -StdoutLog $out -StderrLog $err -EnvNames 'WHISPER_MODELS_ROOT' -WaitPort ([int]$env:WHISPER_EN_DAEMON_PORT)"
 set "RUN_EXIT=%ERRORLEVEL%"
 if %RUN_EXIT% neq 0 (
     popd
     exit /b %RUN_EXIT%
+)
+
+REM Tab mode: warmup is visible live in the tab — don't block here.
+if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe" if not "%WT_TABS%"=="0" (
+    popd
+    exit /b 0
 )
 
 pwsh -NoProfile -File "%~dp0wait_whisperdaemon_ready.ps1" -ModelName whisper_en_turbo

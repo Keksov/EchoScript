@@ -13,7 +13,8 @@ if not exist "%DAEMON_EXE%" (
     exit /b 1
 )
 
-start "voskdaemon_ru_cmd" /min "%DAEMON_EXE%" --model-name vosk_ru_cmd --host 127.0.0.1 --port 7702
+REM Interactive Windows Terminal -> tab in the current window; else minimized window.
+pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\voskdaemon\build\x64\VoskDaemon.exe'; $logDir=Join-Path $wd 'services\voskdaemon\logs'; New-Item -ItemType Directory -Force $logDir | Out-Null; $out=Join-Path $logDir 'vosk_ru_cmd.stdout.log'; $err=Join-Path $logDir 'vosk_ru_cmd.stderr.log'; & (Join-Path $wd 'scripts\launch_tab.ps1') -Title 'voskdaemon_ru_cmd' -Exe $exe -ArgList '--model-name','vosk_ru_cmd','--host','127.0.0.1','--port','7702' -WorkDir $wd -StdoutLog $out -StderrLog $err -WaitPort 7702"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 popd

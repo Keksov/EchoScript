@@ -26,11 +26,18 @@ if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if exist "%STDOUT_LOG%" del /q "%STDOUT_LOG%"
 if exist "%STDERR_LOG%" del /q "%STDERR_LOG%"
 
-pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\voskdaemon\build\x64\VoskDaemon.exe'; $out=Join-Path $wd 'services\voskdaemon\logs\vosk_ru.stdout.log'; $err=Join-Path $wd 'services\voskdaemon\logs\vosk_ru.stderr.log'; $proc = Start-Process -FilePath $exe -ArgumentList '--model-name','vosk_ru','--host','127.0.0.1','--port','7701' -WorkingDirectory $wd -WindowStyle Minimized -RedirectStandardOutput $out -RedirectStandardError $err -PassThru; if ($proc.WaitForExit(1500)) { Write-Host ('voskdaemon_ru exited with code ' + $proc.ExitCode); if (Test-Path $err) { Get-Content -Path $err | ForEach-Object { Write-Host $_ } }; exit $proc.ExitCode }; Write-Host ('Started voskdaemon_ru PID ' + $proc.Id); Write-Host ('stdout: ' + $out); Write-Host ('stderr: ' + $err)"
+REM Interactive Windows Terminal -> tab in the current window; else minimized window.
+pwsh -NoProfile -Command "$wd=(Get-Location).Path; $exe=Join-Path $wd 'services\voskdaemon\build\x64\VoskDaemon.exe'; $out=Join-Path $wd 'services\voskdaemon\logs\vosk_ru.stdout.log'; $err=Join-Path $wd 'services\voskdaemon\logs\vosk_ru.stderr.log'; & (Join-Path $wd 'scripts\launch_tab.ps1') -Title 'voskdaemon_ru' -Exe $exe -ArgList '--model-name','vosk_ru','--host','127.0.0.1','--port','7701' -WorkDir $wd -StdoutLog $out -StderrLog $err -WaitPort 7701"
 set "RUN_EXIT=%ERRORLEVEL%"
 if %RUN_EXIT% neq 0 (
     popd
     exit /b %RUN_EXIT%
+)
+
+REM Tab mode: the daemon shows its own warmup live in the tab — don't block here.
+if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe" if not "%WT_TABS%"=="0" (
+    popd
+    exit /b 0
 )
 
 pwsh -NoProfile -File "%~dp0wait_voskdaemon_ready.ps1" -ModelName vosk_ru
