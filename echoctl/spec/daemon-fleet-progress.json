@@ -212,11 +212,11 @@
       "id": "DF6.1",
       "phase": "P6",
       "title": "Оркестратор: динамический pickup add/remove инстансов (hot-reload reconcile)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF1.1", "DF1.2"],
       "artifacts": ["orchestrator/src/scheduler.ts", "orchestrator/src/index.ts"],
       "verify": "добавленный через echoctl инстанс появляется в роутинге без рестарта оркестратора; удалённый — исчезает; при необходимости правка reconcile add/remove ws_daemons",
-      "evidence": ""
+      "evidence": "МЕХАНИЗМ уже был (правок не потребовалось): buildEngineRouting(config.wsDaemons,…) читает свежий config (job-manager:207), watchConfigForReload делает Object.assign(config,next) — мутация на месте, applyConfigReload перезапускает input-watchers + sweep (scheduler:160), лог '[orchestrator] config hot-reloaded' (index:161). ПРОВЕРЕНО ВЖИВУЮ: поднял оркестратор (:3000); echoctl daemons add df61_probe (пишет реальный config.json) → лог 'config hot-reloaded' (count 1); echoctl daemons remove → count 2; config.json восстановлен (df61_probe исчез, остались whisperdaemon/_en). Инстансы подхватываются без рестарта."
     },
     {
       "id": "DF6.2",
