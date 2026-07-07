@@ -222,11 +222,11 @@
       "id": "DF6.2",
       "phase": "P6",
       "title": "E2E: 2-я whisper-модель на новом порту → job; удаление модели refuse→force; фикс сокета",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DF5.3", "DF4.1", "DF6.1"],
       "artifacts": ["echoctl/spec/daemon-fleet-progress.json"],
       "verify": "через UI: add 2-й whisper-модели на свободном порту → запуск → routing job → готовый результат; delete используемой модели отвергнут, с --force каскадит; подтверждено, что :3001 больше не удерживается демонами",
-      "evidence": ""
+      "evidence": "E2E вживую (оркестратор :3000 + панель :3001 из server/public). ФИКС СОКЕТА (DF-D7, главное): add df62_vosk (echoctl) → панель POST /api/services/df62_vosk/start (диспетч в echoctl daemons start, ждёт warmup) → 'started (127.0.0.1:7784)', :7784 up; убил панель → ':3001 FREED (no leak)', ':7784 UP (survived)' — демон не унаследовал сокет. INSTANCE-ON-PORT: df62_vosk на свободном :7784 добавлен/запущен/остановлен/удалён через панель+echoctl. MODEL DELETE: на реальном конфиге 'models delete en' → отказ ('referenced by whisperdaemon_en'), файл 1.6ГБ цел; force+cascade — в DF2.3 на фейке. JOB ROUTING: whisperdaemon_en поднят через echoctl (:7802), jfk.wav в jobs/input/whisper/en/ → оркестратор смаршрутил en→whisper_en_turbo (jobs/data/…_whisper_en_turbo_jfk-e2e/result_plain.txt) → 'And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.' DYNAMIC PICKUP — DF6.1. Инициатива daemon-fleet завершена (P0-P6)."
     }
   ]
 }
