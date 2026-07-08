@@ -46,11 +46,11 @@
       "id": "DT1.1",
       "phase": "P1",
       "title": "Follow-логика (shared-read, seek к последним N, poll дозаписей) + ожидание файла + ротация",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DT0.2"],
       "artifacts": ["echotail/src/echotail.pas"],
       "verify": "печатает последние N строк, затем дозаписи по мере роста; ждёт появления файла; при усечении читает с начала",
-      "evidence": ""
+      "evidence": "followLog: ждёт появления файла (FileExists poll), FileOpen(fmShareDenyNone) — читает пока демон пишет; initial tail — readRange последних 64K + lastNLinesStart(N); затем poll 250мс: size<pos→ротация (re-read с 0), size>pos→дозапись (cap 1МБ/poll). Вывод сырых байт через FileWrite(GetStdHandle(STD_OUTPUT_HANDLE)) + SetConsoleOutputCP(65001) — без перекодировки FPC, кириллица цела. ПРОВЕРЕНО: --tail 2 → line4/line5; дозаписи 'appended-A' и 'привет warmup ready' появились корректно (UTF-8). ПАМЯТЬ: WorkingSet 6.5МБ (pwsh tail — 77.7МБ, ~12x легче)."
     },
     {
       "id": "DT1.2",
