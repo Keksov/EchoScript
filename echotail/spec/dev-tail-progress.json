@@ -5,7 +5,7 @@
   "branch": "feature/wt-tabs",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08",
+  "updated": "2026-07-08T2",
   "conventions": "FPC CLI по лекалу echoctl/EchoRecorder cli: program {$mode objfpc}{$H+}, scripts/{build,run,smoke,clean}_x64.bat, тулчейн EchoRecorder/VendorsCore. Демон без окна везде; tail-вкладка — отдельный лёгкий процесс. PASCAL_RULES соблюдаем.",
   "decisions": [
     "DT-D1: dev/prod по env ECHOSCRIPT_DEV=1 (echoctl читает, наследует от Bun).",
@@ -66,11 +66,11 @@
       "id": "DT2.1",
       "phase": "P2",
       "title": "echoctl dev-режим: ECHOSCRIPT_DEV → tail-вкладка после старта демона",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DT1.2"],
       "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas"],
       "verify": "при ECHOSCRIPT_DEV=1 и наличии wt echoctl daemons start открывает wt -w 0 new-tab echotail <log>; демон по-прежнему без окна + warmup-ожидание работает; prod — без вкладки",
-      "evidence": ""
+      "evidence": "echoctl_launch: devTailEnabled (ECHOSCRIPT_DEV=1 + wt.exe в WindowsApps) + openLogTab (CreateProcess(nil, '\"wt\" -w 0 new-tab --title \"<name> log\" \"echotail.exe\" \"<log>\" --tail 200 --title \"<name> log\"'), CREATE_NO_WINDOW; best-effort — тихо пропускает если нет wt.exe/echotail.exe, старт демона не ломается). echoctl_daemons.runDaemonsStart: в ветке woReady после waitPortOpen вызывает openLogTab(repoRoot, name, logPath); демон по-прежнему spawnDaemon без окна + warmup-ожидание не тронуто. Build зелёный. ПРОВЕРЕНО той же командой на реальном логе: wt открыл вкладку, echotail (PID 47460, WS 6.5МБ) следит за логом с верными аргументами (echotail.exe <log> --tail 200 --title '...'); дозапись после открытия вкладки подхватилась (всё ещё follows); kill echotail закрыл тестовую вкладку. prod (без ECHOSCRIPT_DEV) → devTailEnabled=false → без вкладки."
     },
     {
       "id": "DT2.2",

@@ -627,6 +627,9 @@ begin
     if outcome = woReady then
     begin
       waitPortOpen(host, port, 5000);
+      { dev (ECHOSCRIPT_DEV=1 + есть wt): открыть echotail-вкладку на лог. Демон без окна. }
+      if devTailEnabled then
+        openLogTab(repoRoot, aName, logPath);
       reportStart(aJson, aName, 'started', host, port);
       Result := EXIT_OK;
     end

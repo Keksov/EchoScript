@@ -36,6 +36,13 @@ function waitPortClosed(const aHost: string; aPort, aTimeoutMs: Integer): Boolea
 { Последние N символов лога — для диагностики в сообщении об ошибке. }
 function logTail(const aLogPath: string; aMaxChars: Integer): string;
 
+{ Dev-режим (ECHOSCRIPT_DEV=1) + наличие wt.exe — открывать echotail-вкладку на лог. }
+function devTailEnabled: Boolean;
+
+{ Открыть WT-вкладку с echotail на лог демона (dev). Best-effort, тихо пропускает,
+  если нет wt.exe/echotail.exe. Демон остаётся без окна — это лишь просмотрщик лога. }
+procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string);
+
 implementation
 
 uses
@@ -180,6 +187,54 @@ begin
     Result := Copy(content, Length(content) - aMaxChars + 1, aMaxChars)
   else
     Result := content;
+end;
+
+{ Путь к wt.exe (Windows Terminal) в WindowsApps, или '' если нет. }
+function wtExePath: string;
+var
+  la: string;
+begin
+  la := SysUtils.GetEnvironmentVariable('LOCALAPPDATA');
+  if la = '' then
+    Exit('');
+  Result := IncludeTrailingPathDelimiter(la) + 'Microsoft\WindowsApps\wt.exe';
+  if not FileExists(Result) then
+    Result := '';
+end;
+
+function devTailEnabled: Boolean;
+begin
+  Result := (SysUtils.GetEnvironmentVariable('ECHOSCRIPT_DEV') = '1') and (wtExePath <> '');
+end;
+
+procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string);
+var
+  wt, echotailExe, cmdLine: string;
+  si: STARTUPINFOA;
+  pi: PROCESS_INFORMATION;
+begin
+  wt := wtExePath;
+  if wt = '' then
+    Exit;
+  echotailExe := IncludeTrailingPathDelimiter(aRepoRoot) +
+    'echotail' + PathDelim + 'build' + PathDelim + 'x64' + PathDelim + 'echotail.exe';
+  if not FileExists(echotailExe) then
+    Exit; { не собран → тихо пропускаем, старт демона не ломаем }
+
+  { wt -w 0 new-tab --title "<title> · log" "<echotail>" "<log>" --tail 200 --title "<title>" }
+  cmdLine := '"' + wt + '" -w 0 new-tab --title "' + aTitle + ' log" "' +
+    echotailExe + '" "' + aLogPath + '" --tail 200 --title "' + aTitle + ' log"';
+  UniqueString(cmdLine);
+
+  FillChar(si, SizeOf(si), 0);
+  si.cb := SizeOf(si);
+  FillChar(pi, SizeOf(pi), 0);
+  if CreateProcess(nil, PChar(cmdLine), nil, nil, False, CREATE_NO_WINDOW, nil,
+      PChar(aRepoRoot), si, pi) then
+  begin
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+  end;
 end;
 
 end.
