@@ -56,11 +56,11 @@
       "id": "DT1.2",
       "phase": "P1",
       "title": "Подсветка (ANSI) ключевых строк + смоук",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DT1.1"],
-      "artifacts": ["echotail/src/echotail.pas", "echotail/scripts/smoke_x64.bat"],
+      "artifacts": ["echotail/src/echotail.pas", "echotail/scripts/smoke_follow.ps1", "echotail/scripts/smoke_follow_x64.bat"],
       "verify": "ready/ok/listening — зелёный, error/fail/exception/fatal — красный; смоук на растущем файле проходит",
-      "evidence": ""
+      "evidence": "emitColored: буферизует неполные строки (gPending), режет по #10, красит по ключам (lineColor: error/fail/exception/fatal→красный, warmup ready/listening/ready/started→зелёный), C_RESET перед eol. setupColor: --no-color/--color/авто (GetFileType=FILE_TYPE_CHAR → цвет только в консоли, не в файле) + ENABLE_VIRTUAL_TERMINAL_PROCESSING. ПРОВЕРЕНО: --color → ESC-коды на нужных строках (green warmup ready, red ERROR failed, normal без цвета); авто/редирект → без ESC. smoke_follow (pwsh-driven): tail + дозапись + ANSII при --color — FOLLOW SMOKE OK; base smoke OK."
     },
     {
       "id": "DT2.1",

@@ -6,9 +6,8 @@ program echotail;
   tab (the daemon itself stays windowless; this just follows its log file). ~единицы МБ
   вместо ~78 МБ у pwsh Get-Content -Wait.
 
-  DT1.1 — follow: ждёт появления файла, печатает последние N строк, затем дозаписи;
-  переживает ротацию (усечение → перечитать). Лог-байты пишутся сырыми (UTF-8), чтобы
-  кириллица не билась (SetConsoleOutputCP 65001 + прямой FileWrite в stdout). }
+  DT1.1 follow (tail-f, ротация, UTF-8) + DT1.2 подсветка (ready→зелёный, error→красный),
+  с буферизацией неполных строк; цвет авто-выкл при редиректе в файл (или --no-color). }
 
 {$mode objfpc}{$H+}
 
@@ -22,14 +21,21 @@ const
   EXIT_RUNTIME = 1;
   EXIT_USAGE   = 2;
 
-  TAIL_CHUNK   = 65536;    { сколько байт с конца читать под initial tail }
-  BURST_CAP    = 1048576;  { максимум байт за один poll }
+  TAIL_CHUNK   = 65536;
+  BURST_CAP    = 1048576;
   POLL_MS      = 250;
+
+  ENABLE_VT    = 4; { ENABLE_VIRTUAL_TERMINAL_PROCESSING }
+
+  C_RED   = #27'[31m';
+  C_GREEN = #27'[32m';
+  C_RESET = #27'[0m';
 
 var
   gStdOut: THandle;
+  gColor: Boolean = False;
+  gPending: RawByteString = '';
 
-{ Прямой вывод сырых байт в stdout (без перекодировки FPC). }
 procedure writeRaw(const aBytes: RawByteString);
 begin
   if Length(aBytes) > 0 then
@@ -46,11 +52,13 @@ begin
   WriteLn('echotail ', ECHOTAIL_VERSION, ' — follow a log file (tail -f) for EchoScript daemons');
   WriteLn;
   WriteLn('Usage:');
-  WriteLn('  echotail <logpath> [--tail N] [--title T]');
+  WriteLn('  echotail <logpath> [--tail N] [--title T] [--no-color]');
   WriteLn;
   WriteLn('  <logpath>     log file to follow (waits for it to appear)');
   WriteLn('  --tail N      show the last N lines first (default 50)');
   WriteLn('  --title T     set the console/tab title');
+  WriteLn('  --color       force ANSI colouring (default: on for a console, off if redirected)');
+  WriteLn('  --no-color    disable ANSI colouring');
   WriteLn('  --help | --version');
 end;
 
@@ -106,7 +114,6 @@ begin
   end;
 end;
 
-{ Индекс, с которого начинаются последние aN строк в s. }
 function lastNLinesStart(const s: RawByteString; aN: Integer): Integer;
 var
   i, count: Integer;
@@ -116,7 +123,7 @@ begin
   count := 0;
   i := Length(s);
   if (i >= 1) and (s[i] = #10) then
-    Dec(i); { завершающий перевод строки не считаем отдельной строкой }
+    Dec(i);
   while i >= 1 do
   begin
     if s[i] = #10 then
@@ -130,7 +137,56 @@ begin
   Result := 1;
 end;
 
-{ Следит за файлом бесконечно (Ctrl-C / закрытие вкладки — выход). }
+{ Цвет строки по ключевым словам (ASCII-регистронезависимо). '' = без цвета. }
+function lineColor(const aContent: RawByteString): RawByteString;
+var
+  low: RawByteString;
+begin
+  low := LowerCase(aContent);
+  if (Pos('error', low) > 0) or (Pos('fail', low) > 0) or
+     (Pos('exception', low) > 0) or (Pos('fatal', low) > 0) then
+    Result := C_RED
+  else if (Pos('warmup ready', low) > 0) or (Pos('listening', low) > 0) or
+          (Pos('ready', low) > 0) or (Pos('started', low) > 0) then
+    Result := C_GREEN
+  else
+    Result := '';
+end;
+
+{ Выводит полные строки из aChunk (+ остаток из прошлого раза), подсвечивая. Неполный
+  хвост копится в gPending до прихода перевода строки. }
+procedure emitColored(const aChunk: RawByteString);
+var
+  nl, contentLen: Integer;
+  line, content, eol, color: RawByteString;
+begin
+  gPending := gPending + aChunk;
+  repeat
+    nl := Pos(#10, gPending);
+    if nl = 0 then
+      Break;
+    line := Copy(gPending, 1, nl);   { включая #10 }
+    Delete(gPending, 1, nl);
+
+    if not gColor then
+    begin
+      writeRaw(line);
+      Continue;
+    end;
+
+    contentLen := Length(line) - 1;  { без #10 }
+    if (contentLen >= 1) and (line[contentLen] = #13) then
+      Dec(contentLen);               { без #13 }
+    content := Copy(line, 1, contentLen);
+    eol := Copy(line, contentLen + 1, MaxInt);
+    color := lineColor(content);
+    if color <> '' then
+      writeRaw(color + content + C_RESET + eol)
+    else
+      writeRaw(line);
+  until False;
+end;
+
 procedure followLog(const aPath: string; aTailN: Integer);
 var
   pos, size, readLen, startPos: Int64;
@@ -138,7 +194,7 @@ var
   waiting: Boolean;
   s: RawByteString;
 begin
-  pos := -1;      { -1 = ещё не инициализировано (сделать initial tail при первом открытии) }
+  pos := -1;
   waiting := False;
   while True do
   begin
@@ -169,7 +225,7 @@ begin
             readLen := TAIL_CHUNK;
           startPos := size - readLen;
           s := readRange(h, startPos, readLen);
-          writeRaw(Copy(s, lastNLinesStart(s, aTailN), MaxInt));
+          emitColored(Copy(s, lastNLinesStart(s, aTailN), MaxInt));
         end;
         pos := size;
       end
@@ -177,6 +233,7 @@ begin
       begin
         writeLineRaw('[echotail] --- log truncated/rotated, re-reading ---');
         pos := 0;
+        gPending := '';
       end;
 
       if size > pos then
@@ -184,7 +241,7 @@ begin
         readLen := size - pos;
         if readLen > BURST_CAP then
           readLen := BURST_CAP;
-        writeRaw(readRange(h, pos, readLen));
+        emitColored(readRange(h, pos, readLen));
         pos := pos + readLen;
       end;
     finally
@@ -192,6 +249,21 @@ begin
     end;
     Sleep(POLL_MS);
   end;
+end;
+
+{ Цвет включаем только если stdout — консоль (не файл/пайп) и не задан --no-color. }
+procedure setupColor;
+var
+  mode: DWORD;
+begin
+  if hasFlag('--no-color') then
+    gColor := False
+  else if hasFlag('--color') then
+    gColor := True   { форс (в т.ч. при редиректе — для тестов) }
+  else
+    gColor := (GetFileType(gStdOut) = FILE_TYPE_CHAR); { авто: только для консоли }
+  if gColor and GetConsoleMode(gStdOut, mode) then
+    SetConsoleMode(gStdOut, mode or ENABLE_VT);
 end;
 
 function run: Integer;
@@ -221,13 +293,14 @@ begin
   if title <> '' then
     SetConsoleTitle(PChar(title));
 
+  setupColor;
   followLog(logPath, tailN);
-  Result := EXIT_OK; { недостижимо в норме — follow бесконечен }
+  Result := EXIT_OK;
 end;
 
 begin
   gStdOut := GetStdHandle(STD_OUTPUT_HANDLE);
-  SetConsoleOutputCP(65001); { UTF-8: кириллица в логах не бьётся в WT }
+  SetConsoleOutputCP(65001);
   DefaultFormatSettings.DecimalSeparator := '.';
   try
     ExitCode := run;
