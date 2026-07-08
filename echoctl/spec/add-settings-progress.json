@@ -5,7 +5,7 @@
   "branch": "feature/add-settings",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08",
+  "updated": "2026-07-08T1",
   "conventions": "FPC по лекалу echoctl; переиспользуем applySet (валидация как в edit). Один шаг → один коммит → один гейт; пауза на границах фаз.",
   "decisions": [
     "AS-D1: переиспользовать applySet (единая валидация add/edit); forward-декларация перед runDaemonsAdd; применять --set после ws.Add (config владеет inst → нет утечки при Exit(fail)).",
@@ -40,11 +40,11 @@
       "id": "AS1.2",
       "phase": "P1",
       "title": "Тесты: add --set persists/validates + регрессия + UI-путь",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["AS1.1"],
       "artifacts": ["echoctl/scripts/smoke_crud_x64.bat"],
       "verify": "add --set k=v → settings записаны+валидны; плохой --set (unknown key / out-of-range) → ошибка, инстанс не создан; add без --set как прежде; панель POST /api/daemons с settings → сохранены",
-      "evidence": ""
+      "evidence": "smoke_crud_x64.bat +3 проверки (CRLF): 'add --set vad=false --set gpu_device=1' → gpu_device в list; 'add --set bogus=1' → отказ + bad_set не в list; 'add --set vad_threshold=2' → отказ + bad_rng не в list. Весь smoke → 'CRUD SMOKE OK'. UI-ПУТЬ (сценарий пользователя) через реальную панель на :3002 (ECHOSCRIPT_DEV=1, не трогая :3001): POST /api/daemons {engine:diarization, model:diarization_sherpa, name:diartest, settings:{cluster_threshold:0.7, num_speakers:2}} → ответ с settings + config.json diartest.settings = {cluster_threshold:0.7, num_speakers:2} (до фикса было {}). Прибрано: панель остановлена, config.json откачен (diartest нет, :3001 intact)."
     }
   ]
 }

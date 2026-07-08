@@ -17,6 +17,18 @@ echo [crud] add valid instance
 echo [crud] added instance appears in list
 "%CLI%" daemons list --json --config "%TMP%" | findstr /C:"test_whisper" >nul || goto :fail
 
+echo [crud] add honors --set (settings persisted at create)
+"%CLI%" daemons add --engine whisper --model whisper_en_turbo --port 7896 --name set_w --set vad=false --set gpu_device=1 --config "%TMP%" || goto :fail
+"%CLI%" daemons list --json --config "%TMP%" | findstr /C:"gpu_device" >nul || goto :fail
+
+echo [crud] add with unknown setting rejected (nothing created)
+"%CLI%" daemons add --engine whisper --model whisper_en_turbo --port 7895 --name bad_set --set bogus=1 --config "%TMP%" && goto :fail
+"%CLI%" daemons list --json --config "%TMP%" | findstr /C:"bad_set" >nul && goto :fail
+
+echo [crud] add with out-of-range setting rejected (nothing created)
+"%CLI%" daemons add --engine whisper --model whisper_en_turbo --port 7895 --name bad_rng --set vad_threshold=2 --config "%TMP%" && goto :fail
+"%CLI%" daemons list --json --config "%TMP%" | findstr /C:"bad_rng" >nul && goto :fail
+
 echo [crud] duplicate name rejected
 "%CLI%" daemons add --engine whisper --model whisper_en_turbo --port 7898 --lang en --name test_whisper --config "%TMP%" && goto :fail
 
