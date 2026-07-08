@@ -14,7 +14,10 @@
             :label="t('fields.engine.label')"
           />
           <q-input dense filled v-model="name" :label="t('daemons.name')" :hint="t('fleet.nameHint')" />
-          <q-input dense filled v-model="language" :label="t('fields.language.label')" />
+          <q-input
+            v-if="engine !== 'diarization'"
+            dense filled v-model="language" :label="t('fields.language.label')"
+          />
         </template>
 
         <q-select
@@ -80,6 +83,7 @@ const { t } = useI18n()
 const engineOptions = [
   { label: "whisper", value: "whisper" },
   { label: "vosk", value: "vosk" },
+  { label: "diarization", value: "diarization" },
 ]
 
 const engine = ref("whisper")
@@ -100,6 +104,14 @@ const modelOptions = computed(() =>
 
 const rangeHint = (f: FieldSpec): string =>
   f.min !== undefined || f.max !== undefined ? `${f.min ?? ""}..${f.max ?? ""}` : ""
+
+// Switching engine (add mode) invalidates the model choice — models are engine-scoped;
+// diarization is language-agnostic, so drop any typed language too.
+watch(engine, () => {
+  if (props.mode !== "add") return
+  model.value = ""
+  if (engine.value === "diarization") language.value = ""
+})
 
 // Reset the form whenever the dialog opens.
 watch(

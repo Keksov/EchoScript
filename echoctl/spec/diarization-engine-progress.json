@@ -79,11 +79,11 @@
       "id": "DZ3.1",
       "phase": "P3",
       "title": "UI: engineOptions += diarization; фильтр моделей по diarization_ ; language необязателен для diarization",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DZ1.3"],
       "artifacts": ["control-panel/ui/src/components/DaemonForm.vue"],
       "verify": "в форме выбирается движок diarization; модель diarization_sherpa в дропдауне; язык необязателен/скрыт для diarization; add собирает верный body",
-      "evidence": ""
+      "evidence": "DaemonForm.vue: engineOptions += {label:'diarization',value:'diarization'}; поле языка (q-input) скрыто v-if=\"engine !== 'diarization'\" (language-agnostic); добавлен watch(engine) — в add-режиме сбрасывает model (модели engine-scoped) и чистит language при переходе на diarization. Существующий фильтр modelOptions (m.modelName.startsWith(engine.value)) для engine='diarization' даёт diarization_sherpa (есть в /api/models → echoctl models list из DZ1.3). submit шлёт body.engine/model/settings как раньше. vue-tsc --noEmit зелёный. ЗАМЕЧАНИЕ: поля настроек (daemonFields) пока whisper-only (без движко-тега) — движко-фильтр + поля diarization в DZ3.2."
     },
     {
       "id": "DZ3.2",
