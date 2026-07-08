@@ -39,11 +39,11 @@
       "id": "DZ1.1",
       "phase": "P1",
       "title": "Распознавание движка diarization: isKnownEngine + enginePortRange(79xx) + daemonExePath + daemonLogDir + add-сообщение",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DZ0.1"],
       "artifacts": ["echoctl/src/echoctl_daemons.pas"],
       "verify": "daemons add --engine diarization не отклоняется на 'unknown engine'; авто-порт из 7900–7999; daemonExePath → services/diarizationdaemon/sherpa/build/x64/DiarizationDaemon.exe; daemonLogDir → sherpa/logs; сборка зелёная",
-      "evidence": ""
+      "evidence": "echoctl_daemons.pas: isKnownEngine += diarization; enginePortRange diarization 7900–7999; daemonExePath diarization → services/diarizationdaemon/sherpa/build/x64/DiarizationDaemon.exe; daemonLogDir diarization → services/diarizationdaemon/sherpa/logs (переписан на явные ветки whisper/vosk/diarization); add-сообщение '(known: whisper, vosk, diarization)'. Build зелёный. ПРОВЕРЕНО: `daemons add --engine diarization --model diarization_sherpa` → exit2 'unknown model: diarization_sherpa' (НЕ 'unknown engine') — движок принят гейтом; `--engine bogus` → 'unknown engine: bogus (known: whisper, vosk, diarization)'; config.json по md5 не изменён (ошибка modelKnown до saveConfigAtomic). Порты/пути exe/log — по коду + сборке, реально исполнятся в DZ2.1."
     },
     {
       "id": "DZ1.2",

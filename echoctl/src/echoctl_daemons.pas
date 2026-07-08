@@ -73,7 +73,8 @@ end;
 
 function isKnownEngine(const aEngine: string): Boolean;
 begin
-  Result := SameText(aEngine, 'whisper') or SameText(aEngine, 'vosk');
+  Result := SameText(aEngine, 'whisper') or SameText(aEngine, 'vosk') or
+            SameText(aEngine, 'diarization');
 end;
 
 { Модель считается известной, если это ключ в config.models (источник идентичности
@@ -104,7 +105,7 @@ begin
   Result := False;
 end;
 
-{ Диапазон портов движка для авто-аллокации (совпадает с текущими: whisper 78xx, vosk 77xx). }
+{ Диапазон портов движка для авто-аллокации (whisper 78xx, vosk 77xx, diarization 79xx). }
 function enginePortRange(const aEngine: string; out aLo, aHi: Integer): Boolean;
 begin
   Result := True;
@@ -117,6 +118,11 @@ begin
   begin
     aLo := 7701;
     aHi := 7799;
+  end
+  else if SameText(aEngine, 'diarization') then
+  begin
+    aLo := 7900;
+    aHi := 7999;
   end
   else
     Result := False;
@@ -212,7 +218,7 @@ begin
     if aSpec.Engine = '' then
       Exit(fail('--engine is required'));
     if not isKnownEngine(aSpec.Engine) then
-      Exit(fail('unknown engine: ' + aSpec.Engine + ' (known: whisper, vosk)'));
+      Exit(fail('unknown engine: ' + aSpec.Engine + ' (known: whisper, vosk, diarization)'));
     if aSpec.ModelName = '' then
       Exit(fail('--model is required'));
     if not modelKnown(config, aSpec.ModelName) then
@@ -439,19 +445,26 @@ begin
     Result := IncludeTrailingPathDelimiter(aRepoRoot) +
       'services' + PathDelim + 'voskdaemon' + PathDelim + 'build' + PathDelim + 'x64' +
       PathDelim + 'VoskDaemon.exe'
+  else if SameText(aEngine, 'diarization') then
+    Result := IncludeTrailingPathDelimiter(aRepoRoot) +
+      'services' + PathDelim + 'diarizationdaemon' + PathDelim + 'sherpa' + PathDelim +
+      'build' + PathDelim + 'x64' + PathDelim + 'DiarizationDaemon.exe'
   else
     Result := '';
 end;
 
 function daemonLogDir(const aRepoRoot, aEngine: string): string;
-var
-  svc: string;
 begin
-  if SameText(aEngine, 'vosk') then
-    svc := 'voskdaemon'
+  { diarization живёт глубже: services/diarizationdaemon/sherpa/logs }
+  if SameText(aEngine, 'diarization') then
+    Result := IncludeTrailingPathDelimiter(aRepoRoot) + 'services' + PathDelim +
+      'diarizationdaemon' + PathDelim + 'sherpa' + PathDelim + 'logs'
+  else if SameText(aEngine, 'vosk') then
+    Result := IncludeTrailingPathDelimiter(aRepoRoot) + 'services' + PathDelim +
+      'voskdaemon' + PathDelim + 'logs'
   else
-    svc := 'whisperdaemon';
-  Result := IncludeTrailingPathDelimiter(aRepoRoot) + 'services' + PathDelim + svc + PathDelim + 'logs';
+    Result := IncludeTrailingPathDelimiter(aRepoRoot) + 'services' + PathDelim +
+      'whisperdaemon' + PathDelim + 'logs';
 end;
 
 function boolEnv(aValue: Boolean): string;
