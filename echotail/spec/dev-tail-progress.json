@@ -36,11 +36,11 @@
       "id": "DT0.2",
       "phase": "P0",
       "title": "Скелет echotail (program + scripts + разбор аргументов)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DT0.1"],
       "artifacts": ["echotail/src/echotail.pas", "echotail/scripts/fpc-x64.cfg", "echotail/scripts/build_x64.bat", "echotail/scripts/run_x64.bat", "echotail/scripts/smoke_x64.bat", "echotail/scripts/clean.bat"],
       "verify": "build зелёный; echotail --help/version; принимает <logpath> [--tail N] [--title T]",
-      "evidence": ""
+      "evidence": "echotail.pas по лекалу echoctl ({$mode objfpc}{$H+}, run+try/except, коды 0/1/2). Разбор: hasFlag/optionValue/firstPositional (пропускает флаги и значения --tail/--title). --help/--version/no-args → usage exit0; отсутствие logpath → exit2. Скрипты build/run/smoke/clean (CRLF), cfg с VendorsCore (одинарный ..\\EchoRecorder). Сборка через FPC EchoRecorder/VendorsCore зелёная; smoke OK (version/help/no-args/missing-logpath→2). follow — заглушка до DT1.1. build/ в .gitignore."
     },
     {
       "id": "DT1.1",
