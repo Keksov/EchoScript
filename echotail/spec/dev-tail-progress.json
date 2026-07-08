@@ -1,0 +1,106 @@
+{
+  "initiative": "dev-tail",
+  "title": "Живые логи демона в WT-вкладке (dev): FPC echotail + echoctl dev-режим + unify start-скриптов",
+  "plan": "dev-tail-plan.md",
+  "branch": "feature/wt-tabs",
+  "baseBranch": "master",
+  "created": "2026-07-08",
+  "updated": "2026-07-08",
+  "conventions": "FPC CLI по лекалу echoctl/EchoRecorder cli: program {$mode objfpc}{$H+}, scripts/{build,run,smoke,clean}_x64.bat, тулчейн EchoRecorder/VendorsCore. Демон без окна везде; tail-вкладка — отдельный лёгкий процесс. PASCAL_RULES соблюдаем.",
+  "decisions": [
+    "DT-D1: dev/prod по env ECHOSCRIPT_DEV=1 (echoctl читает, наследует от Bun).",
+    "DT-D2: тейлер — отдельная FPC CLI echotail (не pwsh Get-Content: 78МБ→~3-5МБ, замер).",
+    "DT-D3: демон запускается без окна везде; логи в services/<engine>daemon/logs/<name>.log.",
+    "DT-D4: dev → echoctl после старта демона открывает wt -w 0 new-tab echotail <log>.",
+    "DT-D5: start_*.bat (ручной) — всегда dev: демон без окна + tail-вкладка (или свёрнутое окно, если нет wt).",
+    "DT-D6: tail-вкладка живёт после остановки демона (закрывает пользователь)."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + скелет echotail", "gate": "pause: build зелёный; echotail --help/version" },
+    { "id": "P1", "title": "follow + подсветка + устойчивость", "gate": "pause: смоук — дозаписи видны, ключевые строки подсвечены, нет файла/ротация ок" },
+    { "id": "P2", "title": "Интеграция: echoctl dev + unify start_*.bat + dev-скрипты env", "gate": "pause: dev→вкладка с логом; prod→без окна; память лёгкая" },
+    { "id": "P3", "title": "E2E + docs", "gate": "pause: демон из панели(dev)/скрипта → живой лог во вкладке; README" }
+  ],
+  "steps": [
+    {
+      "id": "DT0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echotail/spec/dev-tail-plan.md", "echotail/spec/dev-tail-progress.json"],
+      "verify": "план: FPC echotail, ECHOSCRIPT_DEV, unify start-скриптов, вкладка живёт; решения DT-D1..D6; DAG ацикличен",
+      "evidence": "После обсуждения 2026-07-08. Замер pwsh Get-Content -Wait = 77.7МБ WS → FPC ~3-5МБ (~20x). Решения владельца: ECHOSCRIPT_DEV ок, unify под tail, вкладка остаётся, отдельная FPC-утилита вместо pwsh."
+    },
+    {
+      "id": "DT0.2",
+      "phase": "P0",
+      "title": "Скелет echotail (program + scripts + разбор аргументов)",
+      "status": "todo",
+      "dependsOn": ["DT0.1"],
+      "artifacts": ["echotail/src/echotail.pas", "echotail/scripts/fpc-x64.cfg", "echotail/scripts/build_x64.bat", "echotail/scripts/run_x64.bat", "echotail/scripts/smoke_x64.bat", "echotail/scripts/clean.bat"],
+      "verify": "build зелёный; echotail --help/version; принимает <logpath> [--tail N] [--title T]",
+      "evidence": ""
+    },
+    {
+      "id": "DT1.1",
+      "phase": "P1",
+      "title": "Follow-логика (shared-read, seek к последним N, poll дозаписей) + ожидание файла + ротация",
+      "status": "todo",
+      "dependsOn": ["DT0.2"],
+      "artifacts": ["echotail/src/echotail.pas"],
+      "verify": "печатает последние N строк, затем дозаписи по мере роста; ждёт появления файла; при усечении читает с начала",
+      "evidence": ""
+    },
+    {
+      "id": "DT1.2",
+      "phase": "P1",
+      "title": "Подсветка (ANSI) ключевых строк + смоук",
+      "status": "todo",
+      "dependsOn": ["DT1.1"],
+      "artifacts": ["echotail/src/echotail.pas", "echotail/scripts/smoke_x64.bat"],
+      "verify": "ready/ok/listening — зелёный, error/fail/exception/fatal — красный; смоук на растущем файле проходит",
+      "evidence": ""
+    },
+    {
+      "id": "DT2.1",
+      "phase": "P2",
+      "title": "echoctl dev-режим: ECHOSCRIPT_DEV → tail-вкладка после старта демона",
+      "status": "todo",
+      "dependsOn": ["DT1.2"],
+      "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas"],
+      "verify": "при ECHOSCRIPT_DEV=1 и наличии wt echoctl daemons start открывает wt -w 0 new-tab echotail <log>; демон по-прежнему без окна + warmup-ожидание работает; prod — без вкладки",
+      "evidence": ""
+    },
+    {
+      "id": "DT2.2",
+      "phase": "P2",
+      "title": "Unify start_*.bat / launch_tab.ps1: демон без окна + echotail-вкладка",
+      "status": "todo",
+      "dependsOn": ["DT1.2"],
+      "artifacts": ["scripts/launch_tab.ps1", "orchestrator/scripts/start_orchestrator.bat", "services/whisperdaemon/scripts/start_whisperdaemon_en.bat", "services/whisperdaemon/scripts/start_whisperdaemon_podlodka.bat", "services/voskdaemon/scripts/start_voskdaemon_ru.bat", "services/voskdaemon/scripts/start_voskdaemon_ru_cmd.bat"],
+      "verify": "launch_tab: демон без окна (redirect в лог) + tail-вкладка echotail (если wt), иначе свёрнутое окно; не гоняет демон во вкладке",
+      "evidence": ""
+    },
+    {
+      "id": "DT2.3",
+      "phase": "P2",
+      "title": "Dev-скрипты выставляют ECHOSCRIPT_DEV (панель/оркестратор dev)",
+      "status": "todo",
+      "dependsOn": ["DT2.1"],
+      "artifacts": ["control-panel/server/package.json", "orchestrator/package.json"],
+      "verify": "dev-запуск панели/оркестратора выставляет ECHOSCRIPT_DEV=1 (env наследуется echoctl); prod (start) — нет",
+      "evidence": ""
+    },
+    {
+      "id": "DT3.1",
+      "phase": "P3",
+      "title": "E2E + docs",
+      "status": "todo",
+      "dependsOn": ["DT2.1", "DT2.2", "DT2.3"],
+      "artifacts": ["echotail/README.md"],
+      "verify": "демон из панели(dev)/скрипта → живой лог в WT-вкладке (echotail, лёгкий); prod без окна; вкладка остаётся после стопа; README echotail",
+      "evidence": ""
+    }
+  ]
+}
