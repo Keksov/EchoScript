@@ -5,7 +5,7 @@
   "branch": "feature/diarization-engine",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08T1",
+  "updated": "2026-07-08T2",
   "conventions": "FPC по лекалу echoctl — движковые ветки diarization в тех же функциях, что whisper/vosk (isKnownEngine, enginePortRange, daemonExePath, daemonLogDir, buildDaemonArgs, buildDaemonEnv, echoctl_schema). Демон без окна; маркер warmup ready. echoctl — единственный писатель config.json. PASCAL_RULES. Один шаг → один коммит → один гейт; пауза на границах фаз.",
   "decisions": [
     "DZ-D1: diarization — движок-зонтик; модель diarization_sherpa (бэкенд sherpa); конвенция diarization_* (как whisper_*/vosk_*); расширяемо под будущие бэкенды.",
@@ -69,11 +69,11 @@
       "id": "DZ2.1",
       "phase": "P2",
       "title": "echoctl E2E: add diarization_sherpa → start (warmup ready, без окна) → stop + config set round-trip (smoke)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DZ1.1", "DZ1.2", "DZ1.3"],
       "artifacts": ["echoctl/scripts/smoke_diarization_x64.bat"],
       "verify": "на throwaway/реальном config: daemons add diarization → start до warmup ready (MainWindowHandle=0) → stop (порт закрыт); config set num_speakers/cluster_threshold проходит и читается",
-      "evidence": ""
+      "evidence": "РУЧНОЙ E2E (throwaway --config, реальный DiarizationDaemon): add diarization_sherpa (порт 7900) → start → '[diarizationdaemon] warmup ready', DiarizationDaemon PID 17748 на :7900 MainWindowHandle=0 (без окна, WS 83МБ; ORT DLL уже стейджены → staging no-op True) → stop → 'stopped diarization (:7900)', порт закрыт, процесс исчез. smoke_diarization_x64.bat (CRLF, по образцу smoke_lifecycle): build + error-пути (unknown engine bogus, start non-existent) + guarded happy-path (add --name diarsmoke --port 7911, edit --set cluster_threshold=0.7, start→'started', start-again→'already-running' идемпотентно, stop→'stopped') → 'DIARIZATION SMOKE OK'. После: нет зависших DiarizationDaemon, 7900/7911 свободны, реальный config.json не тронут (ws_daemons=whisperdaemon,whisperdaemon_en)."
     },
     {
       "id": "DZ3.1",
