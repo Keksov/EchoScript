@@ -1,0 +1,109 @@
+{
+  "initiative": "diarization-engine",
+  "title": "Diarization (sherpa) как управляемый движок echoctl + панели (движок-зонтик, модель diarization_sherpa)",
+  "plan": "diarization-engine-plan.md",
+  "branch": "feature/diarization-engine",
+  "baseBranch": "master",
+  "created": "2026-07-08",
+  "updated": "2026-07-08",
+  "conventions": "FPC по лекалу echoctl — движковые ветки diarization в тех же функциях, что whisper/vosk (isKnownEngine, enginePortRange, daemonExePath, daemonLogDir, buildDaemonArgs, buildDaemonEnv, echoctl_schema). Демон без окна; маркер warmup ready. echoctl — единственный писатель config.json. PASCAL_RULES. Один шаг → один коммит → один гейт; пауза на границах фаз.",
+  "decisions": [
+    "DZ-D1: diarization — движок-зонтик; модель diarization_sherpa (бэкенд sherpa); конвенция diarization_* (как whisper_*/vosk_*); расширяемо под будущие бэкенды.",
+    "DZ-D2: модель через models-manifest.json (model_name: 'diarization_sherpa' в записи kind:diarization); modelKnown расширить на манифест (в русле DF2.1). Детали в DZ1.3.",
+    "DZ-D3: порт-диапазон diarization 7900–7999 (дефолт демона 7900).",
+    "DZ-D4: launch --host --port --sherpa-dll <diarizationdaemon/sherpa/vendors/sherpa-onnx/sherpa-onnx.dll>; seg/emb через env DIARIZE_SEG_MODEL/EMB_MODEL → services/diarizationdaemon/sherpa/models/*.onnx; без --model-name.",
+    "DZ-D5: перед spawn стейджить ORT DLL (onnxruntime.dll + onnxruntime_providers_shared.dll → build/x64), как run-скрипт; иначе демон не грузится.",
+    "DZ-D6: маркер warmup ready без изменений; dev-tail (на master) даёт echotail-вкладку автоматически.",
+    "DZ-D7: настройки diarization (num_speakers, cluster_threshold, min_duration_on, min_duration_off) в схеме и форме сразу.",
+    "DZ-D8: diarization language-agnostic — language необязателен (пустой)."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + леджер", "gate": "pause: план/решения; DAG ацикличен" },
+    { "id": "P1", "title": "echoctl-движок diarization (распознавание/порты/пути + args/env + ORT-стейджинг + модель/схема)", "gate": "pause: daemons add --engine diarization не отклоняется; сборка зелёная; args/env/staging/схема готовы" },
+    { "id": "P2", "title": "echoctl E2E (add + start/stop реального diarization + config round-trip)", "gate": "pause: add → start (warmup ready, без окна) → stop; config set round-trip" },
+    { "id": "P3", "title": "UI (движок в форме + модель/язык + поля настроек + i18n)", "gate": "pause: diarization в форме; diarization_sherpa выбирается; поля настроек; i18n en/ru" },
+    { "id": "P4", "title": "E2E полный + docs", "gate": "pause: панель(dev) → add+start diarization → появляется + warmup + echotail-вкладка; docs" }
+  ],
+  "steps": [
+    {
+      "id": "DZ0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echoctl/spec/diarization-engine-plan.md", "echoctl/spec/diarization-engine-progress.json"],
+      "verify": "план: diarization-движок-зонтик, модель diarization_sherpa, порты 79xx, ORT-стейджинг, настройки; решения DZ-D1..D8; DAG ацикличен",
+      "evidence": "После обсуждения 2026-07-08 и исследования: echoctl whisper/vosk-only (isKnownEngine/enginePortRange/daemonExePath/daemonLogDir/buildDaemonArgs/buildDaemonEnv/schema); DaemonForm engineOptions=[whisper,vosk]; манифест содержит kind:diarization без model_name (потому нет в UI); демон DiarizationDaemon.exe: --host/--port/--sherpa-dll (+seg/emb/настройки через env), порт 7900, warmup ready, требует стейджинга ORT DLL, пути services/diarizationdaemon/sherpa/. Решения владельца: движок-зонтик+модель diarization_sherpa (Q1), настройки в форме сразу (Q3), dev-tail смёржен в master перед этой веткой (Q2)."
+    },
+    {
+      "id": "DZ1.1",
+      "phase": "P1",
+      "title": "Распознавание движка diarization: isKnownEngine + enginePortRange(79xx) + daemonExePath + daemonLogDir + add-сообщение",
+      "status": "todo",
+      "dependsOn": ["DZ0.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "verify": "daemons add --engine diarization не отклоняется на 'unknown engine'; авто-порт из 7900–7999; daemonExePath → services/diarizationdaemon/sherpa/build/x64/DiarizationDaemon.exe; daemonLogDir → sherpa/logs; сборка зелёная",
+      "evidence": ""
+    },
+    {
+      "id": "DZ1.2",
+      "phase": "P1",
+      "title": "Launch diarization: buildDaemonArgs (--host/--port/--sherpa-dll) + buildDaemonEnv (SHERPA_DLL_PATH, DIARIZE_SEG/EMB_MODEL, DIARIZE_* из settings) + стейджинг ORT DLL перед spawn",
+      "status": "todo",
+      "dependsOn": ["DZ1.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl_launch.pas"],
+      "verify": "аргументы/env диаризации формируются верно; ORT DLL (onnxruntime.dll + provider) стейджатся в build/x64 перед стартом; сборка зелёная",
+      "evidence": ""
+    },
+    {
+      "id": "DZ1.3",
+      "phase": "P1",
+      "title": "Модель diarization_sherpa (manifest model_name + modelKnown на манифест + чистка путей) + схема настроек diarization",
+      "status": "todo",
+      "dependsOn": ["DZ1.1"],
+      "artifacts": ["echoctl/models-manifest.json", "echoctl/src/echoctl_schema.pas", "echoctl/src/echoctl_daemons.pas"],
+      "verify": "manifest diarization имеет model_name 'diarization_sherpa' + верные пути (diarizationdaemon/sherpa); modelKnown принимает его; findSettingSpec/engineKeyList diarization: num_speakers/cluster_threshold/min_duration_on/min_duration_off; config set валидирует",
+      "evidence": ""
+    },
+    {
+      "id": "DZ2.1",
+      "phase": "P2",
+      "title": "echoctl E2E: add diarization_sherpa → start (warmup ready, без окна) → stop + config set round-trip (smoke)",
+      "status": "todo",
+      "dependsOn": ["DZ1.1", "DZ1.2", "DZ1.3"],
+      "artifacts": ["echoctl/scripts/smoke_diarization_x64.bat"],
+      "verify": "на throwaway/реальном config: daemons add diarization → start до warmup ready (MainWindowHandle=0) → stop (порт закрыт); config set num_speakers/cluster_threshold проходит и читается",
+      "evidence": ""
+    },
+    {
+      "id": "DZ3.1",
+      "phase": "P3",
+      "title": "UI: engineOptions += diarization; фильтр моделей по diarization_ ; language необязателен для diarization",
+      "status": "todo",
+      "dependsOn": ["DZ1.3"],
+      "artifacts": ["control-panel/ui/src/components/DaemonForm.vue"],
+      "verify": "в форме выбирается движок diarization; модель diarization_sherpa в дропдауне; язык необязателен/скрыт для diarization; add собирает верный body",
+      "evidence": ""
+    },
+    {
+      "id": "DZ3.2",
+      "phase": "P3",
+      "title": "UI: поля настроек diarization (num_speakers/cluster_threshold/min_duration_on/off) + серверный field-map + i18n en/ru",
+      "status": "todo",
+      "dependsOn": ["DZ3.1"],
+      "artifacts": ["control-panel/ui/src/components/DaemonForm.vue", "control-panel/ui/src/i18n/locales/en.json", "control-panel/ui/src/i18n/locales/ru.json"],
+      "verify": "поля настроек diarization показываются и шлются в settings; серверный WS_DAEMON_FIELDS/DAEMON_ENV_MAP знает diarization; локализация en/ru; typecheck зелёный",
+      "evidence": ""
+    },
+    {
+      "id": "DZ4.1",
+      "phase": "P4",
+      "title": "E2E полный (панель dev → add+start diarization → появляется + warmup + вкладка) + docs",
+      "status": "todo",
+      "dependsOn": ["DZ2.1", "DZ3.2"],
+      "artifacts": ["services/diarizationdaemon/README.md"],
+      "verify": "панель(dev): add diarization_sherpa → появляется в списке → start до warmup ready + echotail-вкладка (dev) → stop; demon без окна; docs про diarization-движок в echoctl/панели",
+      "evidence": ""
+    }
+  ]
+}
