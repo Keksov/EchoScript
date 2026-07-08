@@ -1,26 +1,26 @@
 <#
 .SYNOPSIS
-  Launch a daemon either as a NEW TAB in the current Windows Terminal window (when the
-  caller runs inside an interactive WT session), or — as before — as a minimized window
-  with output redirected to log files.
+  Launch a daemon WINDOWLESS (output → a combined log) and, when Windows Terminal is
+  available, open a lightweight echotail tab that follows that log live. Falls back to a
+  minimized window with redirected output when wt.exe/echotail are absent.
 
 .DESCRIPTION
-  Mirrors the pattern in c:\projects\Games\AppCore (AppLaunch.pas): on Windows 11 with
-  wt.exe present, open the process as a tab of the current/most-recent WT window
-  (`wt -w 0 new-tab`, `-w 0` = current/most-recent window, created if none) — whether the
-  .bat is run from a WT tab OR double-clicked — so daemons stack as tabs of one window
-  instead of N separate console windows (WT_TABS=0 forces the fallback). The tab
-  runs `cmd /k` and shows the daemon's live output (warmup included) — we do NOT block on
-  warmup in tab mode; the caller returns after a short port probe. WT hosts the tab shell
-  outside our process tree, so (like the echoctl launch) it does not inherit our handles.
+  Unified dev launch (see echotail/spec/dev-tail-plan.md, DT-D3/D5). The daemon NEVER runs
+  inside the tab: it starts windowless (a hidden `cmd /c "<exe> args > <log> 2>&1"`, so
+  stdout+stderr land in one combined log), exactly like echoctl's launch. When wt.exe is
+  present (Win11), we open `wt -w 0 new-tab` running echotail on that log — a ~6.5 MB tail-f
+  viewer (vs ~78 MB for pwsh Get-Content -Wait). `-w 0` targets the current/most-recent WT
+  window (created if none), so both "run from a WT tab" and "double-click the .bat" get a
+  tab. WT hosts the tab outside our process tree; the echotail tab outlives the daemon
+  (the user closes it). Set WT_TABS=0 to force the minimized-window fallback.
 
-  Env: for the tab we rely on the daemons' built-in defaults (WHISPER_MODELS_ROOT →
-  services/whisperdaemon/models, VOSK_MODELS_ROOT → C:\var\vosk, ECHOSCRIPT_PORT → 3000),
-  which match what the start scripts set. Pass -EnvNames to bake specific overrides into
-  the tab.
+  Log: the daemon writes a single combined log at -StdoutLog (echotail follows it). -StderrLog
+  is only used by the minimized fallback. Env: -EnvNames are baked into the windowless
+  daemon's .cmd (so the daemon gets them even though it no longer runs in the tab).
 
 .NOTES
-  Start scripts keep building their own arg list and just call this for the final launch.
+  Start scripts keep building their own arg list and just call this for the final launch;
+  they need no changes — their -StdoutLog simply becomes the combined log echotail follows.
 #>
 param(
   [Parameter(Mandatory)][string]$Title,
@@ -44,11 +44,9 @@ function Get-WtPath {
   return ""
 }
 
-# True on Windows 11 (build >= 22000) with wt.exe present. We open tabs regardless of how
-# the script was launched: `wt -w 0` adds the tab to the current/most-recent Windows
-# Terminal window (creating one if none), so both "run from a WT tab" and "double-click the
-# .bat" get a tab instead of a standalone console window. Set WT_TABS=0 to force the
-# minimized-window fallback.
+# True on Windows 11 (build >= 22000) with wt.exe present. `wt -w 0` adds the tab to the
+# current/most-recent Windows Terminal window (creating one if none), so both "run from a WT
+# tab" and "double-click the .bat" get a tab. Set WT_TABS=0 to force the minimized fallback.
 function Test-TabsAvailable {
   if ($ForceTab) { return $true }
   if ($env:WT_TABS -eq "0") { return $false }
@@ -67,35 +65,59 @@ function Wait-PortOpen([int]$port, [int]$timeoutMs) {
   }
 }
 
-if (Test-TabsAvailable) {
-  # Write a per-tab .cmd (title + cd + env + command) to sidestep quote-nesting through wt/cmd.
-  $tabCmd = Join-Path $env:TEMP ("echoscript-tab-{0}.cmd" -f ([Guid]::NewGuid().ToString('N').Substring(0, 12)))
-  $lines = @("@echo off", "title $Title")
-  if ($WorkDir) { $lines += "cd /d `"$WorkDir`"" }
+# repo\scripts\launch_tab.ps1 → repo root is the parent of this script's dir.
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$echotail = Join-Path $repoRoot "echotail\build\x64\echotail.exe"
+
+# Preferred path: WT present AND echotail built → daemon windowless + echotail tab.
+if ((Test-TabsAvailable) -and (Test-Path -LiteralPath $echotail)) {
+  # Combined log the daemon writes and echotail follows.
+  $log = if ($StdoutLog) { $StdoutLog } else { Join-Path $env:TEMP ("echoscript-{0}.log" -f $Title) }
+  $logDir = Split-Path -Parent $log
+  if ($logDir -and -not (Test-Path -LiteralPath $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+  }
+
+  # Windowless daemon: a .cmd (cd + env + "exe" args > log 2>&1) run via hidden cmd, so
+  # stdout+stderr combine into one log (Start-Process can't redirect both to the same file).
+  $argStr = ($ArgList | ForEach-Object { '"' + $_ + '"' }) -join ' '
+  $dlines = @("@echo off")
+  if ($WorkDir) { $dlines += "cd /d `"$WorkDir`"" }
   foreach ($n in $EnvNames) {
     $v = [Environment]::GetEnvironmentVariable($n)
-    if ($v) { $lines += "set `"$n=$v`"" }
+    if ($v) { $dlines += "set `"$n=$v`"" }
   }
-  $argStr = ($ArgList | ForEach-Object { '"' + $_ + '"' }) -join ' '
-  $lines += "`"$Exe`" $argStr"
-  Set-Content -LiteralPath $tabCmd -Value $lines -Encoding Ascii
+  $dlines += "`"$Exe`" $argStr > `"$log`" 2>&1"
+  $daemonCmd = Join-Path $env:TEMP ("echoscript-daemon-{0}.cmd" -f ([Guid]::NewGuid().ToString('N').Substring(0, 12)))
+
+  # echotail tab: a .cmd (title + echotail on the log); cmd /k keeps the tab open even if
+  # echotail ever exits (the tab outlives the daemon — user closes it).
+  $tlines = @("@echo off", "title $Title log", "`"$echotail`" `"$log`" --tail 200 --title `"$Title log`"")
+  $tabCmd = Join-Path $env:TEMP ("echoscript-tab-{0}.cmd" -f ([Guid]::NewGuid().ToString('N').Substring(0, 12)))
 
   $wt = Get-WtPath
   if ($DryRun) {
+    Write-Host "[dry-run] daemon .cmd ($daemonCmd):"
+    $dlines | ForEach-Object { Write-Host "    $_" }
+    Write-Host "[dry-run] windowless: cmd /c `"$daemonCmd`" (hidden)"
     Write-Host "[dry-run] tab .cmd ($tabCmd):"
-    $lines | ForEach-Object { Write-Host "    $_" }
-    Write-Host "[dry-run] wt: `"$wt`" -w 0 new-tab --title `"$Title`" cmd /k `"$tabCmd`""
+    $tlines | ForEach-Object { Write-Host "    $_" }
+    Write-Host "[dry-run] wt: `"$wt`" -w 0 new-tab --title `"$Title log`" cmd /k `"$tabCmd`""
     exit 0
   }
 
-  # -w 0 targets the current/most-recent window; new-tab adds a tab to it.
-  & $wt -w 0 new-tab --title $Title cmd /k $tabCmd | Out-Null
-  Write-Host "opened '$Title' in a new Windows Terminal tab (watch it for warmup)"
+  Set-Content -LiteralPath $daemonCmd -Value $dlines -Encoding Ascii
+  Set-Content -LiteralPath $tabCmd -Value $tlines -Encoding Ascii
+
+  # Start the daemon windowless, then open the echotail tab following its log.
+  Start-Process -FilePath "cmd.exe" -ArgumentList '/c', $daemonCmd -WindowStyle Hidden | Out-Null
+  & $wt -w 0 new-tab --title "$Title log" cmd /k $tabCmd | Out-Null
+  Write-Host "started '$Title' windowless; live log in a new Windows Terminal tab (echotail)"
   Wait-PortOpen $WaitPort 20000
   exit 0
 }
 
-# Fallback: minimized window, output redirected to logs (previous behavior).
+# Fallback (no wt, or echotail not built): minimized window, output redirected to logs.
 if ($DryRun) {
   Write-Host "[dry-run] fallback: Start-Process -WindowStyle Minimized `"$Exe`" $($ArgList -join ' ')"
   exit 0

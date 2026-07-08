@@ -76,11 +76,11 @@
       "id": "DT2.2",
       "phase": "P2",
       "title": "Unify start_*.bat / launch_tab.ps1: демон без окна + echotail-вкладка",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DT1.2"],
-      "artifacts": ["scripts/launch_tab.ps1", "orchestrator/scripts/start_orchestrator.bat", "services/whisperdaemon/scripts/start_whisperdaemon_en.bat", "services/whisperdaemon/scripts/start_whisperdaemon_podlodka.bat", "services/voskdaemon/scripts/start_voskdaemon_ru.bat", "services/voskdaemon/scripts/start_voskdaemon_ru_cmd.bat"],
+      "artifacts": ["scripts/launch_tab.ps1"],
       "verify": "launch_tab: демон без окна (redirect в лог) + tail-вкладка echotail (если wt), иначе свёрнутое окно; не гоняет демон во вкладке",
-      "evidence": ""
+      "evidence": "launch_tab.ps1 переписан: демон ВСЕГДА windowless (hidden `cmd /c \"exe\" args > log 2>&1` — объединённый stdout+stderr, как в echoctl), НЕ во вкладке. При wt+echotail собран: открывает `wt -w 0 new-tab --title '<T> log' cmd /k echotail <log> --tail 200` — echotail follows объединённый лог; иначе fallback = свёрнутое окно + redirect (без изменений). echotail.exe резолвится от repoRoot (Split-Path $PSScriptRoot -Parent), не от WorkDir. Per-daemon/per-tab .cmd снимают вложенные кавычки (пути с пробелами ок). START-СКРИПТЫ НЕ МЕНЯЛИСЬ (обратно совместимо): их -StdoutLog становится объединённым логом echotail, -StderrLog только для fallback; они уже пропускают свой wait_ready при wt. ПРОВЕРЕНО: DryRun — верное построение (cd+env+redirect, экранирование пробелов в путях exe/лога); живой фейк-демон (pwsh TCP-listener) через launch_tab → лог создан со stdout демона (starting/listening/warmup ready/heartbeat), демон windowless, echotail (PID 2460) follows верный лог; DT-D6 — демон сам остановился (порт 7999 закрыт, лог 'stopped'), echotail жив → вкладка держится; WT_TABS=0 → fallback 'Start-Process -WindowStyle Minimized'."
     },
     {
       "id": "DT2.3",
