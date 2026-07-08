@@ -503,6 +503,30 @@ begin
       if aSettings.Find('entropy_thold') <> nil then
         aEnv.Values['WHISPER_ENTROPY_THOLD'] := floatEnv(aSettings.Get('entropy_thold', 2.4));
     end;
+  end
+  else if SameText(aEngine, 'diarization') then
+  begin
+    { diarization: sherpa-dll + пути к ONNX-моделям + тюнинг — всё через env (демон их читает). }
+    aEnv.Values['SHERPA_DLL_PATH'] := IncludeTrailingPathDelimiter(aRepoRoot) +
+      'services' + PathDelim + 'diarizationdaemon' + PathDelim + 'sherpa' + PathDelim +
+      'vendors' + PathDelim + 'sherpa-onnx' + PathDelim + 'sherpa-onnx.dll';
+    aEnv.Values['DIARIZE_SEG_MODEL'] := IncludeTrailingPathDelimiter(aRepoRoot) +
+      'services' + PathDelim + 'diarizationdaemon' + PathDelim + 'sherpa' + PathDelim +
+      'models' + PathDelim + 'segmentation.onnx';
+    aEnv.Values['DIARIZE_EMB_MODEL'] := IncludeTrailingPathDelimiter(aRepoRoot) +
+      'services' + PathDelim + 'diarizationdaemon' + PathDelim + 'sherpa' + PathDelim +
+      'models' + PathDelim + 'embedding.onnx';
+    if aSettings <> nil then
+    begin
+      if aSettings.Find('num_speakers') <> nil then
+        aEnv.Values['DIARIZE_NUM_SPEAKERS'] := IntToStr(aSettings.Get('num_speakers', -1));
+      if aSettings.Find('cluster_threshold') <> nil then
+        aEnv.Values['DIARIZE_CLUSTER_THRESHOLD'] := floatEnv(aSettings.Get('cluster_threshold', 0.5));
+      if aSettings.Find('min_duration_on') <> nil then
+        aEnv.Values['DIARIZE_MIN_DURATION_ON'] := floatEnv(aSettings.Get('min_duration_on', 0.2));
+      if aSettings.Find('min_duration_off') <> nil then
+        aEnv.Values['DIARIZE_MIN_DURATION_OFF'] := floatEnv(aSettings.Get('min_duration_off', 0.5));
+    end;
   end;
   { vosk: VOSK_MODELS_ROOT — оставляем дефолт демона (C:\var\vosk), если не задан в окружении. }
 end;
@@ -510,6 +534,10 @@ end;
 function buildDaemonArgs(const aModel, aHost: string; aPort: Integer;
   const aEngine: string; aSettings: TJSONObject): string;
 begin
+  if SameText(aEngine, 'diarization') then
+    { diarization не принимает --model-name; sherpa-dll/модели/настройки идут через env. }
+    Exit('--host ' + aHost + ' --port ' + IntToStr(aPort));
+
   Result := '--model-name "' + aModel + '" --host ' + aHost + ' --port ' + IntToStr(aPort);
   if SameText(aEngine, 'whisper') and (aSettings <> nil) then
   begin
@@ -523,6 +551,56 @@ begin
     if aSettings.Find('gpu_device') <> nil then
       Result := Result + ' --gpu-device ' + IntToStr(aSettings.Get('gpu_device', 0));
   end;
+end;
+
+{ Копирование файла с перезаписью через потоки (без Windows-зависимости). }
+function copyFileOverwrite(const aSrc, aDst: string): Boolean;
+var
+  src, dst: TFileStream;
+begin
+  Result := False;
+  if not FileExists(aSrc) then
+    Exit;
+  try
+    src := TFileStream.Create(aSrc, fmOpenRead or fmShareDenyNone);
+    try
+      dst := TFileStream.Create(aDst, fmCreate);
+      try
+        if src.Size > 0 then
+          dst.CopyFrom(src, src.Size);
+        Result := True;
+      finally
+        dst.Free;
+      end;
+    finally
+      src.Free;
+    end;
+  except
+    Result := False;
+  end;
+end;
+
+{ diarization: sherpa-onnx подгружает ORT DLL из каталога exe → стейджим их из vendors в
+  build/x64 (как run-скрипт copy /y). Стейджим только отсутствующие: если уже на месте
+  (возможно, залочены запущенным инстансом) — не трогаем. False, если vendor-DLL нет вовсе. }
+function stageDiarizationRuntime(const aRepoRoot: string): Boolean;
+var
+  vend, bin: string;
+
+  function stageOne(const aName: string): Boolean;
+  begin
+    if FileExists(bin + aName) then
+      Exit(True);
+    Result := copyFileOverwrite(vend + aName, bin + aName);
+  end;
+
+begin
+  vend := IncludeTrailingPathDelimiter(aRepoRoot) + 'services' + PathDelim +
+    'diarizationdaemon' + PathDelim + 'sherpa' + PathDelim + 'vendors' + PathDelim +
+    'sherpa-onnx' + PathDelim;
+  bin := IncludeTrailingPathDelimiter(aRepoRoot) + 'services' + PathDelim +
+    'diarizationdaemon' + PathDelim + 'sherpa' + PathDelim + 'build' + PathDelim + 'x64' + PathDelim;
+  Result := stageOne('onnxruntime.dll') and stageOne('onnxruntime_providers_shared.dll');
 end;
 
 { Убить <Engine>Daemon.exe, слушающий aPort (владелец listening-сокета = сам демон). }
@@ -632,6 +710,11 @@ begin
 
     buildDaemonEnv(repoRoot, engine, settings, env);
     args := buildDaemonArgs(model, host, port, engine, settings);
+
+    { diarization: sherpa-onnx требует ORT DLL рядом с exe — стейджим перед стартом. }
+    if SameText(engine, 'diarization') then
+      if not stageDiarizationRuntime(repoRoot) then
+        Exit(fail('failed to stage sherpa ONNX runtime DLLs (build + download_sherpa_assets first?)'));
 
     if not spawnDaemon(exePath, args, repoRoot, logPath, env, pid, err) then
       Exit(fail('spawn failed: ' + err));

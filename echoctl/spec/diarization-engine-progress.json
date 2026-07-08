@@ -48,12 +48,12 @@
     {
       "id": "DZ1.2",
       "phase": "P1",
-      "title": "Launch diarization: buildDaemonArgs (--host/--port/--sherpa-dll) + buildDaemonEnv (SHERPA_DLL_PATH, DIARIZE_SEG/EMB_MODEL, DIARIZE_* из settings) + стейджинг ORT DLL перед spawn",
-      "status": "todo",
+      "title": "Launch diarization: buildDaemonArgs (--host/--port) + buildDaemonEnv (SHERPA_DLL_PATH, DIARIZE_SEG/EMB_MODEL, DIARIZE_* из settings) + стейджинг ORT DLL перед spawn",
+      "status": "done",
       "dependsOn": ["DZ1.1"],
-      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl_launch.pas"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
       "verify": "аргументы/env диаризации формируются верно; ORT DLL (onnxruntime.dll + provider) стейджатся в build/x64 перед стартом; сборка зелёная",
-      "evidence": ""
+      "evidence": "echoctl_daemons.pas: buildDaemonArgs diarization — Exit('--host H --port P') ДО whisper/vosk-ветки (без --model-name, который DiarizationDaemon отверг бы как Unknown argument); sherpa-dll/модели/настройки идут через env. buildDaemonEnv diarization — SHERPA_DLL_PATH→vendors/sherpa-onnx/sherpa-onnx.dll, DIARIZE_SEG_MODEL/EMB_MODEL→models/segmentation|embedding.onnx, + DIARIZE_NUM_SPEAKERS/CLUSTER_THRESHOLD/MIN_DURATION_ON/OFF из settings. copyFileOverwrite (TFileStream, без Windows) + stageDiarizationRuntime (stage-if-missing: onnxruntime.dll + onnxruntime_providers_shared.dll vendors→build/x64; не клобберит залоченные) — вызывается в runDaemonsStart перед spawn только для diarization (Exit(fail) при отсутствии vendor-DLL). Build зелёный. ПРОВЕРЕНО наличие путей: vendor sherpa-onnx.dll(4.4M)/onnxruntime.dll(16M)/provider(105K) ✓; build/x64 уже стейджено (staging → no-op True); models/segmentation.onnx(9.5M)+embedding.onnx(39M) ✓. Реальный старт демона — DZ2.1."
     },
     {
       "id": "DZ1.3",
