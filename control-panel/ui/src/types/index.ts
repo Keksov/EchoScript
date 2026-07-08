@@ -43,6 +43,7 @@ export interface FieldSpec {
   readonly type: FieldType
   readonly reload: ReloadClass
   readonly target?: FieldTarget
+  readonly engine?: string
   readonly min?: number
   readonly max?: number
   readonly optionsFrom?: "models"

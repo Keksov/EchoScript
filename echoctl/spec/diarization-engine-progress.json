@@ -5,7 +5,7 @@
   "branch": "feature/diarization-engine",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08T2",
+  "updated": "2026-07-08T3",
   "conventions": "FPC по лекалу echoctl — движковые ветки diarization в тех же функциях, что whisper/vosk (isKnownEngine, enginePortRange, daemonExePath, daemonLogDir, buildDaemonArgs, buildDaemonEnv, echoctl_schema). Демон без окна; маркер warmup ready. echoctl — единственный писатель config.json. PASCAL_RULES. Один шаг → один коммит → один гейт; пауза на границах фаз.",
   "decisions": [
     "DZ-D1: diarization — движок-зонтик; модель diarization_sherpa (бэкенд sherpa); конвенция diarization_* (как whisper_*/vosk_*); расширяемо под будущие бэкенды.",
@@ -89,11 +89,11 @@
       "id": "DZ3.2",
       "phase": "P3",
       "title": "UI: поля настроек diarization (num_speakers/cluster_threshold/min_duration_on/off) + серверный field-map + i18n en/ru",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DZ3.1"],
-      "artifacts": ["control-panel/ui/src/components/DaemonForm.vue", "control-panel/ui/src/i18n/locales/en.json", "control-panel/ui/src/i18n/locales/ru.json"],
+      "artifacts": ["control-panel/server/settings-schema.ts", "control-panel/ui/src/types/index.ts", "control-panel/ui/src/components/DaemonForm.vue", "control-panel/ui/src/i18n/locales/en.json", "control-panel/ui/src/i18n/locales/ru.json"],
       "verify": "поля настроек diarization показываются и шлются в settings; серверный WS_DAEMON_FIELDS/DAEMON_ENV_MAP знает diarization; локализация en/ru; typecheck зелёный",
-      "evidence": ""
+      "evidence": "settings-schema.ts: FieldSpec +engine?; whisper launch-поля помечены engine:'whisper'; добавлены diarization-поля engine:'diarization' — num_speakers(int -1..64,def -1), cluster_threshold(float 0..1,def 0.5), min_duration_on/off(float 0..10,def 0.2/0.5); DAEMON_ENV_MAP += num_speakers→DIARIZE_NUM_SPEAKERS, cluster_threshold→DIARIZE_CLUSTER_THRESHOLD, min_duration_on/off→DIARIZE_MIN_DURATION_ON/OFF. ui/types FieldSpec +engine?. DaemonForm.vue: engine берётся из instance в edit-режиме; computed visibleFields (фильтр daemonFields по engine, untagged=все движки); шаблон (v-for) и collectSettings используют visibleFields — whisper-поля больше НЕ показываются для diarization/vosk (заодно чинит прежнюю неточность vosk). i18n en/ru: 4 поля (label+desc). ПРОВЕРЕНО: bun eval — WS_DAEMON_FIELDS engine=diarization = 4 поля, DAEMON_ENV_MAP → DIARIZE_*; en/ru JSON валиден (utf-8); server typecheck (bun x tsc) зелёный; ui typecheck (vue-tsc) зелёный."
     },
     {
       "id": "DZ4.1",

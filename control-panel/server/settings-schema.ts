@@ -16,6 +16,8 @@ export interface FieldSpec {
   readonly type: FieldType
   readonly reload: ReloadClass
   readonly target?: FieldTarget
+  /** Engine this daemon-launch field belongs to (whisper/diarization/…); absent = all engines. */
+  readonly engine?: string
   readonly min?: number
   readonly max?: number
   /** For type "select": dynamic option source resolved against the live config. */
@@ -52,13 +54,19 @@ export const WS_DAEMON_FIELDS: readonly FieldSpec[] = [
   { key: "engine", type: "string", reload: "hot", target: "orchestrator" },
   { key: "language", type: "string", reload: "hot", target: "orchestrator" },
   { key: "model_name", type: "string", reload: "hot", target: "orchestrator" },
-  { key: "vad", type: "bool", reload: "restart", target: "daemon", default: true },
-  { key: "vad_threshold", type: "float", reload: "restart", target: "daemon", min: 0, max: 1, default: 0.4 },
-  { key: "vad_speech_pad_ms", type: "int", reload: "restart", target: "daemon", min: 0, max: 2000, default: 200 },
-  { key: "no_speech_thold", type: "float", reload: "restart", target: "daemon", min: 0, max: 1, default: 0.6 },
-  { key: "entropy_thold", type: "float", reload: "restart", target: "daemon", min: 0, max: 10, default: 2.4 },
-  { key: "gpu", type: "bool", reload: "restart", target: "daemon", default: false },
-  { key: "gpu_device", type: "int", reload: "restart", target: "daemon", min: 0, max: 16, default: 0 },
+  // whisper launch tuning
+  { key: "vad", type: "bool", reload: "restart", target: "daemon", engine: "whisper", default: true },
+  { key: "vad_threshold", type: "float", reload: "restart", target: "daemon", engine: "whisper", min: 0, max: 1, default: 0.4 },
+  { key: "vad_speech_pad_ms", type: "int", reload: "restart", target: "daemon", engine: "whisper", min: 0, max: 2000, default: 200 },
+  { key: "no_speech_thold", type: "float", reload: "restart", target: "daemon", engine: "whisper", min: 0, max: 1, default: 0.6 },
+  { key: "entropy_thold", type: "float", reload: "restart", target: "daemon", engine: "whisper", min: 0, max: 10, default: 2.4 },
+  { key: "gpu", type: "bool", reload: "restart", target: "daemon", engine: "whisper", default: false },
+  { key: "gpu_device", type: "int", reload: "restart", target: "daemon", engine: "whisper", min: 0, max: 16, default: 0 },
+  // diarization (sherpa) launch tuning
+  { key: "num_speakers", type: "int", reload: "restart", target: "daemon", engine: "diarization", min: -1, max: 64, default: -1 },
+  { key: "cluster_threshold", type: "float", reload: "restart", target: "daemon", engine: "diarization", min: 0, max: 1, default: 0.5 },
+  { key: "min_duration_on", type: "float", reload: "restart", target: "daemon", engine: "diarization", min: 0, max: 10, default: 0.2 },
+  { key: "min_duration_off", type: "float", reload: "restart", target: "daemon", engine: "diarization", min: 0, max: 10, default: 0.5 },
 ]
 
 /** Config field -> daemon env var (launcher passes these at daemon start, CP4.1). */
@@ -70,6 +78,10 @@ export const DAEMON_ENV_MAP: Readonly<Record<string, string>> = {
   entropy_thold: "WHISPER_ENTROPY_THOLD",
   gpu: "WHISPER_USE_GPU",
   gpu_device: "WHISPER_GPU_DEVICE",
+  num_speakers: "DIARIZE_NUM_SPEAKERS",
+  cluster_threshold: "DIARIZE_CLUSTER_THRESHOLD",
+  min_duration_on: "DIARIZE_MIN_DURATION_ON",
+  min_duration_off: "DIARIZE_MIN_DURATION_OFF",
 }
 
 /** Options for a "select" field, resolved against the current config (e.g. model names). */

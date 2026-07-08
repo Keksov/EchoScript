@@ -35,7 +35,7 @@
 
         <q-expansion-item dense :label="t('fleet.settings')" header-class="text-grey-4">
           <div class="q-pl-sm q-gutter-xs">
-            <template v-for="f in daemonFields" :key="f.key">
+            <template v-for="f in visibleFields" :key="f.key">
               <q-toggle
                 v-if="f.type === 'bool'"
                 v-model="settings[f.key]"
@@ -102,6 +102,12 @@ const modelOptions = computed(() =>
     .map((m) => ({ label: `${m.modelName} — ${m.model}`, value: m.modelName })),
 )
 
+// Only the launch fields for the selected engine (whisper vad/gpu vs diarization tuning);
+// untagged fields apply to all engines.
+const visibleFields = computed(() =>
+  props.daemonFields.filter((f) => !f.engine || f.engine === engine.value),
+)
+
 const rangeHint = (f: FieldSpec): string =>
   f.min !== undefined || f.max !== undefined ? `${f.min ?? ""}..${f.max ?? ""}` : ""
 
@@ -121,6 +127,7 @@ watch(
     error.value = null
     settings.value = {}
     if (props.mode === "edit" && props.instance) {
+      engine.value = props.instance.engine ?? "whisper"
       model.value = props.instance.modelName ?? ""
       port.value = props.instance.port
     } else {
@@ -135,7 +142,7 @@ watch(
 
 const collectSettings = (): Record<string, unknown> => {
   const out: Record<string, unknown> = {}
-  for (const f of props.daemonFields) {
+  for (const f of visibleFields.value) {
     const v = settings.value[f.key]
     if (v !== undefined && v !== null && v !== "") out[f.key] = v
   }
