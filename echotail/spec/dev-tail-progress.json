@@ -5,7 +5,7 @@
   "branch": "feature/wt-tabs",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08T3",
+  "updated": "2026-07-08T4",
   "conventions": "FPC CLI по лекалу echoctl/EchoRecorder cli: program {$mode objfpc}{$H+}, scripts/{build,run,smoke,clean}_x64.bat, тулчейн EchoRecorder/VendorsCore. Демон без окна везде; tail-вкладка — отдельный лёгкий процесс. PASCAL_RULES соблюдаем.",
   "decisions": [
     "DT-D1: dev/prod по env ECHOSCRIPT_DEV=1 (echoctl читает, наследует от Bun).",
@@ -96,11 +96,11 @@
       "id": "DT3.1",
       "phase": "P3",
       "title": "E2E + docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DT2.1", "DT2.2", "DT2.3"],
       "artifacts": ["echotail/README.md"],
       "verify": "демон из панели(dev)/скрипта → живой лог в WT-вкладке (echotail, лёгкий); prod без окна; вкладка остаётся после стопа; README echotail",
-      "evidence": ""
+      "evidence": "РЕАЛЬНЫЙ E2E (echoctl/panel-путь): `ECHOSCRIPT_DEV=1 echoctl daemons start whisperdaemon_en` → WhisperDaemon загрузил whisper_en_turbo (1.6ГБ), в логе 'warmup ready model=whisper_en_turbo', echoctl вернул 'started' exit0. ПРОВЕРЕНО: echotail (PID 22004) follows настоящий services/whisperdaemon/logs/whisperdaemon_en.log --tail 200 --title 'whisperdaemon_en log' (dev-вкладка открылась через реальный echoctl-путь с наследованным ECHOSCRIPT_DEV); WhisperDaemon PID 20132 на :7802 MainWindowHandle=0 (без окна); DT-D6 — `echoctl daemons stop whisperdaemon_en` → :7802 закрыт, echotail жив (WS 6.5МБ) → вкладка держится после стопа демона; podlodka :7801 не тронут. README.md: что/зачем (6.5 vs 77.7МБ pwsh), usage (флаги), follow/rotation/UTF-8/color, интеграция (echoctl ECHOSCRIPT_DEV/devTailEnabled/openLogTab + launch_tab windowless+tab, fallback), build."
     }
   ]
 }
