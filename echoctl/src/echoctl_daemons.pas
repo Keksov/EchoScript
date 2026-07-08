@@ -19,7 +19,7 @@ type
   end;
 
 function runDaemonsList(const aConfigPath: string; aJson: Boolean): Integer;
-function runDaemonsAdd(const aConfigPath, aManifestPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
+function runDaemonsAdd(const aConfigPath, aManifestPath: string; const aSpec: TAddSpec; const aSets: array of string; aJson: Boolean): Integer;
 function runDaemonsRemove(const aConfigPath, aName: string; aJson: Boolean): Integer;
 function runDaemonsEdit(const aConfigPath, aName, aNewModel: string; aNewPort: Integer;
   const aSets: array of string; aJson: Boolean): Integer;
@@ -241,11 +241,14 @@ begin
     Result := aSpec.Engine;
 end;
 
-function runDaemonsAdd(const aConfigPath, aManifestPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
+{ applySet определён ниже (используется и в edit) — forward, чтобы add применял --set тоже. }
+function applySet(aInst: TJSONObject; const aEngine, aPair: string; out aError: string): Boolean; forward;
+
+function runDaemonsAdd(const aConfigPath, aManifestPath: string; const aSpec: TAddSpec; const aSets: array of string; aJson: Boolean): Integer;
 var
   config, ws, inst, created: TJSONObject;
-  name, host: string;
-  port: Integer;
+  name, host, setErr: string;
+  port, i: Integer;
 begin
   config := loadConfigObject(aConfigPath);
   try
@@ -290,6 +293,12 @@ begin
     inst.Add('language', aSpec.Language);
     inst.Add('model_name', aSpec.ModelName);
     ws.Add(name, inst);
+
+    { --set при создании: та же валидация, что в edit (applySet). inst уже в ws → config
+      владеет им, поэтому Exit(fail) на плохом --set не течёт. }
+    for i := 0 to High(aSets) do
+      if not applySet(inst, aSpec.Engine, aSets[i], setErr) then
+        Exit(fail(setErr));
 
     saveConfigAtomic(aConfigPath, config);
 

@@ -30,11 +30,11 @@
       "id": "AS1.1",
       "phase": "P1",
       "title": "runDaemonsAdd += aSets (applySet после ws.Add) + forward-декларация + doDaemonsAdd прокидывает collectSets",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["AS0.1"],
       "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl.pas"],
       "verify": "сборка зелёная; runDaemonsAdd применяет --set через applySet после ws.Add; плохой --set → Exit(fail) без сохранения; doDaemonsAdd передаёт collectSets",
-      "evidence": ""
+      "evidence": "echoctl_daemons.pas: runDaemonsAdd += const aSets: array of string; forward-декларация applySet перед runDaemonsAdd; после ws.Add — цикл applySet(inst, aSpec.Engine, aSets[i]) (та же валидация, что edit), Exit(fail) на плохом --set (inst уже в ws → config владеет им, без утечки, saveConfigAtomic не вызывается). echoctl.pas: forward collectSets (используется раньше своего определения) + doDaemonsAdd прокидывает collectSets. Build зелёный. ПРОВЕРЕНО (throwaway): add whisper --set vad=false --set gpu_device=1 → settings {vad:False,gpu_device:1}; add diarization --set num_speakers=2 --set cluster_threshold=0.7 → оба записаны; add --set foo=1 → 'unknown setting \"foo\" for engine whisper (allowed: …)' + инстанс НЕ создан (disk не тронут); add --set cluster_threshold=5 → 'cluster_threshold: above max 1' + не создан; add без --set → создан без ключа settings (регрессия чистая)."
     },
     {
       "id": "AS1.2",

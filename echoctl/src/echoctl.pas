@@ -99,6 +99,9 @@ begin
   Result := runDaemonsList(activeConfigPath, hasFlag('--json'));
 end;
 
+{ collectSets определена ниже (используется и в edit) — forward, чтобы add собирал --set. }
+function collectSets: TStringDynArray; forward;
+
 function doDaemonsAdd: Integer;
 var
   spec: TAddSpec;
@@ -109,7 +112,7 @@ begin
   spec.Language := optionValue('--lang', '');
   spec.Name := optionValue('--name', '');
   spec.Port := StrToIntDef(optionValue('--port', ''), -1);
-  Result := runDaemonsAdd(activeConfigPath, activeManifestPath, spec, hasFlag('--json'));
+  Result := runDaemonsAdd(activeConfigPath, activeManifestPath, spec, collectSets, hasFlag('--json'));
 end;
 
 { Имя целевого инстанса для команд remove/edit/…: позиционный аргумент после
