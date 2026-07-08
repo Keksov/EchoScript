@@ -109,7 +109,7 @@ begin
   spec.Language := optionValue('--lang', '');
   spec.Name := optionValue('--name', '');
   spec.Port := StrToIntDef(optionValue('--port', ''), -1);
-  Result := runDaemonsAdd(activeConfigPath, spec, hasFlag('--json'));
+  Result := runDaemonsAdd(activeConfigPath, activeManifestPath, spec, hasFlag('--json'));
 end;
 
 { Имя целевого инстанса для команд remove/edit/…: позиционный аргумент после

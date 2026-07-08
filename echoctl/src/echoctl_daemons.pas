@@ -19,7 +19,7 @@ type
   end;
 
 function runDaemonsList(const aConfigPath: string; aJson: Boolean): Integer;
-function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
+function runDaemonsAdd(const aConfigPath, aManifestPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
 function runDaemonsRemove(const aConfigPath, aName: string; aJson: Boolean): Integer;
 function runDaemonsEdit(const aConfigPath, aName, aNewModel: string; aNewPort: Integer;
   const aSets: array of string; aJson: Boolean): Integer;
@@ -86,6 +86,40 @@ begin
   node := aConfig.Find('models');
   Result := (node <> nil) and (node is TJSONObject) and
             (TJSONObject(node).Find(aModel) <> nil);
+end;
+
+{ Модель известна, если это ключ config.models ИЛИ model_name в манифесте (реальный каталог
+  моделей/ассетов — там живёт diarization_sherpa и др.). Реализует пометку DF2.1. }
+function modelKnownAnywhere(aConfig: TJSONObject; const aManifestPath, aModel: string): Boolean;
+var
+  manifest: TJSONObject;
+  models: TJSONData;
+  arr: TJSONArray;
+  i: Integer;
+begin
+  if modelKnown(aConfig, aModel) then
+    Exit(True);
+  Result := False;
+  if (aManifestPath = '') or (not FileExists(aManifestPath)) then
+    Exit;
+  try
+    manifest := loadConfigObject(aManifestPath);
+    try
+      models := manifest.Find('models');
+      if (models <> nil) and (models is TJSONArray) then
+      begin
+        arr := TJSONArray(models);
+        for i := 0 to arr.Count - 1 do
+          if (arr.Items[i] is TJSONObject) and
+             SameText(TJSONObject(arr.Items[i]).Get('model_name', ''), aModel) then
+            Exit(True);
+      end;
+    finally
+      manifest.Free;
+    end;
+  except
+    Result := False;
+  end;
 end;
 
 function portInUse(aWs: TJSONObject; aPort: Integer; const aExcept: string): Boolean;
@@ -207,7 +241,7 @@ begin
     Result := aSpec.Engine;
 end;
 
-function runDaemonsAdd(const aConfigPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
+function runDaemonsAdd(const aConfigPath, aManifestPath: string; const aSpec: TAddSpec; aJson: Boolean): Integer;
 var
   config, ws, inst, created: TJSONObject;
   name, host: string;
@@ -221,8 +255,8 @@ begin
       Exit(fail('unknown engine: ' + aSpec.Engine + ' (known: whisper, vosk, diarization)'));
     if aSpec.ModelName = '' then
       Exit(fail('--model is required'));
-    if not modelKnown(config, aSpec.ModelName) then
-      Exit(fail('unknown model: ' + aSpec.ModelName + ' (not a key in config.models)'));
+    if not modelKnownAnywhere(config, aManifestPath, aSpec.ModelName) then
+      Exit(fail('unknown model: ' + aSpec.ModelName + ' (not in config.models or manifest)'));
 
     ws := ensureDaemonsObject(config);
     name := defaultName(aSpec);

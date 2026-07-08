@@ -28,12 +28,13 @@
       "id": "diarization",
       "model": "diarizationdaemon (sherpa)",
       "kind": "diarization",
+      "model_name": "diarization_sherpa",
       "files": [
-        "services/whisperdaemon/models/diarization/segmentation.onnx",
-        "services/whisperdaemon/models/diarization/embedding.onnx",
-        "services/whisperdaemon/vendors/sherpa-onnx/sherpa-onnx.dll"
+        "services/diarizationdaemon/sherpa/models/segmentation.onnx",
+        "services/diarizationdaemon/sherpa/models/embedding.onnx",
+        "services/diarizationdaemon/sherpa/vendors/sherpa-onnx/sherpa-onnx.dll"
       ],
-      "download": { "script": "services/whisperdaemon/scripts/download_diarize_models.bat", "args": [] }
+      "download": { "script": "services/diarizationdaemon/sherpa/scripts/download_sherpa_assets.bat", "args": [] }
     },
     {
       "id": "vosk_ru",

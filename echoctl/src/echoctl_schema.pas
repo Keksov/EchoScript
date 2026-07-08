@@ -86,6 +86,19 @@ begin
     else
       Result := False;
   end
+  else if SameText(aEngine, 'diarization') then
+  begin
+    if SameText(aKey, 'num_speakers') then
+      aSpec := mkSpec(aKey, stInt, True, -1, True, 64)      { -1 = auto }
+    else if SameText(aKey, 'cluster_threshold') then
+      aSpec := mkSpec(aKey, stFloat, True, 0, True, 1)
+    else if SameText(aKey, 'min_duration_on') then
+      aSpec := mkSpec(aKey, stFloat, True, 0, True, 10)
+    else if SameText(aKey, 'min_duration_off') then
+      aSpec := mkSpec(aKey, stFloat, True, 0, True, 10)
+    else
+      Result := False;
+  end
   else
     Result := False;
 end;
@@ -96,6 +109,8 @@ begin
     Result := 'vad, vad_threshold, vad_speech_pad_ms, no_speech_thold, entropy_thold, gpu, gpu_device'
   else if SameText(aEngine, 'vosk') then
     Result := '(none in v1)'
+  else if SameText(aEngine, 'diarization') then
+    Result := 'num_speakers, cluster_threshold, min_duration_on, min_duration_off'
   else
     Result := '(unknown engine)';
 end;

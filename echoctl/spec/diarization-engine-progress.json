@@ -5,7 +5,7 @@
   "branch": "feature/diarization-engine",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08",
+  "updated": "2026-07-08T1",
   "conventions": "FPC по лекалу echoctl — движковые ветки diarization в тех же функциях, что whisper/vosk (isKnownEngine, enginePortRange, daemonExePath, daemonLogDir, buildDaemonArgs, buildDaemonEnv, echoctl_schema). Демон без окна; маркер warmup ready. echoctl — единственный писатель config.json. PASCAL_RULES. Один шаг → один коммит → один гейт; пауза на границах фаз.",
   "decisions": [
     "DZ-D1: diarization — движок-зонтик; модель diarization_sherpa (бэкенд sherpa); конвенция diarization_* (как whisper_*/vosk_*); расширяемо под будущие бэкенды.",
@@ -59,11 +59,11 @@
       "id": "DZ1.3",
       "phase": "P1",
       "title": "Модель diarization_sherpa (manifest model_name + modelKnown на манифест + чистка путей) + схема настроек diarization",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DZ1.1"],
-      "artifacts": ["echoctl/models-manifest.json", "echoctl/src/echoctl_schema.pas", "echoctl/src/echoctl_daemons.pas"],
+      "artifacts": ["echoctl/models-manifest.json", "echoctl/src/echoctl_schema.pas", "echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl.pas"],
       "verify": "manifest diarization имеет model_name 'diarization_sherpa' + верные пути (diarizationdaemon/sherpa); modelKnown принимает его; findSettingSpec/engineKeyList diarization: num_speakers/cluster_threshold/min_duration_on/min_duration_off; config set валидирует",
-      "evidence": ""
+      "evidence": "manifest: запись diarization получила model_name 'diarization_sherpa' + канонические пути services/diarizationdaemon/sherpa/{models/segmentation.onnx,models/embedding.onnx,vendors/sherpa-onnx/sherpa-onnx.dll} + download → diarizationdaemon/sherpa/scripts/download_sherpa_assets.bat. echoctl_daemons: modelKnownAnywhere (config.models ИЛИ model_name в манифесте — реализует пометку DF2.1), runDaemonsAdd(+aManifestPath), сообщение '(not in config.models or manifest)'; echoctl.pas doDaemonsAdd прокидывает activeManifestPath. echoctl_schema: findSettingSpec/engineKeyList diarization — num_speakers(int -1..64), cluster_threshold(float 0..1), min_duration_on/off(float 0..10). Build зелёный. ПРОВЕРЕНО (throwaway --config, реальный манифест): daemons add --engine diarization --model diarization_sherpa → 'added ... 127.0.0.1:7900 diarization_sherpa' (порт авто 7900 из 79xx, language пустой); edit --set cluster_threshold=0.7 → edited, =5 → 'above max 1', num_speakers=abc → 'expected integer'; models list --json → diarization с model_name diarization_sherpa, downloaded=true, 51МБ, канонические пути; реальный config.json не тронут (ws_daemons = whisperdaemon, whisperdaemon_en)."
     },
     {
       "id": "DZ2.1",
