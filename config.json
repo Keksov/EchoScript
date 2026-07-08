@@ -11,7 +11,8 @@
   "ffmpeg_path": "./tools/ffmpeg/ffmpeg.exe",
   "ws_daemons": {
     "whisperdaemon": { "host": "127.0.0.1", "port": 7801, "engine": "whisper", "language": "ru", "model_name": "whisper_podlodka" },
-    "whisperdaemon_en": { "host": "127.0.0.1", "port": 7802, "engine": "whisper", "language": "en", "model_name": "whisper_en_turbo" }
+    "whisperdaemon_en": { "host": "127.0.0.1", "port": 7802, "engine": "whisper", "language": "en", "model_name": "whisper_en_turbo" },
+    "diarization": { "host": "127.0.0.1", "port": 7900, "engine": "diarization", "language": "", "model_name": "diarization_sherpa" }
   },
   "speech": {
     "command_grammars": {

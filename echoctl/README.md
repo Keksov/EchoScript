@@ -28,7 +28,7 @@ config   get | set | schema
 ```
 
 ```
-daemons add --engine <whisper|vosk> --model <model> [--port N] [--host H] [--lang L] [--name NM] [--set k=v ...]
+daemons add --engine <whisper|vosk|diarization> --model <model> [--port N] [--host H] [--lang L] [--name NM] [--set k=v ...]
 daemons edit <name> [--model M] [--port N] [--set k=v ...]
 daemons start|stop|restart <name> [--timeout <sec>]
 models delete <id> [--dry-run] [--force]
@@ -46,8 +46,10 @@ config set <key> <value>
 
 - **Instances** live in `config.json` `ws_daemons` (name → host/port/engine/language/model_name +
   optional `settings`). `add`/`remove`/`edit` mutate this atomically; ports auto-allocate per engine
-  (whisper 78xx, vosk 77xx) when `--port` is omitted; per-instance `settings` are validated against a
-  per-engine schema (whisper VAD/decode/GPU; vosk none in v1).
+  (whisper 78xx, vosk 77xx, diarization 79xx) when `--port` is omitted; per-instance `settings` are
+  validated against a per-engine schema (whisper VAD/decode/GPU; diarization speaker/clustering;
+  vosk none in v1). Diarization (sherpa) is an engine umbrella — see
+  `services/diarizationdaemon/README.md`.
 - **Lifecycle** — `start` spawns the daemon detached via `cmd /c ""exe" args > log 2>&1"` with
   `CreateProcess(bInheritHandles=FALSE)` (the daemon inherits none of echoctl's handles, so the
   control-panel's `:3001` socket no longer leaks into daemons), waits for a real `warmup ready` in the

@@ -5,7 +5,7 @@
   "branch": "feature/diarization-engine",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08T3",
+  "updated": "2026-07-08T4",
   "conventions": "FPC по лекалу echoctl — движковые ветки diarization в тех же функциях, что whisper/vosk (isKnownEngine, enginePortRange, daemonExePath, daemonLogDir, buildDaemonArgs, buildDaemonEnv, echoctl_schema). Демон без окна; маркер warmup ready. echoctl — единственный писатель config.json. PASCAL_RULES. Один шаг → один коммит → один гейт; пауза на границах фаз.",
   "decisions": [
     "DZ-D1: diarization — движок-зонтик; модель diarization_sherpa (бэкенд sherpa); конвенция diarization_* (как whisper_*/vosk_*); расширяемо под будущие бэкенды.",
@@ -99,11 +99,11 @@
       "id": "DZ4.1",
       "phase": "P4",
       "title": "E2E полный (панель dev → add+start diarization → появляется + warmup + вкладка) + docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DZ2.1", "DZ3.2"],
-      "artifacts": ["services/diarizationdaemon/README.md"],
+      "artifacts": ["services/diarizationdaemon/README.md", "echoctl/README.md", "config.json"],
       "verify": "панель(dev): add diarization_sherpa → появляется в списке → start до warmup ready + echotail-вкладка (dev) → stop; demon без окна; docs про diarization-движок в echoctl/панели",
-      "evidence": ""
+      "evidence": "Полный E2E через РЕАЛЬНУЮ панель (своя dev-панель на :3002 с ECHOSCRIPT_DEV=1, чтобы не трогать stale пользовательскую :3001): GET /api/schema → 4 поля diarization (num_speakers/cluster_threshold/min_duration_on/off — что читает форма); GET /api/models → diarization_sherpa downloaded; POST /api/daemons {engine:diarization,model:diarization_sherpa,name:diarization} → создан :7900; GET /api/daemons → diarization в списке (configured, up:false); POST /api/services/diarization/start → '{ok:true, started diarization (127.0.0.1:7900)}', DiarizationDaemon PID 15208 на :7900 MainWindowHandle=0 (без окна, 83МБ) + echotail-вкладка PID 16728 следит за diarization.log --title 'diarization log' (dev-tail для нового движка ЧЕРЕЗ панель), '[diarizationdaemon] warmup ready'; POST .../stop → 'stopped', :7900 закрыт. Тестовые артефакты убраны (моя :3002 панель + тест-echotail), пользовательская :3001 не тронута. config.json: добавлен инстанс diarization (:7900, diarization_sherpa) компактной строкой — чистый +2 diff (echoctl-переформатирование откачено). Docs: services/diarizationdaemon/README.md (движок-зонтик, CLI+панель, таблица настроек, ORT-стейджинг) + echoctl/README.md (движки += diarization, порты 79xx). ЗАМЕЧАНИЕ: `daemons add` игнорирует --set (настройки на добавлении теряются для ВСЕХ движков — предсуществующее; применять через `edit`) — кандидат на отдельный фикс."
     }
   ]
 }
