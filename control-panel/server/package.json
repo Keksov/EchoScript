@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --env-file=server.env --watch run server.ts",
+    "dev": "ECHOSCRIPT_DEV=1 bun --env-file=server.env --watch run server.ts",
     "start": "bun --env-file=server.env run server.ts",
     "typecheck": "bun x tsc --noEmit -p tsconfig.json",
     "test": "bun test"

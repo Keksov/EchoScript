@@ -5,7 +5,7 @@
   "branch": "feature/wt-tabs",
   "baseBranch": "master",
   "created": "2026-07-08",
-  "updated": "2026-07-08T2",
+  "updated": "2026-07-08T3",
   "conventions": "FPC CLI по лекалу echoctl/EchoRecorder cli: program {$mode objfpc}{$H+}, scripts/{build,run,smoke,clean}_x64.bat, тулчейн EchoRecorder/VendorsCore. Демон без окна везде; tail-вкладка — отдельный лёгкий процесс. PASCAL_RULES соблюдаем.",
   "decisions": [
     "DT-D1: dev/prod по env ECHOSCRIPT_DEV=1 (echoctl читает, наследует от Bun).",
@@ -86,11 +86,11 @@
       "id": "DT2.3",
       "phase": "P2",
       "title": "Dev-скрипты выставляют ECHOSCRIPT_DEV (панель/оркестратор dev)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DT2.1"],
       "artifacts": ["control-panel/server/package.json", "orchestrator/package.json"],
       "verify": "dev-запуск панели/оркестратора выставляет ECHOSCRIPT_DEV=1 (env наследуется echoctl); prod (start) — нет",
-      "evidence": ""
+      "evidence": "control-panel/server dev → 'ECHOSCRIPT_DEV=1 bun --env-file=server.env --watch run server.ts'; orchestrator dev → 'ECHOSCRIPT_DEV=1 bun run --watch src/index.ts'. start (prod) без флага. ПРОВЕРЕНО: bun-shell чтит префикс VAR=1 на Windows (script → DEV=1 с префиксом, undefined без); цепочка наследования — Bun-процесс с ECHOSCRIPT_DEV=1 → Bun.spawn(child, {cwd,stdout:'pipe',stderr:'pipe'} как в echoctl.ts runEchoctl, env не задан → наследует) → child видит ECHOSCRIPT_DEV=1; start → undefined на обоих уровнях. Реальный потребитель — панель→echoctl (devTailEnabled=true → openLogTab). ЗАМЕЧАНИЕ: оркестраторский process-manager.spawnModel порождает python-модели с stdout/stderr:'inherit' (вывод в консоль оркестратора, отдельных лог-файлов нет, echoctl не зовётся) → ECHOSCRIPT_DEV там сейчас no-op (маркер dev на будущее, не ломает)."
     },
     {
       "id": "DT3.1",
