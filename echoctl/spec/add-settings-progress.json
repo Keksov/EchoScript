@@ -1,0 +1,50 @@
+{
+  "initiative": "add-settings",
+  "title": "echoctl daemons add принимает --set (настройки при создании, как edit)",
+  "plan": "add-settings-plan.md",
+  "branch": "feature/add-settings",
+  "baseBranch": "master",
+  "created": "2026-07-08",
+  "updated": "2026-07-08",
+  "conventions": "FPC по лекалу echoctl; переиспользуем applySet (валидация как в edit). Один шаг → один коммит → один гейт; пауза на границах фаз.",
+  "decisions": [
+    "AS-D1: переиспользовать applySet (единая валидация add/edit); forward-декларация перед runDaemonsAdd; применять --set после ws.Add (config владеет inst → нет утечки при Exit(fail)).",
+    "AS-D2: фикс для всех движков (whisper/vosk/diarization); поведение edit не трогаем."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + леджер", "gate": "pause: DAG ацикличен" },
+    { "id": "P1", "title": "Фикс + тесты", "gate": "pause: add --set пишет валидированные settings; плохой --set → ошибка без создания; регрессия add без --set; UI add с настройками сохраняет их" }
+  ],
+  "steps": [
+    {
+      "id": "AS0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echoctl/spec/add-settings-plan.md", "echoctl/spec/add-settings-progress.json"],
+      "verify": "план: add принимает --set через applySet; forward-декларация; применение после ws.Add; решения AS-D1/D2; DAG ацикличен",
+      "evidence": "Подтверждено на throwaway: add --set vad=false → settings None; edit --set vad=false → {vad:false}. doDaemonsAdd не читает --set; applySet(367) после runDaemonsAdd(244); collectSets уже есть (используется doDaemonsEdit)."
+    },
+    {
+      "id": "AS1.1",
+      "phase": "P1",
+      "title": "runDaemonsAdd += aSets (applySet после ws.Add) + forward-декларация + doDaemonsAdd прокидывает collectSets",
+      "status": "todo",
+      "dependsOn": ["AS0.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl.pas"],
+      "verify": "сборка зелёная; runDaemonsAdd применяет --set через applySet после ws.Add; плохой --set → Exit(fail) без сохранения; doDaemonsAdd передаёт collectSets",
+      "evidence": ""
+    },
+    {
+      "id": "AS1.2",
+      "phase": "P1",
+      "title": "Тесты: add --set persists/validates + регрессия + UI-путь",
+      "status": "todo",
+      "dependsOn": ["AS1.1"],
+      "artifacts": ["echoctl/scripts/smoke_crud_x64.bat"],
+      "verify": "add --set k=v → settings записаны+валидны; плохой --set (unknown key / out-of-range) → ошибка, инстанс не создан; add без --set как прежде; панель POST /api/daemons с settings → сохранены",
+      "evidence": ""
+    }
+  ]
+}
