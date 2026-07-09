@@ -1,0 +1,52 @@
+{
+  "initiative": "tail-stop-marker",
+  "title": "echotail --watch-port: маркер «демон завершился/слушает» в лог-вкладке",
+  "plan": "tail-stop-marker-plan.md",
+  "branch": "feature/tail-stop-marker",
+  "baseBranch": "master",
+  "created": "2026-07-09",
+  "updated": "2026-07-09",
+  "conventions": "FPC по лекалу echotail/echoctl. GetExtendedTcpTable без connect-проб (не мусорить в лог демона). Один шаг → один коммит → один гейт; пауза на границах фаз.",
+  "decisions": [
+    "TS-D1: слежение за портом в echotail (--watch-port N); listen-состояние через GetExtendedTcpTable (iphlpapi), БЕЗ connect-проб; маркеры в stdout вкладки, лог демона не трогаем.",
+    "TS-D2: вкладка не закрывается (DT-D6 в силе); маркер — информация, не действие.",
+    "TS-D3: маркеры stopped→красный, listening→зелёный; уважают --no-color/redirect; переход только от реально виденного состояния (initial unknown → без ложного stopped)."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + леджер", "gate": "pause: DAG ацикличен" },
+    { "id": "P1", "title": "echotail --watch-port + маркеры", "gate": "pause: stop → красный маркер; start при живом echotail → зелёный; без --watch-port прежнее поведение" },
+    { "id": "P2", "title": "Прокидка порта (echoctl ×3 + launch_tab)", "gate": "pause: stop через echoctl/UI при вкладке из start/tabs/панели → маркер; смоуки зелёные" }
+  ],
+  "steps": [
+    {
+      "id": "TS0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echotail/spec/tail-stop-marker-plan.md", "echotail/spec/tail-stop-marker-progress.json"],
+      "verify": "план: --watch-port через GetExtendedTcpTable без connect; маркеры цветные в stdout; решения TS-D1..D3; DAG ацикличен",
+      "evidence": "Из живого прогона: stop через UI (echoctl TerminateProcess) — демон умирает молча, лог не растёт, вкладка без индикации. Connect-проба отклонена (демон логирует connected/disconnected → мусор в наблюдаемом логе). DT-D6 (вкладку не закрывать) подтверждён пользователем — нужна именно информация."
+    },
+    {
+      "id": "TS1.1",
+      "phase": "P1",
+      "title": "echotail: --watch-port N (GetExtendedTcpTable, переходы open/closed, цветные маркеры)",
+      "status": "todo",
+      "dependsOn": ["TS0.1"],
+      "artifacts": ["echotail/src/echotail.pas"],
+      "verify": "echotail <log> --watch-port N: демон остановился → '[echotail] daemon stopped (port N no longer listening)' красным; демон поднялся → '[echotail] daemon listening on port N' зелёным; initial unknown без ложного stopped; без --watch-port ничего нового; смоуки зелёные",
+      "evidence": ""
+    },
+    {
+      "id": "TS2.1",
+      "phase": "P2",
+      "title": "Прокидка порта: echoctl openLogTab(+aPort) ×3 вызова + launch_tab.ps1 (--watch-port из -WaitPort)",
+      "status": "todo",
+      "dependsOn": ["TS1.1"],
+      "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas", "scripts/launch_tab.ps1"],
+      "verify": "вкладки из echoctl start/already-running/daemons tabs и из launch_tab получают --watch-port; E2E: stop diarization через echoctl → маркер stopped в выводе echotail; повторный start → маркер listening",
+      "evidence": ""
+    }
+  ]
+}
