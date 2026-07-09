@@ -41,11 +41,11 @@
       "id": "DC2.1",
       "phase": "P2",
       "title": "openLogTab: запуск wt через cmd.exe /c (диагностика после #3 + фикс + проверка)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DC1.1"],
       "artifacts": ["echoctl/src/echoctl_launch.pas"],
       "verify": "ECHOSCRIPT_DEV=1 echoctl restart <daemon> → поднимается echotail (WindowsTerminal-окно + echotail следит за логом); та же вкладка при старте из панели",
-      "evidence": ""
+      "evidence": "Диагностика (старый билд): ECHOSCRIPT_DEV=1 echoctl restart diarization → echotail delta 0 — прямой CreateProcess(nil, '\"wt.exe\" …', CREATE_NO_WINDOW) у app-execution-alias wt.exe окно НЕ создаёт (ошибка глушится best-effort), при этом ECHOSCRIPT_DEV точно задан → значит виноват openLogTab, не окружение. Фикс: cmdLine := 'cmd.exe /c \"\"<wt>\" -w 0 new-tab --title \"<t> log\" \"<echotail>\" \"<log>\" --tail 200 --title \"<t> log\"\"' (cmd.exe — реальный exe, резолвит алиас wt; двойные кавычки как в spawnDaemon). Build зелёный. ПРОВЕРЕНО прямым echoctl: ECHOSCRIPT_DEV=1 restart → echotail delta +1. E2E ЧЕРЕЗ ПАНЕЛЬ: POST /api/services/diarization/restart на :3001 (bun run dev с ECHOSCRIPT_DEV) → 'started diarization (127.0.0.1:7900)' без зависания + echotail delta +1 → панель открывает dev-вкладку (окно Windows Terminal с echotail на diarization.log). Заодно доказано, что панель наследует ECHOSCRIPT_DEV=1."
     }
   ]
 }

@@ -296,9 +296,11 @@ begin
   if not FileExists(echotailExe) then
     Exit; { не собран → тихо пропускаем, старт демона не ломаем }
 
-  { wt -w 0 new-tab --title "<title> · log" "<echotail>" "<log>" --tail 200 --title "<title>" }
-  cmdLine := '"' + wt + '" -w 0 new-tab --title "' + aTitle + ' log" "' +
-    echotailExe + '" "' + aLogPath + '" --tail 200 --title "' + aTitle + ' log"';
+  { Запуск wt через cmd /c: прямой CreateProcess у app-execution-alias wt.exe окно не создаёт
+    (алиас резолвится оболочкой). Двойные внешние кавычки — cmd снимает внешнюю пару (как в
+    spawnDaemon). Итог для cmd: "<wt>" -w 0 new-tab --title "<t> log" "<echotail>" "<log>" --tail 200. }
+  cmdLine := 'cmd.exe /c ""' + wt + '" -w 0 new-tab --title "' + aTitle + ' log" "' +
+    echotailExe + '" "' + aLogPath + '" --tail 200 --title "' + aTitle + ' log""';
   UniqueString(cmdLine);
 
   FillChar(si, SizeOf(si), 0);
