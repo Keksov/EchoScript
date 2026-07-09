@@ -15,7 +15,7 @@ uses
   SysUtils, Windows;
 
 const
-  ECHOTAIL_VERSION = '0.2.0';
+  ECHOTAIL_VERSION = '0.3.0';
 
   EXIT_OK      = 0;
   EXIT_RUNTIME = 1;
@@ -56,6 +56,24 @@ var
   gStdOut: THandle;
   gColor: Boolean = False;
   gPending: RawByteString = '';
+  gTabMutex: THandle = 0;   { «эта вкладка/логопуть занят» — живёт до выхода процесса }
+
+{ Имя mutex'а «кто-то тейлит этот лог»: lowercase полного пути, не-[a-z0-9] → '-'.
+  ВАЖНО: алгоритм продублирован в echoctl_launch.pas (tabMutexName) и scripts/launch_tab.ps1 —
+  менять только синхронно. }
+function tabMutexName(const aPath: string): string;
+var
+  full: string;
+  i: Integer;
+begin
+  full := LowerCase(ExpandFileName(aPath));
+  Result := 'echotail-tab-';
+  for i := 1 to Length(full) do
+    if full[i] in ['a'..'z', '0'..'9'] then
+      Result := Result + full[i]
+    else
+      Result := Result + '-';
+end;
 
 procedure writeRaw(const aBytes: RawByteString);
 begin
@@ -399,6 +417,10 @@ begin
   title := optionValue('--title', '');
   if title <> '' then
     SetConsoleTitle(PChar(title));
+
+  { Публикуем «этот лог уже тейлится» (tab-reuse): openLogTab/launch_tab не откроют дубль.
+    Держим хендл до выхода; закрытие вкладки снимает mutex автоматически. }
+  gTabMutex := CreateMutex(nil, False, PChar(tabMutexName(logPath)));
 
   setupColor;
   followLog(logPath, tailN, watchPort);

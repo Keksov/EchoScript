@@ -36,7 +36,7 @@
       "dependsOn": ["TR0.1"],
       "artifacts": ["echotail/src/echotail.pas"],
       "verify": "пока echotail жив — OpenMutex('echotail-tab-<путь>') успешен; после kill — ERROR_FILE_NOT_FOUND; поведение tail без изменений; смоуки зелёные",
-      "evidence": ""
+      "evidence": "echotail.pas 0.3.0: tabMutexName (lowercase ExpandFileName, не-[a-z0-9]→'-', префикс 'echotail-tab-'; пометка о синхронности с echoctl_launch/launch_tab.ps1); в run() перед followLog — gTabMutex := CreateMutex(nil,False,имя), хендл до выхода (ОС снимает сама; несколько echotail на логе делят mutex — «занят», пока жив хотя бы один). Build (exe залочен вкладками → rename echotail.old1.exe). ПРОВЕРЕНО извне (python ctypes OpenMutexW, независимая репликация алгоритма имени — кросс-языковая совместимость): echotail жив → EXISTS; kill → gone. Смоуки: SMOKE OK + FOLLOW SMOKE OK."
     },
     {
       "id": "TR2.1",
