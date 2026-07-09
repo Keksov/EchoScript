@@ -851,7 +851,8 @@ var
   config, ws, inst, o: TJSONObject;
   arr: TJSONArray;
   i, port, opened: Integer;
-  name, host, engine, repoRoot: string;
+  name, host, engine, repoRoot, tabLog: string;
+  exists: Boolean;
 begin
   repoRoot := resolveRepoRoot;
   if not canOpenLogTabs(repoRoot) then
@@ -872,16 +873,23 @@ begin
         engine := inst.Get('engine', '');
         if (port <= 0) or not isPortOpen(host, port) then
           Continue; { остановленные пропускаем — вкладка с «waiting for log» не нужна }
-        openLogTab(repoRoot, name,
-          IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + name + '.log', port);
-        Inc(opened);
+        tabLog := IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + name + '.log';
+        exists := logTabAlreadyOpen(tabLog);
+        if not exists then
+        begin
+          openLogTab(repoRoot, name, tabLog, port);
+          Inc(opened);
+        end;
         if aJson then
         begin
           o := TJSONObject.Create;
           o.Add('name', name);
           o.Add('port', port);
+          o.Add('opened', not exists);
           arr.Add(o);
         end
+        else if exists then
+          WriteLn(Format('tab exists: %s (%s:%d)', [name, host, port]))
         else
           WriteLn(Format('tab: %s (%s:%d)', [name, host, port]));
       end;

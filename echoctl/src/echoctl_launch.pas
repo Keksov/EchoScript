@@ -50,6 +50,9 @@ procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string; aPort: Integer);
 { Вкладки доступны: есть wt.exe и собран echotail.exe (для честной диагностики daemons tabs). }
 function canOpenLogTabs(const aRepoRoot: string): Boolean;
 
+{ Живой echotail уже тейлит этот лог? (tab-reuse: echotail публикует именованный mutex). }
+function logTabAlreadyOpen(const aLogPath: string): Boolean;
+
 implementation
 
 uses
@@ -292,6 +295,32 @@ begin
     'echotail' + PathDelim + 'build' + PathDelim + 'x64' + PathDelim + 'echotail.exe');
 end;
 
+{ Имя mutex'а echotail для лога. ВАЖНО: алгоритм продублирован в echotail.pas (tabMutexName)
+  и scripts/launch_tab.ps1 — менять только синхронно. }
+function tabMutexName(const aLogPath: string): string;
+var
+  full: string;
+  i: Integer;
+begin
+  full := LowerCase(ExpandFileName(aLogPath));
+  Result := 'echotail-tab-';
+  for i := 1 to Length(full) do
+    if full[i] in ['a'..'z', '0'..'9'] then
+      Result := Result + full[i]
+    else
+      Result := Result + '-';
+end;
+
+function logTabAlreadyOpen(const aLogPath: string): Boolean;
+var
+  h: THandle;
+begin
+  h := OpenMutex(SYNCHRONIZE, False, PChar(tabMutexName(aLogPath)));
+  Result := h <> 0;
+  if h <> 0 then
+    CloseHandle(h);
+end;
+
 procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string; aPort: Integer);
 var
   wt, echotailExe, watch, cmdLine: string;
@@ -305,6 +334,9 @@ begin
     'echotail' + PathDelim + 'build' + PathDelim + 'x64' + PathDelim + 'echotail.exe';
   if not FileExists(echotailExe) then
     Exit; { не собран → тихо пропускаем, старт демона не ломаем }
+
+  if logTabAlreadyOpen(aLogPath) then
+    Exit; { вкладка уже есть — переиспользуем (tab-reuse), дубль не открываем }
 
   watch := '';
   if aPort > 0 then

@@ -90,6 +90,12 @@ if ((Test-TabsAvailable) -and (Test-Path -LiteralPath $echotail)) {
   $dlines += "`"$Exe`" $argStr > `"$log`" 2>&1"
   $daemonCmd = Join-Path $env:TEMP ("echoscript-daemon-{0}.cmd" -f ([Guid]::NewGuid().ToString('N').Substring(0, 12)))
 
+  # Tab-reuse: a live echotail on this log publishes a named mutex (algorithm mirrored in
+  # echotail.pas / echoctl_launch.pas — change in sync). If it exists, skip the duplicate tab.
+  $mutexName = 'echotail-tab-' + ($log.ToLowerInvariant() -replace '[^a-z0-9]', '-')
+  $tabExists = $false
+  try { $m = [System.Threading.Mutex]::OpenExisting($mutexName); $m.Dispose(); $tabExists = $true } catch {}
+
   # echotail tab: a .cmd (title + echotail on the log); cmd /k keeps the tab open even if
   # echotail ever exits (the tab outlives the daemon — user closes it). -WaitPort also feeds
   # echotail's --watch-port so the tab reports when the daemon stops/starts listening.
@@ -102,6 +108,7 @@ if ((Test-TabsAvailable) -and (Test-Path -LiteralPath $echotail)) {
     Write-Host "[dry-run] daemon .cmd ($daemonCmd):"
     $dlines | ForEach-Object { Write-Host "    $_" }
     Write-Host "[dry-run] windowless: cmd /c `"$daemonCmd`" (hidden)"
+    Write-Host "[dry-run] tab exists (mutex $mutexName): $tabExists"
     Write-Host "[dry-run] tab .cmd ($tabCmd):"
     $tlines | ForEach-Object { Write-Host "    $_" }
     Write-Host "[dry-run] wt: `"$wt`" -w 0 new-tab --title `"$Title log`" cmd /k `"$tabCmd`""
@@ -109,12 +116,17 @@ if ((Test-TabsAvailable) -and (Test-Path -LiteralPath $echotail)) {
   }
 
   Set-Content -LiteralPath $daemonCmd -Value $dlines -Encoding Ascii
-  Set-Content -LiteralPath $tabCmd -Value $tlines -Encoding Ascii
 
-  # Start the daemon windowless, then open the echotail tab following its log.
+  # Start the daemon windowless, then open the echotail tab following its log
+  # (unless a live echotail already follows it — reuse that tab).
   Start-Process -FilePath "cmd.exe" -ArgumentList '/c', $daemonCmd -WindowStyle Hidden | Out-Null
-  & $wt -w 0 new-tab --title "$Title log" cmd /k $tabCmd | Out-Null
-  Write-Host "started '$Title' windowless; live log in a new Windows Terminal tab (echotail)"
+  if ($tabExists) {
+    Write-Host "started '$Title' windowless; log tab already open (reused)"
+  } else {
+    Set-Content -LiteralPath $tabCmd -Value $tlines -Encoding Ascii
+    & $wt -w 0 new-tab --title "$Title log" cmd /k $tabCmd | Out-Null
+    Write-Host "started '$Title' windowless; live log in a new Windows Terminal tab (echotail)"
+  }
   Wait-PortOpen $WaitPort 20000
   exit 0
 }

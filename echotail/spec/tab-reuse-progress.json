@@ -5,7 +5,7 @@
   "branch": "feature/tab-reuse",
   "baseBranch": "master",
   "created": "2026-07-09",
-  "updated": "2026-07-09",
+  "updated": "2026-07-09T1",
   "conventions": "FPC по лекалу echotail/echoctl. Алгоритм имени mutex продублирован (echotail program / echoctl unit / launch_tab.ps1) — правки синхронно. Один шаг → один коммит → один гейт.",
   "decisions": [
     "TR-D1: переиспользование через именованный mutex 'echotail-tab-<lowercase полный путь лога, не-[a-z0-9]→->'; echotail держит хендл до выхода (ОС снимает сама); несколько echotail на логе делят mutex. (владелец: переиспользовать, не закрывать+переоткрывать)",
@@ -46,7 +46,7 @@
       "dependsOn": ["TR1.1"],
       "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas", "scripts/launch_tab.ps1", "echotail/README.md"],
       "verify": "живая вкладка → повторный dev start/daemons tabs НЕ открывает дубль ('tab exists'), echotail-счётчик не растёт; вкладка закрыта → открывает; launch_tab dry-run/чек работает; README упоминает reuse",
-      "evidence": ""
+      "evidence": "echoctl_launch: tabMutexName (копия алгоритма, пометка о синхронности) + logTabAlreadyOpen (OpenMutex SYNCHRONIZE → CloseHandle); openLogTab выходит до спавна при живом mutex (уточнение TR-D2: openLogTab остался процедурой, отчётность через выделенный logTabAlreadyOpen — чище). runDaemonsTabs: exists → 'tab exists: X' (JSON opened:false), не инкрементит opened. launch_tab.ps1: [System.Threading.Mutex]::OpenExisting → при exists демон стартует windowless, вкладка пропускается ('log tab already open (reused)'); dry-run печатает 'tab exists (mutex <имя>): True/False'. README: --watch-port + Tab reuse. Build зелёный. ПРОВЕРЕНО: daemons tabs #2 → 'tab exists: whisperdaemon', opened 0, delta 0 (идемпотентно); СЦЕНАРИЙ ВЛАДЕЛЬЦА — повторный dev start у работающего diarization с живой вкладкой ×2 → 'already-running', echotail delta 0 оба раза (дубль не открывается); свежий старт остановленного демона → вкладка открывается (+1, корректно); launch_tab dry-run: mutex-имя PS совпало с FPC (live diarization.log → True, случайный лог → False) — алгоритм синхронен во всех 3 компонентах (echotail/echoctl/ps1; + python-репликация в TR1.1)."
     }
   ]
 }

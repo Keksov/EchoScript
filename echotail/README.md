@@ -15,13 +15,16 @@ per tab to do so is wasteful; `echotail` is a single small binary that does exac
 ## Usage
 
 ```
-echotail <logpath> [--tail N] [--title T] [--color | --no-color]
+echotail <logpath> [--tail N] [--title T] [--watch-port N] [--color | --no-color]
 ```
 
 - `<logpath>` — log file to follow; **waits** for it to appear (poll), so it can be opened
   before the daemon writes its first line.
 - `--tail N` — show the last N lines first (default 50).
 - `--title T` — set the console/tab title.
+- `--watch-port N` — watch the daemon's TCP port (listen-state via `GetExtendedTcpTable`,
+  no connect probes) and print markers on transitions: red `daemon stopped (port N no
+  longer listening)`, green `daemon listening on port N`.
 - `--color` / `--no-color` — force/disable ANSI colouring. Default: **on** for a console,
   **off** when redirected to a file/pipe.
 - `--help` | `--version`.
@@ -37,7 +40,12 @@ echotail <logpath> [--tail N] [--title T] [--color | --no-color]
   `warmup ready`/`listening`/`ready`/`started` → green; everything else plain. Partial
   (unterminated) lines are buffered until their newline arrives.
 - The process just follows a file — it **outlives the daemon**: when the daemon stops, the
-  log stops growing and the tab stays open until you close it.
+  log stops growing and the tab stays open until you close it (with `--watch-port` it also
+  says so).
+- **Tab reuse**: echotail publishes a named mutex derived from the log path
+  (`echotail-tab-<normalized path>`); `echoctl`/`launch_tab.ps1` check it and skip opening a
+  duplicate tab while one is already following the log (one tab per daemon; the algorithm is
+  mirrored in `echoctl_launch.pas` and `launch_tab.ps1`).
 
 ## Where it's used (dev-tail)
 
