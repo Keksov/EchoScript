@@ -66,7 +66,12 @@
               <td class="text-left">{{ d.language ?? "—" }}</td>
               <td class="text-left">{{ d.host }}:{{ d.port }}</td>
               <td class="text-left">
-                <q-chip :color="statusColor(d)" text-color="white" dense size="sm">
+                <q-chip
+                  :color="statusColor(d)"
+                  :text-color="d.detail === 'stale' ? undefined : 'white'"
+                  :style="d.detail === 'stale' ? 'color: #0c55c7' : undefined"
+                  dense size="sm"
+                >
                   {{ t(`daemons.${d.detail}`) }}
                 </q-chip>
               </td>
