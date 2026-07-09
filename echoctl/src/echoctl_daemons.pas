@@ -27,6 +27,10 @@ function runDaemonsStart(const aConfigPath, aName: string; aTimeoutMs: Integer; 
 function runDaemonsStop(const aConfigPath, aName: string; aJson: Boolean): Integer;
 function runDaemonsRestart(const aConfigPath, aName: string; aTimeoutMs: Integer; aJson: Boolean): Integer;
 
+{ Открыть echotail-вкладки для всех РАБОТАЮЩИХ ws_daemons (порт открыт). Для возврата
+  вкладок после закрытия окна WT (start_orchestrator.bat, ручной dev). }
+function runDaemonsTabs(const aConfigPath: string; aJson: Boolean): Integer;
+
 implementation
 
 uses
@@ -840,6 +844,57 @@ begin
     config.Free;
   end;
   Result := runDaemonsStart(aConfigPath, aName, aTimeoutMs, aJson);
+end;
+
+function runDaemonsTabs(const aConfigPath: string; aJson: Boolean): Integer;
+var
+  config, ws, inst, o: TJSONObject;
+  arr: TJSONArray;
+  i, port, opened: Integer;
+  name, host, engine, repoRoot: string;
+begin
+  repoRoot := resolveRepoRoot;
+  if not canOpenLogTabs(repoRoot) then
+    Exit(fail('log tabs unavailable: need wt.exe (Windows Terminal) and echotail built'));
+
+  config := loadConfigObject(aConfigPath);
+  arr := TJSONArray.Create;
+  try
+    ws := daemonsObject(config);
+    opened := 0;
+    if ws <> nil then
+      for i := 0 to ws.Count - 1 do
+      begin
+        name := ws.Names[i];
+        inst := ws.Objects[name];
+        host := inst.Get('host', '127.0.0.1');
+        port := inst.Get('port', 0);
+        engine := inst.Get('engine', '');
+        if (port <= 0) or not isPortOpen(host, port) then
+          Continue; { остановленные пропускаем — вкладка с «waiting for log» не нужна }
+        openLogTab(repoRoot, name,
+          IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + name + '.log');
+        Inc(opened);
+        if aJson then
+        begin
+          o := TJSONObject.Create;
+          o.Add('name', name);
+          o.Add('port', port);
+          arr.Add(o);
+        end
+        else
+          WriteLn(Format('tab: %s (%s:%d)', [name, host, port]));
+      end;
+
+    if aJson then
+      WriteLn(arr.FormatJSON())
+    else
+      WriteLn(Format('opened %d log tab(s) for running daemons', [opened]));
+    Result := EXIT_OK;
+  finally
+    arr.Free;
+    config.Free;
+  end;
 end;
 
 end.

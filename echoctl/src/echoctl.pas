@@ -38,7 +38,7 @@ begin
   WriteLn('  echoctl <group> <command> [options] [--json]');
   WriteLn;
   WriteLn('Groups & commands:');
-  WriteLn('  daemons   list | add | remove | edit | start | stop | restart');
+  WriteLn('  daemons   list | add | remove | edit | start | stop | restart | tabs');
   WriteLn('  models    list | download | delete');
   WriteLn('  config    get | set | schema');
   WriteLn;
@@ -169,6 +169,8 @@ begin
     Result := runDaemonsStop(activeConfigPath, targetName, hasFlag('--json'))
   else if SameText(aCommand, 'restart') then
     Result := runDaemonsRestart(activeConfigPath, targetName, activeTimeoutMs, hasFlag('--json'))
+  else if SameText(aCommand, 'tabs') then
+    Result := runDaemonsTabs(activeConfigPath, hasFlag('--json'))
   else
   begin
     writeErr('echoctl: unknown daemons command: ' + aCommand);

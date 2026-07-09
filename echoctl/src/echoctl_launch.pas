@@ -46,6 +46,9 @@ function devTailEnabled: Boolean;
   если нет wt.exe/echotail.exe. Демон остаётся без окна — это лишь просмотрщик лога. }
 procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string);
 
+{ Вкладки доступны: есть wt.exe и собран echotail.exe (для честной диагностики daemons tabs). }
+function canOpenLogTabs(const aRepoRoot: string): Boolean;
+
 implementation
 
 uses
@@ -280,6 +283,12 @@ end;
 function devTailEnabled: Boolean;
 begin
   Result := (SysUtils.GetEnvironmentVariable('ECHOSCRIPT_DEV') = '1') and (wtExePath <> '');
+end;
+
+function canOpenLogTabs(const aRepoRoot: string): Boolean;
+begin
+  Result := (wtExePath <> '') and FileExists(IncludeTrailingPathDelimiter(aRepoRoot) +
+    'echotail' + PathDelim + 'build' + PathDelim + 'x64' + PathDelim + 'echotail.exe');
 end;
 
 procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string);

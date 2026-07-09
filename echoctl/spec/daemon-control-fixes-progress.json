@@ -18,7 +18,8 @@
     { "id": "P1", "title": "#3 stop без PowerShell (Win-API)", "gate": "pause: stop реального демона закрывает порт без PowerShell; restart не виснет" },
     { "id": "P2", "title": "#2 dev-вкладка из панели", "gate": "pause: restart/панель открывает echotail-вкладку (WindowsTerminal + echotail следит за логом)" },
     { "id": "P3", "title": "Вкладка при already-running (dev)", "gate": "pause: Start у работающего демона открывает вкладку, демон не перезапускается" },
-    { "id": "P4", "title": "Саморегистрация DiarizationDaemon", "gate": "pause: registry-файл с живым heartbeat; панель ready; stop → файл удалён" }
+    { "id": "P4", "title": "Саморегистрация DiarizationDaemon", "gate": "pause: registry-файл с живым heartbeat; панель ready; stop → файл удалён" },
+    { "id": "P5", "title": "echoctl daemons tabs + вызов из start_orchestrator", "gate": "pause: daemons tabs открывает вкладки всех работающих демонов; start_orchestrator.bat поднимает вкладки оркестратора И работающих демонов" }
   ],
   "steps": [
     {
@@ -70,6 +71,16 @@
       "artifacts": ["services/diarizationdaemon/sherpa/app/src/DiarizationDaemon.pas"],
       "verify": "после старта появляется jobs/registry/diarization_sherpa.json (name/host/port/model_name/state/pid/updated_at, обновляется каждые ~5с); панель /api/daemons показывает diarization up/ready; stop → файл удалён, панель down",
       "evidence": "DiarizationDaemon.pas (зеркало WhisperDaemon): options += ModelName (дефолт 'diarization_sherpa') / RegistryDir (дефолт <root>\\jobs\\registry через getWorkspaceRootDir); args --model-name/--registry-dir + usage; utcNowIso/registryFilePath/writeRegistration (JSON name/host/port/model_name/state/pid/input{pcm16le,16000,1}/updated_at; атомарно temp+MoveFileEx) / removeRegistration; main-loop heartbeat REGISTRY_HEARTBEAT_MS=5000 + try/finally removeRegistration. Build зелёный. ПРОВЕРЕНО: start → jobs/registry/diarization_sherpa.json {state:ready, pid:30196, port:7900}; heartbeat обновляется (updated_at 08:46:10→08:46:15 за 6с); ПАНЕЛЬ /api/daemons: diarization {up:True, detail:'ready', state:'ready', pid:30196} — статус наконец отображается. Stop-семантика = whisper: жёсткий TerminateProcess не даёт finally отработать → файл остаётся, панель 'ready' ≤TTL(15с) → 'stale'/up=false (проверено: ageMs 6.8с ready → 22.9с stale). Кандидат на будущее (не блокер): echoctl после успешного stop удалять registry-файл инстанса → мгновенный 'down' вместо 15с stale (касается и whisper)."
+    },
+    {
+      "id": "DC5.1",
+      "phase": "P5",
+      "title": "echoctl daemons tabs (лог-вкладки всех работающих демонов) + вызов из start_orchestrator.bat",
+      "status": "todo",
+      "dependsOn": ["DC2.1", "DC3.1"],
+      "artifacts": ["echoctl/src/echoctl.pas", "echoctl/src/echoctl_daemons.pas", "echoctl/src/echoctl_launch.pas", "orchestrator/scripts/start_orchestrator.bat"],
+      "verify": "echoctl daemons tabs открывает echotail-вкладки для всех РАБОТАЮЩИХ ws_daemons (порт открыт), пропускает остановленные; start_orchestrator.bat после вкладки оркестратора вызывает его best-effort → закрыл окно WT, перезапустил скрипт — вкладки оркестратора и всех живых демонов вернулись",
+      "evidence": "echoctl_launch: canOpenLogTabs (wt.exe + echotail собран — для честной диагностики). echoctl_daemons.runDaemonsTabs: fail если вкладки недоступны; итерирует ws_daemons, порт открыт → openLogTab(logDir+name+'.log'), остановленные пропускает (вкладка 'waiting for log' не нужна); отчёт text/JSON. echoctl.pas: dispatch 'tabs' + usage. start_orchestrator.bat: после launch_tab — `if exist echoctl.exe … daemons tabs >nul 2>nul` (best-effort; ручной старт = dev по DT-D5); CRLF-нормализован, diff +5. Build зелёный. ПРОВЕРЕНО standalone: при 7801 RUNNING/7802 down/7900 RUNNING → 'tab: whisperdaemon', 'tab: diarization', 'opened 2 log tab(s)', echotail +2 (остановленный пропущен). Полный прогон .bat не гонялся сознательно — оркестратор уже работает, а скрипт не идемпотентен (повторный запуск спавнит второй bun → EADDRINUSE в лог; предсуществующее — кандидат на follow-up 'skip start if :3000 listening'); пользователь проверит естественным сценарием (закрыть окно → запустить скрипт)."
     }
   ]
 }
