@@ -646,14 +646,11 @@ begin
   Result := stageOne('onnxruntime.dll') and stageOne('onnxruntime_providers_shared.dll');
 end;
 
-{ Убить <Engine>Daemon.exe, слушающий aPort (владелец listening-сокета = сам демон). }
+{ Убить процесс, слушающий aPort (владелец listening-сокета = сам демон). Win-API, без PowerShell
+  (Get-NetTCPConnection в некоторых сессиях зависает). Пустой порт = уже остановлен. }
 function stopDaemonByPort(aPort: Integer): Boolean;
-var
-  comLine: string;
 begin
-  comLine := '-NoProfile -Command "Get-NetTCPConnection -LocalPort ' + IntToStr(aPort) +
-    ' -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"';
-  Result := ExecuteProcess('powershell.exe', comLine) = 0;
+  Result := stopListenerOnPort(aPort);
 end;
 
 procedure reportStart(aJson: Boolean; const aName, aStatus, aHost: string; aPort: Integer);

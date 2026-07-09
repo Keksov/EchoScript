@@ -36,6 +36,9 @@ function waitPortClosed(const aHost: string; aPort, aTimeoutMs: Integer): Boolea
 { Последние N символов лога — для диагностики в сообщении об ошибке. }
 function logTail(const aLogPath: string; aMaxChars: Integer): string;
 
+{ Убить процесс, слушающий TCP-порт aPort (Win-API, без PowerShell). True = порт свободен. }
+function stopListenerOnPort(aPort: Integer): Boolean;
+
 { Dev-режим (ECHOSCRIPT_DEV=1) + наличие wt.exe — открывать echotail-вкладку на лог. }
 function devTailEnabled: Boolean;
 
@@ -187,6 +190,78 @@ begin
     Result := Copy(content, Length(content) - aMaxChars + 1, aMaxChars)
   else
     Result := content;
+end;
+
+const
+  AF_INET_ = 2;
+  TCP_TABLE_OWNER_PID_LISTENER = 3;
+  MIB_TCP_STATE_LISTEN = 2;
+
+type
+  TMibTcpRowOwnerPid = record
+    dwState: DWORD;
+    dwLocalAddr: DWORD;
+    dwLocalPort: DWORD;
+    dwRemoteAddr: DWORD;
+    dwRemotePort: DWORD;
+    dwOwningPid: DWORD;
+  end;
+  PMibTcpRowOwnerPid = ^TMibTcpRowOwnerPid;
+
+function GetExtendedTcpTable(pTcpTable: Pointer; var pdwSize: DWORD; bOrder: BOOL;
+  ulAf: ULONG; TableClass: DWORD; Reserved: DWORD): DWORD; stdcall;
+  external 'iphlpapi.dll' name 'GetExtendedTcpTable';
+
+{ PID процесса, слушающего TCP-порт aPort (IPv4); 0, если нет. }
+function pidListeningOnPort(aPort: Integer): DWORD;
+var
+  size, numEntries, i: DWORD;
+  buf: Pointer;
+  row: PMibTcpRowOwnerPid;
+  localPort: Integer;
+begin
+  Result := 0;
+  size := 0;
+  GetExtendedTcpTable(nil, size, False, AF_INET_, TCP_TABLE_OWNER_PID_LISTENER, 0);
+  if size = 0 then
+    Exit;
+  buf := GetMem(size);
+  try
+    if GetExtendedTcpTable(buf, size, False, AF_INET_, TCP_TABLE_OWNER_PID_LISTENER, 0) <> 0 then
+      Exit;
+    numEntries := PDWORD(buf)^;                              { dwNumEntries }
+    row := PMibTcpRowOwnerPid(PByte(buf) + SizeOf(DWORD));   { первая строка после счётчика }
+    i := 0;
+    while i < numEntries do
+    begin
+      { dwLocalPort — network byte order в младших 2 байтах }
+      localPort := ((row^.dwLocalPort and $FF) shl 8) or ((row^.dwLocalPort shr 8) and $FF);
+      if (row^.dwState = MIB_TCP_STATE_LISTEN) and (localPort = aPort) then
+        Exit(row^.dwOwningPid);
+      Inc(row);
+      Inc(i);
+    end;
+  finally
+    FreeMem(buf);
+  end;
+end;
+
+function stopListenerOnPort(aPort: Integer): Boolean;
+var
+  pid: DWORD;
+  h: THandle;
+begin
+  pid := pidListeningOnPort(aPort);
+  if pid = 0 then
+    Exit(True);   { никто не слушает — считаем остановленным }
+  h := OpenProcess(PROCESS_TERMINATE, False, pid);
+  if h = 0 then
+    Exit(False);
+  try
+    Result := TerminateProcess(h, 1);
+  finally
+    CloseHandle(h);
+  end;
 end;
 
 { Путь к wt.exe (Windows Terminal) в WindowsApps, или '' если нет. }

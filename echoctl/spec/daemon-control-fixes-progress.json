@@ -31,11 +31,11 @@
       "id": "DC1.1",
       "phase": "P1",
       "title": "stopDaemonByPort через GetExtendedTcpTable + TerminateProcess (без PowerShell)",
-      "status": "todo",
+      "status": "done",
       "dependsOn": ["DC0.1"],
       "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas"],
       "verify": "сборка зелёная; stop реального демона закрывает его порт без вызова PowerShell; restart проходит без зависания; пустой порт → True",
-      "evidence": ""
+      "evidence": "echoctl_launch: pidListeningOnPort (GetExtendedTcpTable/TCP_TABLE_OWNER_PID_LISTENER, порт из network-byte-order) + stopListenerOnPort (OpenProcess(PROCESS_TERMINATE)+TerminateProcess; пустой порт→True). echoctl_daemons.stopDaemonByPort делегирует (убран powershell Get-NetTCPConnection|Stop-Process). Build зелёный. ПРОВЕРЕНО на реальном демоне: :7900 LISTENING (PID 47708) → 'echoctl daemons stop diarization' → 'stopped diarization (:7900)' exit0 мгновенно, без PowerShell → :7900 CLOSED. Побочно подтвердило суть бага: зависший (на старом PS-стопе) echoctl держал build/x64/echoctl.exe залоченным и taskkill/PowerShell его убить не могли (RPC/WMI в сессии подвис) — снят MSYS kill -9; новый TerminateProcess-путь как раз обходит зависший Windows-RPC."
     },
     {
       "id": "DC2.1",
