@@ -93,6 +93,8 @@ type
     ClusterThreshold       : Single;
     MinDurationOn          : Single;
     MinDurationOff         : Single;
+    ModelName              : string;   { ключ реестра/ws_daemons.model_name }
+    RegistryDir            : string;   { jobs/registry для саморегистрации }
   end;
 
   TDiarizerCacheItem = record
@@ -1272,6 +1274,8 @@ begin
   WriteLn('  --cluster-threshold <value>      clustering threshold, default 0.5');
   WriteLn('  --min-duration-on <value>        min active speech duration, default 0.2');
   WriteLn('  --min-duration-off <value>       min silence gap duration, default 0.5');
+  WriteLn('  --model-name <value>             registry/ws_daemons model name, default diarization_sherpa');
+  WriteLn('  --registry-dir <path>            jobs/registry dir for self-registration (default <root>\jobs\registry)');
   WriteLn('  env: SHERPA_DLL_PATH, DIARIZE_SEG_MODEL, DIARIZE_EMB_MODEL');
   WriteLn('  env: DIARIZE_NUM_SPEAKERS, DIARIZE_CLUSTER_THRESHOLD');
   WriteLn('  env: DIARIZE_MIN_DURATION_ON, DIARIZE_MIN_DURATION_OFF');
@@ -1292,6 +1296,8 @@ begin
   Result.ClusterThreshold := readEnvFloat('DIARIZE_CLUSTER_THRESHOLD', 0.5);
   Result.MinDurationOn := readEnvFloat('DIARIZE_MIN_DURATION_ON', 0.2);
   Result.MinDurationOff := readEnvFloat('DIARIZE_MIN_DURATION_OFF', 0.5);
+  Result.ModelName := 'diarization_sherpa';
+  Result.RegistryDir := '';   { пусто → main подставит <root>\jobs\registry }
 
   idx := 1;
   while idx <= ParamCount do
@@ -1356,11 +1362,89 @@ begin
       requireArgValue(idx, '--min-duration-off', val);
       Result.MinDurationOff := parseSingleValue('--min-duration-off', val);
     end
+    else if arg = '--model-name' then
+    begin
+      Inc(idx);
+      requireArgValue(idx, '--model-name', val);
+      Result.ModelName := Trim(val);
+    end
+    else if arg = '--registry-dir' then
+    begin
+      Inc(idx);
+      requireArgValue(idx, '--registry-dir', val);
+      Result.RegistryDir := Trim(val);
+    end
     else
       raise Exception.CreateFmt('Unknown argument: %s', [arg]);
 
     Inc(idx);
   end;
+end;
+
+{ ------------------------------------------------------------ }
+{ Registry self-registration (по образцу WhisperDaemon)          }
+{ ------------------------------------------------------------ }
+
+const
+  REGISTRY_HEARTBEAT_MS = 5000;
+
+function utcNowIso: string;
+var
+  st: TSystemTime;
+begin
+  GetSystemTime(st);
+  Result := Format('%.4d-%.2d-%.2dT%.2d:%.2d:%.2d.%.3dZ',
+    [st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds]);
+end;
+
+function registryFilePath(const aOptions: TDiarizationDaemonOptions): string;
+begin
+  Result := IncludeTrailingPathDelimiter(aOptions.RegistryDir) + aOptions.ModelName + '.json';
+end;
+
+{ Саморегистрация для оркестратора/панели: атомарная запись jobs/registry/<model>.json
+  (temp + MoveFileEx), ключ = model_name — как у WhisperDaemon. }
+procedure writeRegistration(const aOptions: TDiarizationDaemonOptions; const aState: string);
+var
+  root, input: TJSONObject;
+  json, finalPath, tempPath: string;
+  stream: TStringStream;
+begin
+  root := TJSONObject.Create;
+  try
+    root.Add('name', aOptions.ModelName);
+    root.Add('host', aOptions.Host);
+    root.Add('port', Integer(aOptions.Port));
+    root.Add('model_name', aOptions.ModelName);
+    root.Add('state', aState);
+    root.Add('pid', Int64(GetCurrentProcessId));
+    input := TJSONObject.Create;
+    input.Add('codec', 'pcm16le');
+    input.Add('sample_rate_hz', 16000);
+    input.Add('channels', 1);
+    root.Add('input', input);
+    root.Add('updated_at', utcNowIso);
+    json := root.FormatJSON;
+  finally
+    root.Free;
+  end;
+
+  ForceDirectories(aOptions.RegistryDir);
+  finalPath := registryFilePath(aOptions);
+  tempPath := finalPath + '.' + IntToStr(GetCurrentProcessId) + '.tmp';
+  stream := TStringStream.Create(json);
+  try
+    stream.SaveToFile(tempPath);
+  finally
+    stream.Free;
+  end;
+  if not MoveFileEx(PChar(tempPath), PChar(finalPath), MOVEFILE_REPLACE_EXISTING) then
+    SysUtils.DeleteFile(tempPath);
+end;
+
+procedure removeRegistration(const aOptions: TDiarizationDaemonOptions);
+begin
+  SysUtils.DeleteFile(registryFilePath(aOptions));
 end;
 
 { ------------------------------------------------------------ }
@@ -1370,18 +1454,41 @@ end;
 var
   host: TDiarizationDaemonHost;
   options: TDiarizationDaemonOptions;
+  lastHeartbeat: QWord;
+  heartbeatTick: QWord;
 
 begin
   host := nil;
   try
     InitCriticalSection(gSherpaLock);
     options := parseCommandLine;
+    if Trim(options.RegistryDir) = '' then
+      options.RegistryDir := IncludeTrailingPathDelimiter(getWorkspaceRootDir) + 'jobs' + PathDelim + 'registry';
     gDaemonOptions := options;
     ensureDiarizationAssetsAvailable;
     host := TDiarizationDaemonHost.Create(options);
     WriteLn('DiarizationDaemon listening on ws://', options.Host, ':', options.Port, '/');
-    while True do
-      Sleep(250);
+    WriteLn('[diarizationdaemon] model=', options.ModelName, ' registry=', options.RegistryDir);
+    lastHeartbeat := 0;
+    try
+      while True do
+      begin
+        heartbeatTick := GetTickCount64;
+        if (lastHeartbeat = 0) or (heartbeatTick - lastHeartbeat >= REGISTRY_HEARTBEAT_MS) then
+        begin
+          try
+            writeRegistration(options, 'ready');
+          except
+            on E: Exception do
+              WriteLn(StdErr, '[diarizationdaemon] registry write failed: ', E.Message);
+          end;
+          lastHeartbeat := heartbeatTick;
+        end;
+        Sleep(250);
+      end;
+    finally
+      removeRegistration(options);
+    end;
   except
     on E: Exception do
     begin
