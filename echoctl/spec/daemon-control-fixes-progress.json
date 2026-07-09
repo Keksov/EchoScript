@@ -1,0 +1,51 @@
+{
+  "initiative": "daemon-control-fixes",
+  "title": "echoctl: stop без PowerShell (#3) + dev-вкладка открывается из панели (#2)",
+  "plan": "daemon-control-fixes-plan.md",
+  "branch": "feature/daemon-control-fixes",
+  "baseBranch": "master",
+  "created": "2026-07-09",
+  "updated": "2026-07-09",
+  "conventions": "FPC по лекалу echoctl. Win-API в echoctl_launch (там Windows). Один шаг → один коммит → один гейт; пауза на границах фаз.",
+  "decisions": [
+    "DC-D1: #3 — PID слушателя порта через GetExtendedTcpTable (TCP_TABLE_OWNER_PID_LISTENER) + TerminateProcess; функция в echoctl_launch, stopDaemonByPort делегирует; пусто = уже остановлен.",
+    "DC-D2: #2 — openLogTab запускает wt через cmd.exe /c \"...\" (паттерн spawnDaemon/DT2.1), без CREATE_NO_WINDOW; диагностика/проверка после #3."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + леджер", "gate": "pause: DAG ацикличен" },
+    { "id": "P1", "title": "#3 stop без PowerShell (Win-API)", "gate": "pause: stop реального демона закрывает порт без PowerShell; restart не виснет" },
+    { "id": "P2", "title": "#2 dev-вкладка из панели", "gate": "pause: restart/панель открывает echotail-вкладку (WindowsTerminal + echotail следит за логом)" }
+  ],
+  "steps": [
+    {
+      "id": "DC0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echoctl/spec/daemon-control-fixes-plan.md", "echoctl/spec/daemon-control-fixes-progress.json"],
+      "verify": "план: #3 stop через Win-API, #2 wt через cmd /c; решения DC-D1/D2; DAG ацикличен",
+      "evidence": "Из живого прогона: restart timeout 2мин (stop→PowerShell Get-NetTCPConnection виснет); прямой wt из shell поднимает WindowsTerminal+echotail, а после Start из панели echotail-процесса не было (openLogTab CreateProcess(wt,CREATE_NO_WINDOW) окно не создал)."
+    },
+    {
+      "id": "DC1.1",
+      "phase": "P1",
+      "title": "stopDaemonByPort через GetExtendedTcpTable + TerminateProcess (без PowerShell)",
+      "status": "todo",
+      "dependsOn": ["DC0.1"],
+      "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas"],
+      "verify": "сборка зелёная; stop реального демона закрывает его порт без вызова PowerShell; restart проходит без зависания; пустой порт → True",
+      "evidence": ""
+    },
+    {
+      "id": "DC2.1",
+      "phase": "P2",
+      "title": "openLogTab: запуск wt через cmd.exe /c (диагностика после #3 + фикс + проверка)",
+      "status": "todo",
+      "dependsOn": ["DC1.1"],
+      "artifacts": ["echoctl/src/echoctl_launch.pas"],
+      "verify": "ECHOSCRIPT_DEV=1 echoctl restart <daemon> → поднимается echotail (WindowsTerminal-окно + echotail следит за логом); та же вкладка при старте из панели",
+      "evidence": ""
+    }
+  ]
+}
