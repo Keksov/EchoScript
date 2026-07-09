@@ -739,6 +739,11 @@ begin
 
     if isPortOpen(host, port) then
     begin
+      { Демон уже работает — не трогаем, но в dev возвращаем вкладку с его логом
+        (пользователь мог закрыть окно WT; DC-D3). }
+      if devTailEnabled then
+        openLogTab(repoRoot, aName,
+          IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + aName + '.log');
       reportStart(aJson, aName, 'already-running', host, port);
       Exit(EXIT_OK);
     end;

@@ -9,12 +9,16 @@
   "conventions": "FPC по лекалу echoctl. Win-API в echoctl_launch (там Windows). Один шаг → один коммит → один гейт; пауза на границах фаз.",
   "decisions": [
     "DC-D1: #3 — PID слушателя порта через GetExtendedTcpTable (TCP_TABLE_OWNER_PID_LISTENER) + TerminateProcess; функция в echoctl_launch, stopDaemonByPort делегирует; пусто = уже остановлен.",
-    "DC-D2: #2 — openLogTab запускает wt через cmd.exe /c \"...\" (паттерн spawnDaemon/DT2.1), без CREATE_NO_WINDOW; диагностика/проверка после #3."
+    "DC-D2: #2 — openLogTab запускает wt через cmd.exe /c \"...\" (паттерн spawnDaemon/DT2.1), без CREATE_NO_WINDOW; диагностика/проверка после #3.",
+    "DC-D3: Start у уже работающего демона в dev → демон не трогаем, но открываем echotail-вкладку (вернуть вкладку после закрытия WT-окна; дубли при повторных Start — осознанное действие). (владелец)",
+    "DC-D4: статус diarization — САМОРЕГИСТРАЦИЯ демона в jobs/registry по образцу whisper (атомарная запись <model>.json temp+MoveFileEx, heartbeat 5000мс, удаление при выходе; ключ model_name=diarization_sherpa; опции --registry-dir/--model-name с дефолтами workspaceRoot/jobs/registry и diarization_sherpa); порт-проба отклонена. (владелец)"
   ],
   "phases": [
     { "id": "P0", "title": "План + леджер", "gate": "pause: DAG ацикличен" },
     { "id": "P1", "title": "#3 stop без PowerShell (Win-API)", "gate": "pause: stop реального демона закрывает порт без PowerShell; restart не виснет" },
-    { "id": "P2", "title": "#2 dev-вкладка из панели", "gate": "pause: restart/панель открывает echotail-вкладку (WindowsTerminal + echotail следит за логом)" }
+    { "id": "P2", "title": "#2 dev-вкладка из панели", "gate": "pause: restart/панель открывает echotail-вкладку (WindowsTerminal + echotail следит за логом)" },
+    { "id": "P3", "title": "Вкладка при already-running (dev)", "gate": "pause: Start у работающего демона открывает вкладку, демон не перезапускается" },
+    { "id": "P4", "title": "Саморегистрация DiarizationDaemon", "gate": "pause: registry-файл с живым heartbeat; панель ready; stop → файл удалён" }
   ],
   "steps": [
     {
@@ -46,6 +50,26 @@
       "artifacts": ["echoctl/src/echoctl_launch.pas"],
       "verify": "ECHOSCRIPT_DEV=1 echoctl restart <daemon> → поднимается echotail (WindowsTerminal-окно + echotail следит за логом); та же вкладка при старте из панели",
       "evidence": "Диагностика (старый билд): ECHOSCRIPT_DEV=1 echoctl restart diarization → echotail delta 0 — прямой CreateProcess(nil, '\"wt.exe\" …', CREATE_NO_WINDOW) у app-execution-alias wt.exe окно НЕ создаёт (ошибка глушится best-effort), при этом ECHOSCRIPT_DEV точно задан → значит виноват openLogTab, не окружение. Фикс: cmdLine := 'cmd.exe /c \"\"<wt>\" -w 0 new-tab --title \"<t> log\" \"<echotail>\" \"<log>\" --tail 200 --title \"<t> log\"\"' (cmd.exe — реальный exe, резолвит алиас wt; двойные кавычки как в spawnDaemon). Build зелёный. ПРОВЕРЕНО прямым echoctl: ECHOSCRIPT_DEV=1 restart → echotail delta +1. E2E ЧЕРЕЗ ПАНЕЛЬ: POST /api/services/diarization/restart на :3001 (bun run dev с ECHOSCRIPT_DEV) → 'started diarization (127.0.0.1:7900)' без зависания + echotail delta +1 → панель открывает dev-вкладку (окно Windows Terminal с echotail на diarization.log). Заодно доказано, что панель наследует ECHOSCRIPT_DEV=1."
+    },
+    {
+      "id": "DC3.1",
+      "phase": "P3",
+      "title": "echoctl: Start у already-running демона в dev открывает echotail-вкладку (демон не трогается)",
+      "status": "todo",
+      "dependsOn": ["DC2.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "verify": "демон работает → echoctl daemons start (dev) → echotail-вкладка на его лог, демон не перезапущен (тот же PID/порт); prod (без ECHOSCRIPT_DEV) — без вкладки",
+      "evidence": "runDaemonsStart, ветка already-running: перед reportStart при devTailEnabled → openLogTab(repoRoot, aName, daemonLogDir+aName+'.log') — демон не трогается (DC-D3). Build зелёный. ПРОВЕРЕНО на работающем diarization (:7900): ECHOSCRIPT_DEV=1 start → 'already-running', PID не изменился (39780), echotail +1 (вкладка вернулась); prod start (без env) → 'already-running', echotail delta 0 (вкладки нет)."
+    },
+    {
+      "id": "DC4.1",
+      "phase": "P4",
+      "title": "DiarizationDaemon: саморегистрация в jobs/registry (heartbeat, как whisper)",
+      "status": "todo",
+      "dependsOn": ["DC0.1"],
+      "artifacts": ["services/diarizationdaemon/sherpa/app/src/DiarizationDaemon.pas"],
+      "verify": "после старта появляется jobs/registry/diarization_sherpa.json (name/host/port/model_name/state/pid/updated_at, обновляется каждые ~5с); панель /api/daemons показывает diarization up/ready; stop → файл удалён, панель down",
+      "evidence": ""
     }
   ]
 }

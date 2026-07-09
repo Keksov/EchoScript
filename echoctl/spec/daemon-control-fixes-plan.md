@@ -30,12 +30,21 @@ ECHOSCRIPT_DEV и можно наблюдать echotail).
 - **DC-D1** #3 через Win-API GetExtendedTcpTable + TerminateProcess (без PowerShell/внешних утилит);
   функция в echoctl_launch (там уже Windows), stopDaemonByPort делегирует.
 - **DC-D2** #2 — запуск wt через `cmd.exe /c` (как spawnDaemon), диагностика/фикс после #3.
+- **DC-D3** Start у уже работающего демона в dev → демон не трогаем, но открываем echotail-вкладку
+  (вернуть вкладку после закрытия окна WT; повторные Start могут плодить дубли — осознанное
+  действие пользователя). (владелец)
+- **DC-D4** Статус diarization в панели — через САМОРЕГИСТРАЦИЮ демона в jobs/registry (как whisper:
+  атомарная запись <model>.json, heartbeat 5с, удаление при выходе; ключ = model_name
+  diarization_sherpa; --registry-dir + --model-name с дефолтами). Полный паритет и готовность к
+  интеграции с оркестратором; порт-проба отклонена. (владелец)
 
 ## Фазы
 
 - **P0** План + леджер.
 - **P1** #3 stop без PowerShell — gate: stop реального демона закрывает порт без PowerShell; restart не виснет.
 - **P2** #2 dev-вкладка из панели — gate: `ECHOSCRIPT_DEV=1 echoctl restart <d>` (и панель) открывает echotail-вкладку (WindowsTerminal + echotail следит за логом).
+- **P3** Вкладка при already-running (dev) — gate: Start у работающего демона открывает вкладку, демон не перезапускается.
+- **P4** Саморегистрация DiarizationDaemon — gate: jobs/registry/diarization_sherpa.json с живым heartbeat; панель показывает ready/запущен; stop → файл удалён, панель down.
 
 ## Конвенции
 
