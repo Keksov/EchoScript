@@ -43,8 +43,9 @@ function stopListenerOnPort(aPort: Integer): Boolean;
 function devTailEnabled: Boolean;
 
 { Открыть WT-вкладку с echotail на лог демона (dev). Best-effort, тихо пропускает,
-  если нет wt.exe/echotail.exe. Демон остаётся без окна — это лишь просмотрщик лога. }
-procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string);
+  если нет wt.exe/echotail.exe. Демон остаётся без окна — это лишь просмотрщик лога.
+  aPort > 0 → echotail следит за портом (--watch-port): маркеры stopped/listening. }
+procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string; aPort: Integer);
 
 { Вкладки доступны: есть wt.exe и собран echotail.exe (для честной диагностики daemons tabs). }
 function canOpenLogTabs(const aRepoRoot: string): Boolean;
@@ -291,9 +292,9 @@ begin
     'echotail' + PathDelim + 'build' + PathDelim + 'x64' + PathDelim + 'echotail.exe');
 end;
 
-procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string);
+procedure openLogTab(const aRepoRoot, aTitle, aLogPath: string; aPort: Integer);
 var
-  wt, echotailExe, cmdLine: string;
+  wt, echotailExe, watch, cmdLine: string;
   si: STARTUPINFOA;
   pi: PROCESS_INFORMATION;
 begin
@@ -305,11 +306,15 @@ begin
   if not FileExists(echotailExe) then
     Exit; { не собран → тихо пропускаем, старт демона не ломаем }
 
+  watch := '';
+  if aPort > 0 then
+    watch := ' --watch-port ' + IntToStr(aPort);
+
   { Запуск wt через cmd /c: прямой CreateProcess у app-execution-alias wt.exe окно не создаёт
     (алиас резолвится оболочкой). Двойные внешние кавычки — cmd снимает внешнюю пару (как в
     spawnDaemon). Итог для cmd: "<wt>" -w 0 new-tab --title "<t> log" "<echotail>" "<log>" --tail 200. }
   cmdLine := 'cmd.exe /c ""' + wt + '" -w 0 new-tab --title "' + aTitle + ' log" "' +
-    echotailExe + '" "' + aLogPath + '" --tail 200 --title "' + aTitle + ' log""';
+    echotailExe + '" "' + aLogPath + '" --tail 200 --title "' + aTitle + ' log"' + watch + '"';
   UniqueString(cmdLine);
 
   FillChar(si, SizeOf(si), 0);

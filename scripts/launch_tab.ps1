@@ -91,8 +91,10 @@ if ((Test-TabsAvailable) -and (Test-Path -LiteralPath $echotail)) {
   $daemonCmd = Join-Path $env:TEMP ("echoscript-daemon-{0}.cmd" -f ([Guid]::NewGuid().ToString('N').Substring(0, 12)))
 
   # echotail tab: a .cmd (title + echotail on the log); cmd /k keeps the tab open even if
-  # echotail ever exits (the tab outlives the daemon — user closes it).
-  $tlines = @("@echo off", "title $Title log", "`"$echotail`" `"$log`" --tail 200 --title `"$Title log`"")
+  # echotail ever exits (the tab outlives the daemon — user closes it). -WaitPort also feeds
+  # echotail's --watch-port so the tab reports when the daemon stops/starts listening.
+  $watch = if ($WaitPort -gt 0) { " --watch-port $WaitPort" } else { "" }
+  $tlines = @("@echo off", "title $Title log", "`"$echotail`" `"$log`" --tail 200 --title `"$Title log`"$watch")
   $tabCmd = Join-Path $env:TEMP ("echoscript-tab-{0}.cmd" -f ([Guid]::NewGuid().ToString('N').Substring(0, 12)))
 
   $wt = Get-WtPath

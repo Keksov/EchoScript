@@ -5,7 +5,7 @@
   "branch": "feature/tail-stop-marker",
   "baseBranch": "master",
   "created": "2026-07-09",
-  "updated": "2026-07-09",
+  "updated": "2026-07-09T1",
   "conventions": "FPC по лекалу echotail/echoctl. GetExtendedTcpTable без connect-проб (не мусорить в лог демона). Один шаг → один коммит → один гейт; пауза на границах фаз.",
   "decisions": [
     "TS-D1: слежение за портом в echotail (--watch-port N); listen-состояние через GetExtendedTcpTable (iphlpapi), БЕЗ connect-проб; маркеры в stdout вкладки, лог демона не трогаем.",
@@ -46,7 +46,7 @@
       "dependsOn": ["TS1.1"],
       "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas", "scripts/launch_tab.ps1"],
       "verify": "вкладки из echoctl start/already-running/daemons tabs и из launch_tab получают --watch-port; E2E: stop diarization через echoctl → маркер stopped в выводе echotail; повторный start → маркер listening",
-      "evidence": ""
+      "evidence": "echoctl_launch.openLogTab(+aPort): при aPort>0 добавляет ' --watch-port N' в echotail-команду. Все 3 вызова передают порт: runDaemonsStart woReady (port), already-running (port), runDaemonsTabs (port). launch_tab.ps1: $watch из -WaitPort → echotail-строка tab .cmd. Build зелёный. ПРОВЕРЕНО: launch_tab -DryRun -WaitPort 7912 → tab .cmd содержит '--watch-port 7912'; E2E через echoctl — dev start → вкладка +1 (echotail с watch), echoctl stop → красный маркер в вкладке, prod start → без новой вкладки (delta 0), в той же вкладке зелёный listening (маркерная механика подтверждена капчей в TS1.1 на идентичных аргументах; вкладочная история — визуально у владельца). Гейт-вопрос владельцу: видны ли маркеры в новой вкладке diarization log."
     }
   ]
 }

@@ -747,7 +747,7 @@ begin
         (пользователь мог закрыть окно WT; DC-D3). }
       if devTailEnabled then
         openLogTab(repoRoot, aName,
-          IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + aName + '.log');
+          IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + aName + '.log', port);
       reportStart(aJson, aName, 'already-running', host, port);
       Exit(EXIT_OK);
     end;
@@ -774,7 +774,7 @@ begin
       waitPortOpen(host, port, 5000);
       { dev (ECHOSCRIPT_DEV=1 + есть wt): открыть echotail-вкладку на лог. Демон без окна. }
       if devTailEnabled then
-        openLogTab(repoRoot, aName, logPath);
+        openLogTab(repoRoot, aName, logPath, port);
       reportStart(aJson, aName, 'started', host, port);
       Result := EXIT_OK;
     end
@@ -873,7 +873,7 @@ begin
         if (port <= 0) or not isPortOpen(host, port) then
           Continue; { остановленные пропускаем — вкладка с «waiting for log» не нужна }
         openLogTab(repoRoot, name,
-          IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + name + '.log');
+          IncludeTrailingPathDelimiter(daemonLogDir(repoRoot, engine)) + name + '.log', port);
         Inc(opened);
         if aJson then
         begin
