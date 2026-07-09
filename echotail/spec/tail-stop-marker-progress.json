@@ -36,7 +36,7 @@
       "dependsOn": ["TS0.1"],
       "artifacts": ["echotail/src/echotail.pas"],
       "verify": "echotail <log> --watch-port N: демон остановился → '[echotail] daemon stopped (port N no longer listening)' красным; демон поднялся → '[echotail] daemon listening on port N' зелёным; initial unknown без ложного stopped; без --watch-port ничего нового; смоуки зелёные",
-      "evidence": ""
+      "evidence": "echotail.pas 0.2.0: --watch-port N (usage, firstPositional skip, optionValue); isPortListening — GetExtendedTcpTable(TCP_TABLE_OWNER_PID_LISTENER) без connect-проб, ЗАКАЛЁН ретраями: двухфазный вызов гоночный (таблица растёт между size-query и чтением → ERROR_INSUFFICIENT_BUFFER трактовался как «не слушает» — так в первом прогоне пропали startup/stop маркеры), теперь 3 попытки + запас 16 строк; writeMarker (цвет при gColor); checkWatchPort — состояние -1/0/1, проверка раз в 2000мс по GetTickCount64, вызов в цикле followLog. ПРОВЕРЕН полный цикл на реальном diarization (:7900): старт echotail → зелёный '[echotail] daemon listening on port 7900' ПЕРВОЙ строкой; echoctl stop → красный '[echotail] daemon stopped (port 7900 no longer listening)'; echoctl start → 'truncated/rotated' + снова зелёный listening; --color → ESC[32m в маркере (od-дамп); redirect без --color → маркеры плейн-текстом. Смоуки: SMOKE OK + FOLLOW SMOKE OK (без регрессий). Залоченный работающими вкладками exe при пересборке решён rename→echotail.old.exe (NTFS позволяет; старые вкладки доживают на старом образе)."
     },
     {
       "id": "TS2.1",
