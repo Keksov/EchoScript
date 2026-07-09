@@ -1,0 +1,40 @@
+{
+  "initiative": "registry-cleanup",
+  "title": "echoctl stop удаляет регистрацию из jobs/registry → мгновенный «down» вместо 15с «устарел»",
+  "plan": "registry-cleanup-plan.md",
+  "branch": "feature/registry-cleanup",
+  "baseBranch": "master",
+  "created": "2026-07-09",
+  "updated": "2026-07-09",
+  "conventions": "FPC по лекалу echoctl. Best-effort удаление (stop не падает). Один шаг → один коммит → один гейт.",
+  "decisions": [
+    "RC-D1: удаление jobs/registry/<model_name>.json после подтверждённого stop (waitPortClosed) в runDaemonsStop и стоп-фазе runDaemonsRestart; best-effort.",
+    "RC-D2: ключ — model_name (имя файла регистрации, как пишут демоны); два инстанса одной модели делят файл — stop одного удалит регистрацию живого, тот восстановит её heartbeat'ом ≤5с; допустимо."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + леджер", "gate": "pause: DAG ацикличен" },
+    { "id": "P1", "title": "Фикс + live-тест", "gate": "pause: stop → файл удалён сразу, панель «down» без stale-окна; start → файл/ready возвращаются" }
+  ],
+  "steps": [
+    {
+      "id": "RC0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echoctl/spec/registry-cleanup-plan.md", "echoctl/spec/registry-cleanup-progress.json"],
+      "verify": "план: удаление после stop/restart-стопа, jobs_root из config, best-effort; решения RC-D1/D2; DAG ацикличен",
+      "evidence": "Кандидат из DC4.1 (там же зафиксирована семантика: TerminateProcess не даёт finally демона отработать → файл остаётся, панель ready≤TTL→stale). Подтверждён владельцем («да») после объяснения статуса «устарел»."
+    },
+    {
+      "id": "RC1.1",
+      "phase": "P1",
+      "title": "removeRegistryEntry (jobs_root из config, model_name инстанса) + вызовы в stop/restart",
+      "status": "todo",
+      "dependsOn": ["RC0.1"],
+      "artifacts": ["echoctl/src/echoctl_daemons.pas"],
+      "verify": "live: демон работает (registry-файл свежий) → echoctl stop → порт закрыт И файл удалён сразу; панель /api/daemons → detail 'down' (не stale) немедленно; start → файл вернулся, 'ready'; сборка зелёная",
+      "evidence": ""
+    }
+  ]
+}
