@@ -34,7 +34,7 @@
       "dependsOn": ["RC0.1"],
       "artifacts": ["echoctl/src/echoctl_daemons.pas"],
       "verify": "live: демон работает (registry-файл свежий) → echoctl stop → порт закрыт И файл удалён сразу; панель /api/daemons → detail 'down' (не stale) немедленно; start → файл вернулся, 'ready'; сборка зелёная",
-      "evidence": ""
+      "evidence": "echoctl_daemons: removeRegistryEntry(config, model_name) — jobs_root из config (относительный → от resolveRepoRoot, абсолютный как есть), путь <jobs_root>/registry/<model_name>.json, SysUtils.DeleteFile best-effort; вызовы: runDaemonsStop после waitPortClosed-успеха; runDaemonsRestart в стоп-фазе (честный down на время прогрева). Build зелёный. LIVE-ТЕСТ: diarization RUNNING + diarization_sherpa.json → stop → 'stopped', файл GONE сразу, панель {'up':False,'detail':'down'} НЕМЕДЛЕННО (stale-окна нет); dev start → 'started', файл вернулся, панель {'up':True,'detail':'ready'}."
     }
   ]
 }

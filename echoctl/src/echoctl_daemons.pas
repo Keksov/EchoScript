@@ -698,6 +698,23 @@ begin
     WriteLn(Format('%s %s (:%d)', [aStatus, aName, aPort]));
 end;
 
+{ Удалить регистрацию инстанса из <jobs_root>/registry/<model_name>.json. Демон, убитый
+  TerminateProcess'ом, не прибирает её сам — без этого панель показывает «stale» до TTL.
+  Best-effort: отсутствие файла/неудача удаления stop не ломают. }
+procedure removeRegistryEntry(aConfig: TJSONObject; const aModelName: string);
+var
+  jobsRoot, path: string;
+begin
+  if aModelName = '' then
+    Exit;
+  jobsRoot := aConfig.Get('jobs_root', './jobs');
+  if (Length(jobsRoot) < 2) or (jobsRoot[2] <> ':') then
+    jobsRoot := IncludeTrailingPathDelimiter(resolveRepoRoot) + jobsRoot; { относительный — от repoRoot }
+  path := ExpandFileName(IncludeTrailingPathDelimiter(jobsRoot) + 'registry' + PathDelim +
+    aModelName + '.json');
+  SysUtils.DeleteFile(path);
+end;
+
 function findInstance(aConfig: TJSONObject; const aName: string): TJSONObject;
 var
   ws: TJSONObject;
@@ -807,6 +824,8 @@ begin
     stopDaemonByPort(port);
     if waitPortClosed(host, port, 10000) then
     begin
+      { Убитый демон не удалит свою регистрацию сам → без этого панель покажет stale до TTL. }
+      removeRegistryEntry(config, inst.Get('model_name', ''));
       reportStop(aJson, aName, 'stopped', port);
       Result := EXIT_OK;
     end
@@ -837,7 +856,8 @@ begin
       if isPortOpen(host, port) then
       begin
         stopDaemonByPort(port);
-        waitPortClosed(host, port, 10000);
+        if waitPortClosed(host, port, 10000) then
+          removeRegistryEntry(config, inst.Get('model_name', '')); { честный down на время прогрева }
       end;
     end;
   finally
