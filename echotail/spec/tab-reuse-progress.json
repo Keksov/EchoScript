@@ -1,0 +1,52 @@
+{
+  "initiative": "tab-reuse",
+  "title": "Одна echotail-вкладка на демона: mutex от пути лога, дубли не открываются",
+  "plan": "tab-reuse-plan.md",
+  "branch": "feature/tab-reuse",
+  "baseBranch": "master",
+  "created": "2026-07-09",
+  "updated": "2026-07-09",
+  "conventions": "FPC по лекалу echotail/echoctl. Алгоритм имени mutex продублирован (echotail program / echoctl unit / launch_tab.ps1) — правки синхронно. Один шаг → один коммит → один гейт.",
+  "decisions": [
+    "TR-D1: переиспользование через именованный mutex 'echotail-tab-<lowercase полный путь лога, не-[a-z0-9]→->'; echotail держит хендл до выхода (ОС снимает сама); несколько echotail на логе делят mutex. (владелец: переиспользовать, не закрывать+переоткрывать)",
+    "TR-D2: openLogTab → Boolean (открыл/пропустил); daemons tabs печатает 'tab: X' / 'tab exists: X'; повторный запуск идемпотентен.",
+    "TR-D3: echotail старой сборки mutex не публикует → возможен один одноразовый дубль до закрытия старых вкладок; допустимо (мягкая деградация)."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + леджер", "gate": "pause: DAG ацикличен" },
+    { "id": "P1", "title": "echotail публикует mutex", "gate": "pause: mutex открывается пока echotail жив, исчезает после kill; смоуки зелёные" },
+    { "id": "P2", "title": "Чек в echoctl openLogTab + launch_tab.ps1", "gate": "pause: повторный dev start / daemons tabs при живой вкладке не плодит дубль; после закрытия — открывает снова" }
+  ],
+  "steps": [
+    {
+      "id": "TR0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["echotail/spec/tab-reuse-plan.md", "echotail/spec/tab-reuse-progress.json"],
+      "verify": "план: mutex-механизм, имена синхронны в 3 местах, openLogTab→Boolean; решения TR-D1..D3; DAG ацикличен",
+      "evidence": "Обсуждение 2026-07-09: у владельца плодятся вкладки при повторном старте демона; варианты переиспользовать vs закрыть+открыть; выбран «переиспользовать» (проще: без поиска/убийства процессов — WMI в сессии виснет, cmd /k оставлял бы огрызки; и лучше: полная история в одной вкладке, маркеры watch-port уже показывают рестарты)."
+    },
+    {
+      "id": "TR1.1",
+      "phase": "P1",
+      "title": "echotail: именованный mutex от пути лога (создать при старте, держать до выхода)",
+      "status": "todo",
+      "dependsOn": ["TR0.1"],
+      "artifacts": ["echotail/src/echotail.pas"],
+      "verify": "пока echotail жив — OpenMutex('echotail-tab-<путь>') успешен; после kill — ERROR_FILE_NOT_FOUND; поведение tail без изменений; смоуки зелёные",
+      "evidence": ""
+    },
+    {
+      "id": "TR2.1",
+      "phase": "P2",
+      "title": "Чек mutex: echoctl openLogTab→Boolean + отчёт daemons tabs + launch_tab.ps1",
+      "status": "todo",
+      "dependsOn": ["TR1.1"],
+      "artifacts": ["echoctl/src/echoctl_launch.pas", "echoctl/src/echoctl_daemons.pas", "scripts/launch_tab.ps1", "echotail/README.md"],
+      "verify": "живая вкладка → повторный dev start/daemons tabs НЕ открывает дубль ('tab exists'), echotail-счётчик не растёт; вкладка закрыта → открывает; launch_tab dry-run/чек работает; README упоминает reuse",
+      "evidence": ""
+    }
+  ]
+}
