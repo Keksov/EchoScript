@@ -34,7 +34,7 @@
       "dependsOn": ["TB0.1"],
       "artifacts": ["control-panel/server/server.ts", "control-panel/ui/src/pages/OverviewPage.vue", "control-panel/ui/src/services/api.ts", "control-panel/ui/src/i18n/locales/en.json", "control-panel/ui/src/i18n/locales/ru.json"],
       "verify": "POST /api/daemons/tabs → echoctl daemons tabs --json (список name/port/opened); иконка terminal в 32px-ячейке заголовка слева от Сервис, tooltip en/ru, busy на время; клик открывает окно WT со вкладками работающих демонов, повторный — без дублей (tab exists); typecheck + build зелёные, ассеты в server/public",
-      "evidence": ""
+      "evidence": "server.ts: POST /api/daemons/tabs → echoctlResponse(['daemons','tabs']) (даёт daemons tabs --json). api.ts: openDaemonTabs → sendJson POST. OverviewPage.vue: q-btn icon=terminal в пустой 32px-ячейке заголовка слева от «Сервис» (:loading=busyTabs, :disable при busyService, tooltip daemons.openTabs) + openTabs() (busyTabs + error-баннер при сбое). i18n en/ru daemons.openTabs. Typecheck server(bun x tsc)+ui(vue-tsc) зелёные; quasar build → server/public (панель отдаёт новый бандл — хеш index-*.js совпал). ПРОВЕРЕНО через живую :3001: POST /api/daemons/tabs → [{whisperdaemon:7801,opened:true},{diarization:7900,opened:true}], echotail +2 (окно WT со вкладками работающих демонов); POST#2 → opened:false оба, echotail остался 2 (идемпотентно, tab-reuse не плодит дубли). server/public — build-артефакт (.gitignore), в коммит не идёт; на чистом чекауте регенерится quasar build."
     }
   ]
 }

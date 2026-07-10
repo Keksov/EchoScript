@@ -148,6 +148,10 @@ const handleApi = async (request: Request, pathname: string): Promise<Response> 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     return echoctlResponse(daemonMutationArgs(["daemons", "add"], body))
   }
+  // Open echotail log tabs for every running daemon (thin wrapper over echoctl daemons tabs).
+  if (pathname === "/api/daemons/tabs" && request.method === "POST") {
+    return echoctlResponse(["daemons", "tabs"])
+  }
   // Remove / edit a ws-daemon instance.
   const daemonMatch = /^\/api\/daemons\/([^/]+)$/u.exec(pathname)
   if (daemonMatch !== null && request.method === "DELETE") {

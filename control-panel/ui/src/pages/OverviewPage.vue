@@ -41,7 +41,15 @@
         <q-markup-table flat bordered dense class="bg-dark">
           <thead>
             <tr>
-              <th class="text-left" style="width: 32px"></th>
+              <th class="text-left" style="width: 32px">
+                <q-btn
+                  flat dense round size="sm" icon="terminal" color="cyan-3"
+                  :loading="busyTabs" :disable="busyService !== null"
+                  @click="openTabs"
+                >
+                  <q-tooltip>{{ t("daemons.openTabs") }}</q-tooltip>
+                </q-btn>
+              </th>
               <th class="text-left">{{ t("daemons.name") }}</th>
               <th class="text-left">{{ t("daemons.model") }}</th>
               <th class="text-left">{{ t("daemons.engine") }}</th>
@@ -175,6 +183,7 @@ import {
   fetchDaemons,
   fetchModels,
   fetchSchema,
+  openDaemonTabs,
   removeDaemon,
 } from "src/services/api"
 import type { DaemonStatus, FieldSpec, ModelStatus, ServiceAction } from "src/types"
@@ -245,6 +254,7 @@ const ageText = (ageMs: number | null): string => {
 }
 
 const busyService = ref<string | null>(null)
+const busyTabs = ref(false)
 
 const reload = async (): Promise<void> => {
   loading.value = true
@@ -273,6 +283,19 @@ const doAction = async (name: string, action: ServiceAction): Promise<void> => {
   } finally {
     busyService.value = null
     await reload()
+  }
+}
+
+// Open Windows Terminal log tabs for every running daemon (echoctl daemons tabs).
+const openTabs = async (): Promise<void> => {
+  busyTabs.value = true
+  error.value = null
+  try {
+    await openDaemonTabs()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    busyTabs.value = false
   }
 }
 

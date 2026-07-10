@@ -30,6 +30,7 @@
     "state": "State",
     "pid": "PID",
     "age": "Updated",
+    "openTabs": "Open log tabs for running daemons",
     "ready": "ready",
     "listening": "listening",
     "stale": "stale",

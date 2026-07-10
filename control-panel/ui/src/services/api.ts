@@ -101,6 +101,10 @@ export const editDaemon = (name: string, body: Record<string, unknown>): Promise
 export const removeDaemon = (name: string): Promise<JsonRecord> =>
   sendJson(`/api/daemons/${encodeURIComponent(name)}`, "DELETE")
 
+/** Open echotail log tabs (Windows Terminal) for every running daemon. */
+export const openDaemonTabs = (): Promise<JsonRecord> =>
+  sendJson("/api/daemons/tabs", "POST")
+
 /** Delete a model. dryRun previews; force cascades (removes referencing instances). */
 export const deleteModel = (id: string, opts: { force?: boolean; dryRun?: boolean }): Promise<JsonRecord> => {
   const qs = new URLSearchParams()
