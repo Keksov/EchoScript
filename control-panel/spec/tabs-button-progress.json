@@ -1,0 +1,40 @@
+{
+  "initiative": "tabs-button",
+  "title": "Кнопка в UI: открыть окно WT со вкладками логов всех запущенных демонов",
+  "plan": "tabs-button-plan.md",
+  "branch": "feature/tabs-button",
+  "baseBranch": "master",
+  "created": "2026-07-10",
+  "updated": "2026-07-10",
+  "conventions": "Тонкая обёртка над echoctl daemons tabs (единый механизм вкладок). Один шаг → один коммит → один гейт.",
+  "decisions": [
+    "TB-D1: кнопка = обёртка над echoctl daemons tabs; логики в панели нет.",
+    "TB-D2: место — пустая ячейка заголовка слева от «Сервис» (левый верхний угол таблицы демонов), иконка terminal."
+  ],
+  "phases": [
+    { "id": "P0", "title": "План + леджер", "gate": "pause: DAG ацикличен" },
+    { "id": "P1", "title": "Endpoint + кнопка + i18n + ребилд", "gate": "pause: клик → окно WT со вкладками работающих демонов; повторный клик без дублей" }
+  ],
+  "steps": [
+    {
+      "id": "TB0.1",
+      "phase": "P0",
+      "title": "План и леджер",
+      "status": "done",
+      "dependsOn": [],
+      "artifacts": ["control-panel/spec/tabs-button-plan.md", "control-panel/spec/tabs-button-progress.json"],
+      "verify": "план: POST /api/daemons/tabs → echoctl daemons tabs; иконка в заголовке слева от Сервис; решения TB-D1/D2; DAG ацикличен",
+      "evidence": "Запрос владельца 2026-07-10: иконка слева от «Сервис» открывает окно со вкладками запущенных демонов. Механика уже есть (echoctl daemons tabs из DC5.1 + tab-reuse из TR2.1); пустая 32px-ячейка заголовка таблицы демонов в OverviewPage — готовое место."
+    },
+    {
+      "id": "TB1.1",
+      "phase": "P1",
+      "title": "server POST /api/daemons/tabs + UI иконка-кнопка (заголовок) + i18n en/ru + ребилд ассетов",
+      "status": "todo",
+      "dependsOn": ["TB0.1"],
+      "artifacts": ["control-panel/server/server.ts", "control-panel/ui/src/pages/OverviewPage.vue", "control-panel/ui/src/services/api.ts", "control-panel/ui/src/i18n/locales/en.json", "control-panel/ui/src/i18n/locales/ru.json"],
+      "verify": "POST /api/daemons/tabs → echoctl daemons tabs --json (список name/port/opened); иконка terminal в 32px-ячейке заголовка слева от Сервис, tooltip en/ru, busy на время; клик открывает окно WT со вкладками работающих демонов, повторный — без дублей (tab exists); typecheck + build зелёные, ассеты в server/public",
+      "evidence": ""
+    }
+  ]
+}
